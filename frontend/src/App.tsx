@@ -1,6 +1,10 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./components/AuthProvider";
+import ProtectedRoute from "./components/ProtectedRoute";
+import LoginPage from "./pages/LoginPage";
 import { Box, Typography } from "@mui/material";
 
-export default function App() {
+function ChatPagePlaceholder() {
   return (
     <Box
       sx={{
@@ -10,16 +14,29 @@ export default function App() {
         height: "100vh",
       }}
     >
-      <Typography
-        variant="h4"
-        sx={{
-          background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-        }}
-      >
-        YouTube Manager
+      <Typography variant="h5" color="text.secondary">
+        Chat — coming soon
       </Typography>
     </Box>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <ChatPagePlaceholder />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
