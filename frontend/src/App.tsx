@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
 import ChatPage from "./pages/ChatPage";
+import AssetsPage from "./pages/AssetsPage";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
             }
           >
             <Route path="/" element={<ChatPage />} />
+            <Route path="/assets" element={<AssetsPage />} />
           </Route>
         </Routes>
       </AuthProvider>
