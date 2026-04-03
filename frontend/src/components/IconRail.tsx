@@ -1,4 +1,4 @@
-import { Box, IconButton, Tooltip, Avatar } from "@mui/material";
+import { Box, IconButton, Tooltip } from "@mui/material";
 import ChatIcon from "@mui/icons-material/Chat";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -8,7 +8,7 @@ import { useAuth } from "./AuthProvider";
 export default function IconRail() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signOut } = useAuth();
+  const { signOut } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -25,17 +25,12 @@ export default function IconRail() {
         backgroundColor: "rgba(0,0,0,0.3)",
       }}
     >
-      <Avatar
-        sx={{
-          width: 32,
-          height: 32,
-          mb: 2,
-          background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
-          fontSize: 14,
-        }}
-      >
-        {user?.email?.[0]?.toUpperCase() || "Y"}
-      </Avatar>
+      <Box
+        component="img"
+        src="/logo.svg"
+        alt="YouTube Manager"
+        sx={{ width: 32, height: 32, mb: 2, borderRadius: 1 }}
+      />
 
       <Tooltip title="Chat" placement="right">
         <IconButton

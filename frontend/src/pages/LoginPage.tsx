@@ -59,6 +59,14 @@ export default function LoginPage() {
           borderRadius: 3,
         }}
       >
+        <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+          <Box
+            component="img"
+            src="/logo.svg"
+            alt="YouTube Manager"
+            sx={{ width: 64, height: 64, borderRadius: 2 }}
+          />
+        </Box>
         <Typography
           variant="h4"
           sx={{
