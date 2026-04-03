@@ -16,9 +16,11 @@ app.add_middleware(
 
 from routes.conversations import router as conversations_router
 from routes.assets import router as assets_router
+from routes.chat import router as chat_router
 
 app.include_router(conversations_router)
 app.include_router(assets_router)
+app.include_router(chat_router)
 
 
 @app.get("/api/health")
