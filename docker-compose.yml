@@ -1,0 +1,55 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GUARDIAN_URL=${GUARDIAN_URL}
+      - GUARDIAN_API_KEY=${GUARDIAN_API_KEY}
+      - CORS_ORIGINS=https://youtube.merigafy.com
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.yt-backend.rule=Host(`youtube.merigafy.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.yt-backend.entrypoints=websecure"
+      - "traefik.http.routers.yt-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.yt-backend.priority=100"
+      - "traefik.http.services.yt-backend.loadbalancer.server.port=8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+        - VITE_API_URL=https://youtube.merigafy.com
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.yt-frontend.rule=Host(`youtube.merigafy.com`)"
+      - "traefik.http.routers.yt-frontend.entrypoints=websecure"
+      - "traefik.http.routers.yt-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.yt-frontend.priority=50"
+      - "traefik.http.services.yt-frontend.loadbalancer.server.port=80"
+
+networks:
+  proxy:
+    external: true
+    name: proxy
