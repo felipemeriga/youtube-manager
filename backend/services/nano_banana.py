@@ -20,19 +20,27 @@ async def generate_thumbnail(
     if reference_images:
         contents.append("Here are my reference thumbnails for style inspiration:")
         for img_bytes in reference_images:
-            contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/png"))
+            contents.append(
+                types.Part.from_bytes(data=img_bytes, mime_type="image/png")
+            )
 
     # Add personal photos
     if personal_photos:
-        contents.append("Here are my personal photos. Pick the best one for this thumbnail:")
+        contents.append(
+            "Here are my personal photos. Pick the best one for this thumbnail:"
+        )
         for img_bytes in personal_photos:
-            contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
+            contents.append(
+                types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")
+            )
 
     # Add font files
     if font_files:
         contents.append("Here are available fonts for the text:")
         for font_bytes in font_files:
-            contents.append(types.Part.from_bytes(data=font_bytes, mime_type="font/ttf"))
+            contents.append(
+                types.Part.from_bytes(data=font_bytes, mime_type="font/ttf")
+            )
 
     # Add the generation prompt
     contents.append(prompt)

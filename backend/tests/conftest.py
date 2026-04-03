@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 
@@ -19,6 +19,7 @@ def mock_settings():
 @pytest.fixture
 def client(mock_settings):
     from main import app
+
     return TestClient(app)
 
 

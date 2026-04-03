@@ -14,7 +14,13 @@ def get_supabase():
 @router.get("/api/conversations")
 async def list_conversations(user_id: str = Depends(get_current_user)):
     sb = get_supabase()
-    result = sb.table("conversations").select("*").eq("user_id", user_id).order("updated_at", desc=True).execute()
+    result = (
+        sb.table("conversations")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("updated_at", desc=True)
+        .execute()
+    )
     return result.data
 
 
@@ -26,20 +32,43 @@ async def create_conversation(user_id: str = Depends(get_current_user)):
 
 
 @router.get("/api/conversations/{conversation_id}")
-async def get_conversation(conversation_id: str, user_id: str = Depends(get_current_user)):
+async def get_conversation(
+    conversation_id: str, user_id: str = Depends(get_current_user)
+):
     sb = get_supabase()
-    conv = sb.table("conversations").select("*").eq("id", conversation_id).eq("user_id", user_id).single().execute()
+    conv = (
+        sb.table("conversations")
+        .select("*")
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute()
+    )
     if not conv.data:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    messages = sb.table("messages").select("*").eq("conversation_id", conversation_id).order("created_at").execute()
+    messages = (
+        sb.table("messages")
+        .select("*")
+        .eq("conversation_id", conversation_id)
+        .order("created_at")
+        .execute()
+    )
     return {**conv.data, "messages": messages.data}
 
 
 @router.delete("/api/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: str, user_id: str = Depends(get_current_user)):
+async def delete_conversation(
+    conversation_id: str, user_id: str = Depends(get_current_user)
+):
     sb = get_supabase()
-    result = sb.table("conversations").delete().eq("id", conversation_id).eq("user_id", user_id).execute()
+    result = (
+        sb.table("conversations")
+        .delete()
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
     if not result.data:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"status": "deleted"}

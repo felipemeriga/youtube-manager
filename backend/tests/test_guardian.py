@@ -9,7 +9,9 @@ from services.guardian import ask_guardian
 async def test_ask_guardian_returns_response():
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = {"response": "Here is my plan for your thumbnail..."}
+    mock_response.json.return_value = {
+        "response": "Here is my plan for your thumbnail..."
+    }
     mock_response.raise_for_status = MagicMock()
 
     mock_client = AsyncMock()
@@ -23,7 +25,7 @@ async def test_ask_guardian_returns_response():
             mock_settings.guardian_api_key = "test-key"
             result = await ask_guardian(
                 prompt="Create a thumbnail plan for a Python tutorial",
-                system="You are a YouTube thumbnail designer."
+                system="You are a YouTube thumbnail designer.",
             )
 
     assert result == "Here is my plan for your thumbnail..."
@@ -40,9 +42,11 @@ async def test_ask_guardian_handles_error():
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post = AsyncMock(side_effect=httpx.HTTPStatusError(
-        "Server error", request=MagicMock(), response=MagicMock(status_code=500)
-    ))
+    mock_client.post = AsyncMock(
+        side_effect=httpx.HTTPStatusError(
+            "Server error", request=MagicMock(), response=MagicMock(status_code=500)
+        )
+    )
 
     with patch("services.guardian.httpx.AsyncClient", return_value=mock_client):
         with patch("services.guardian.settings") as mock_settings:

@@ -1,7 +1,5 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from io import BytesIO
-
 from services.nano_banana import generate_thumbnail
 
 
@@ -10,8 +8,9 @@ async def test_generate_thumbnail_returns_image_bytes():
     mock_image = MagicMock()
     mock_image_bytes = b"\x89PNG\r\n\x1a\nfake-png-data"
 
-    mock_buffer = BytesIO(mock_image_bytes)
-    mock_image.save = MagicMock(side_effect=lambda buf, format: buf.write(mock_image_bytes))
+    mock_image.save = MagicMock(
+        side_effect=lambda buf, format: buf.write(mock_image_bytes)
+    )
 
     mock_part = MagicMock()
     mock_part.inline_data = True

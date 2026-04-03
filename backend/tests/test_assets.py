@@ -1,6 +1,5 @@
-import pytest
 from unittest.mock import patch, MagicMock
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from auth import get_current_user
@@ -44,7 +43,9 @@ def test_list_assets_invalid_bucket():
 def test_upload_asset():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.upload.return_value = {"Key": "test-user/photo.jpg"}
+    mock_sb.storage.from_.return_value.upload.return_value = {
+        "Key": "test-user/photo.jpg"
+    }
 
     with patch("routes.assets.get_supabase", return_value=mock_sb):
         response = client.post(

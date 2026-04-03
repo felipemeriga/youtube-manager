@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
+from routes.assets import router as assets_router
+from routes.chat import router as chat_router
+from routes.conversations import router as conversations_router
 
 app = FastAPI(title="YouTube Manager API")
 
@@ -12,11 +15,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-from routes.conversations import router as conversations_router
-from routes.assets import router as assets_router
-from routes.chat import router as chat_router
 
 app.include_router(conversations_router)
 app.include_router(assets_router)
