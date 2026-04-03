@@ -66,3 +66,85 @@ def test_expired_token_returns_401(valid_user_id):
         response = client.get("/test", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
+
+
+def test_invalid_jwt_format_returns_401():
+    app = FastAPI()
+
+    @app.get("/test")
+    async def test_route(user_id: str = Depends(get_current_user)):
+        return {"user_id": user_id}
+
+    client = TestClient(app)
+
+    with patch("auth.settings") as mock_settings:
+        mock_settings.supabase_jwt_secret = "test-jwt-secret"
+        response = client.get(
+            "/test", headers={"Authorization": "Bearer not-a-valid-jwt"}
+        )
+
+    assert response.status_code == 401
+    assert "Invalid token" in response.json()["detail"]
+
+
+def test_wrong_audience_returns_401():
+    secret = "test-jwt-secret"
+    payload = {
+        "sub": "user-123",
+        "aud": "wrong-audience",
+        "exp": int(time.time()) + 3600,
+        "iat": int(time.time()),
+    }
+    token = jwt.encode(payload, secret, algorithm="HS256")
+
+    app = FastAPI()
+
+    @app.get("/test")
+    async def test_route(user_id: str = Depends(get_current_user)):
+        return {"user_id": user_id}
+
+    client = TestClient(app)
+
+    with patch("auth.settings") as mock_settings:
+        mock_settings.supabase_jwt_secret = secret
+        response = client.get("/test", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+
+
+def test_token_without_sub_claim_returns_401():
+    secret = "test-jwt-secret"
+    payload = {
+        "aud": "authenticated",
+        "exp": int(time.time()) + 3600,
+        "iat": int(time.time()),
+    }
+    token = jwt.encode(payload, secret, algorithm="HS256")
+
+    app = FastAPI()
+
+    @app.get("/test")
+    async def test_route(user_id: str = Depends(get_current_user)):
+        return {"user_id": user_id}
+
+    client = TestClient(app)
+
+    with patch("auth.settings") as mock_settings:
+        mock_settings.supabase_jwt_secret = secret
+        response = client.get("/test", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert "no sub claim" in response.json()["detail"]
+
+
+def test_authorization_header_without_bearer_prefix_returns_401():
+    app = FastAPI()
+
+    @app.get("/test")
+    async def test_route(user_id: str = Depends(get_current_user)):
+        return {"user_id": user_id}
+
+    client = TestClient(app)
+    response = client.get("/test", headers={"Authorization": "Token some-token"})
+    assert response.status_code == 401
+    assert "Missing authorization token" in response.json()["detail"]

@@ -54,3 +54,56 @@ async def test_ask_guardian_handles_error():
             mock_settings.guardian_api_key = "test-key"
             with pytest.raises(Exception, match="Guardian request failed"):
                 await ask_guardian(prompt="test", system="test")
+
+
+@pytest.mark.asyncio
+async def test_ask_guardian_timeout_error():
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(side_effect=httpx.ReadTimeout("Connection timed out"))
+
+    with patch("services.guardian.httpx.AsyncClient", return_value=mock_client):
+        with patch("services.guardian.settings") as mock_settings:
+            mock_settings.guardian_url = "http://localhost:3000"
+            mock_settings.guardian_api_key = "test-key"
+            with pytest.raises(Exception, match="Guardian request failed"):
+                await ask_guardian(prompt="test", system="test")
+
+
+@pytest.mark.asyncio
+async def test_ask_guardian_network_error():
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+
+    with patch("services.guardian.httpx.AsyncClient", return_value=mock_client):
+        with patch("services.guardian.settings") as mock_settings:
+            mock_settings.guardian_url = "http://localhost:3000"
+            mock_settings.guardian_api_key = "test-key"
+            with pytest.raises(Exception, match="Guardian request failed"):
+                await ask_guardian(prompt="test", system="test")
+
+
+@pytest.mark.asyncio
+async def test_ask_guardian_passes_custom_timeout():
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"response": "ok"}
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(return_value=mock_response)
+
+    with patch("services.guardian.httpx.AsyncClient", return_value=mock_client):
+        with patch("services.guardian.settings") as mock_settings:
+            mock_settings.guardian_url = "http://localhost:3000"
+            mock_settings.guardian_api_key = "test-key"
+            await ask_guardian(prompt="test", system="test", timeout=60)
+
+    call_kwargs = mock_client.post.call_args[1]
+    assert call_kwargs["json"]["timeout"] == 60000
+    assert call_kwargs["timeout"] == 70

@@ -58,3 +58,104 @@ async def test_generate_thumbnail_no_image_in_response():
                     personal_photos=[],
                     font_files=[],
                 )
+
+
+@pytest.mark.asyncio
+async def test_generate_thumbnail_picks_first_image_from_multiple_parts():
+    first_image_bytes = b"\x89PNG\r\n\x1a\nfirst-image"
+    second_image_bytes = b"\x89PNG\r\n\x1a\nsecond-image"
+
+    mock_image_1 = MagicMock()
+    mock_image_1.save = MagicMock(
+        side_effect=lambda buf, format: buf.write(first_image_bytes)
+    )
+    mock_image_2 = MagicMock()
+    mock_image_2.save = MagicMock(
+        side_effect=lambda buf, format: buf.write(second_image_bytes)
+    )
+
+    mock_part_text = MagicMock()
+    mock_part_text.inline_data = None
+
+    mock_part_img1 = MagicMock()
+    mock_part_img1.inline_data = True
+    mock_part_img1.as_image.return_value = mock_image_1
+
+    mock_part_img2 = MagicMock()
+    mock_part_img2.inline_data = True
+    mock_part_img2.as_image.return_value = mock_image_2
+
+    mock_response = MagicMock()
+    mock_response.parts = [mock_part_text, mock_part_img1, mock_part_img2]
+
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = mock_response
+
+    with patch("services.nano_banana.genai.Client", return_value=mock_client):
+        with patch("services.nano_banana.settings") as mock_settings:
+            mock_settings.gemini_api_key = "test-key"
+            result = await generate_thumbnail(
+                prompt="test prompt",
+                reference_images=[],
+                personal_photos=[],
+                font_files=[],
+            )
+
+    # Should return the first image part found
+    assert result == first_image_bytes
+
+
+@pytest.mark.asyncio
+async def test_generate_thumbnail_empty_parts_list():
+    mock_response = MagicMock()
+    mock_response.parts = []
+
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = mock_response
+
+    with patch("services.nano_banana.genai.Client", return_value=mock_client):
+        with patch("services.nano_banana.settings") as mock_settings:
+            mock_settings.gemini_api_key = "test-key"
+            with pytest.raises(Exception, match="No image generated"):
+                await generate_thumbnail(
+                    prompt="test prompt",
+                    reference_images=[],
+                    personal_photos=[],
+                    font_files=[],
+                )
+
+
+@pytest.mark.asyncio
+async def test_generate_thumbnail_builds_contents_with_all_assets():
+    mock_image_bytes = b"\x89PNG\r\n\x1a\nfake"
+    mock_image = MagicMock()
+    mock_image.save = MagicMock(
+        side_effect=lambda buf, format: buf.write(mock_image_bytes)
+    )
+
+    mock_part = MagicMock()
+    mock_part.inline_data = True
+    mock_part.as_image.return_value = mock_image
+
+    mock_response = MagicMock()
+    mock_response.parts = [mock_part]
+
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = mock_response
+
+    with patch("services.nano_banana.genai.Client", return_value=mock_client):
+        with patch("services.nano_banana.settings") as mock_settings:
+            mock_settings.gemini_api_key = "test-key"
+            await generate_thumbnail(
+                prompt="Generate a thumbnail",
+                reference_images=[b"ref1", b"ref2"],
+                personal_photos=[b"photo1"],
+                font_files=[b"font1"],
+            )
+
+    call_args = mock_client.models.generate_content.call_args
+    contents = call_args[1]["contents"]
+    # Should contain: ref text + 2 refs + photo text + 1 photo + font text + 1 font + prompt
+    assert len(contents) == 8
+    assert contents[0] == "Here are my reference thumbnails for style inspiration:"
+    assert contents[-1] == "Generate a thumbnail"

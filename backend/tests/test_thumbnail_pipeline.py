@@ -128,3 +128,148 @@ async def test_save_stores_to_outputs():
     done = [e for e in events if e.get("done")]
     assert len(done) == 1
     assert done[0].get("saved") is True
+
+
+@pytest.mark.asyncio
+async def test_save_without_image_returns_error():
+    mock_sb = MagicMock()
+    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = [
+        {"role": "user", "content": "Create a thumbnail", "type": "text"},
+        {
+            "role": "assistant",
+            "content": "Here is a plan...",
+            "type": "plan",
+        },
+    ]
+    mock_sb.table.return_value.insert.return_value.execute.return_value.data = [
+        {"id": "msg-4"}
+    ]
+
+    with patch("services.thumbnail_pipeline.get_supabase", return_value=mock_sb):
+        events = []
+        async for event in handle_chat_message(
+            conversation_id="conv-1",
+            content="SAVE_OUTPUT",
+            msg_type="save",
+            user_id="test-user",
+        ):
+            events.append(json.loads(event.replace("data: ", "").strip()))
+
+    done = [e for e in events if e.get("done")]
+    assert len(done) == 1
+    assert done[0].get("error") == "No image found to save"
+
+
+@pytest.mark.asyncio
+async def test_regenerate_delegates_to_approval():
+    mock_sb = MagicMock()
+    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = [
+        {"role": "user", "content": "Create a thumbnail", "type": "text"},
+        {
+            "role": "assistant",
+            "content": "I'll use your studio portrait...",
+            "type": "plan",
+        },
+    ]
+    mock_sb.table.return_value.insert.return_value.execute.return_value.data = [
+        {"id": "msg-5"}
+    ]
+    mock_sb.storage.from_.return_value.list.return_value = []
+    mock_sb.storage.from_.return_value.download.return_value = b"fake-bytes"
+    mock_sb.storage.from_.return_value.upload.return_value = {
+        "Key": "test-user/temp.png"
+    }
+
+    fake_image = b"\x89PNG\r\n\x1a\nregenerated"
+
+    with patch("services.thumbnail_pipeline.get_supabase", return_value=mock_sb):
+        with patch(
+            "services.thumbnail_pipeline.generate_thumbnail", new_callable=AsyncMock
+        ) as mock_gen:
+            mock_gen.return_value = fake_image
+
+            events = []
+            async for event in handle_chat_message(
+                conversation_id="conv-1",
+                content="Make it brighter",
+                msg_type="regenerate",
+                user_id="test-user",
+            ):
+                events.append(json.loads(event.replace("data: ", "").strip()))
+
+    stages = [e for e in events if "stage" in e]
+    image_events = [e for e in events if e.get("message_type") == "image"]
+
+    assert any(s["stage"] == "generating" for s in stages)
+    assert len(image_events) == 1
+
+
+@pytest.mark.asyncio
+async def test_text_message_updates_conversation_title():
+    mock_sb = MagicMock()
+    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = []
+    mock_sb.table.return_value.insert.return_value.execute.return_value.data = [
+        {"id": "msg-6"}
+    ]
+    mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value.data = [
+        {}
+    ]
+    mock_sb.storage.from_.return_value.list.return_value = []
+
+    with patch("services.thumbnail_pipeline.get_supabase", return_value=mock_sb):
+        with patch(
+            "services.thumbnail_pipeline.ask_guardian", new_callable=AsyncMock
+        ) as mock_guardian:
+            mock_guardian.return_value = "Plan for your thumbnail"
+
+            events = []
+            async for event in handle_chat_message(
+                conversation_id="conv-1",
+                content="A very long title that should be truncated to fifty characters maximum for the conversation",
+                msg_type="text",
+                user_id="test-user",
+            ):
+                events.append(json.loads(event.replace("data: ", "").strip()))
+
+    # Verify the title update was called with truncated content
+    update_calls = [
+        c for c in mock_sb.table.return_value.update.call_args_list if "title" in str(c)
+    ]
+    assert len(update_calls) > 0
+
+
+@pytest.mark.asyncio
+async def test_text_message_with_existing_assets():
+    mock_sb = MagicMock()
+    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = []
+    mock_sb.table.return_value.insert.return_value.execute.return_value.data = [
+        {"id": "msg-7"}
+    ]
+    mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value.data = [
+        {}
+    ]
+    # Return files for each bucket
+    mock_sb.storage.from_.return_value.list.return_value = [
+        {"name": "file1.png"},
+        {"name": "file2.png"},
+    ]
+    mock_sb.storage.from_.return_value.download.return_value = b"file-bytes"
+
+    with patch("services.thumbnail_pipeline.get_supabase", return_value=mock_sb):
+        with patch(
+            "services.thumbnail_pipeline.ask_guardian", new_callable=AsyncMock
+        ) as mock_guardian:
+            mock_guardian.return_value = "I see your 2 reference images"
+
+            events = []
+            async for event in handle_chat_message(
+                conversation_id="conv-1",
+                content="Create a thumbnail",
+                msg_type="text",
+                user_id="test-user",
+            ):
+                events.append(json.loads(event.replace("data: ", "").strip()))
+
+    # Guardian should have been called with asset summary
+    guardian_call = mock_guardian.call_args
+    assert "Reference thumbnails:" in guardian_call[1]["prompt"]
