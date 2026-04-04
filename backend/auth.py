@@ -3,6 +3,10 @@ from fastapi import Request, HTTPException
 
 from config import settings
 
+_jwks_client = jwt.PyJWKClient(
+    f"{settings.supabase_url}/auth/v1/.well-known/jwks.json",
+)
+
 
 async def get_current_user(request: Request) -> str:
     auth_header = request.headers.get("Authorization")
@@ -12,10 +16,11 @@ async def get_current_user(request: Request) -> str:
     token = auth_header.split(" ", 1)[1]
 
     try:
+        signing_key = _jwks_client.get_signing_key_from_jwt(token)
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
+            signing_key.key,
+            algorithms=["ES256", "HS256"],
             audience="authenticated",
         )
         user_id = payload.get("sub")
