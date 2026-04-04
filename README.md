@@ -73,7 +73,6 @@ npm run dev
 |-----------------------|--------------------------------------------|
 | `SUPABASE_URL`        | Supabase project URL                       |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key                 |
-| `SUPABASE_JWT_SECRET` | JWT verification secret                    |
 | `GEMINI_API_KEY`      | Gemini API key for Nano Banana generation  |
 | `GUARDIAN_URL`        | server-guardian URL (default: `http://server-guardian:3000`) |
 | `GUARDIAN_API_KEY`    | Bearer token for server-guardian `/api/ask` |

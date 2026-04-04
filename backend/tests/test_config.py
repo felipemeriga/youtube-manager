@@ -6,7 +6,6 @@ def test_settings_loads_from_env_vars():
     env_vars = {
         "SUPABASE_URL": "https://test.supabase.co",
         "SUPABASE_SERVICE_KEY": "test-service-key",
-        "SUPABASE_JWT_SECRET": "test-jwt-secret",
         "GEMINI_API_KEY": "test-gemini-key",
         "GUARDIAN_URL": "http://custom-guardian:3000",
         "GUARDIAN_API_KEY": "test-guardian-key",
@@ -27,7 +26,6 @@ def test_settings_guardian_url_default():
     env_vars = {
         "SUPABASE_URL": "https://test.supabase.co",
         "SUPABASE_SERVICE_KEY": "test-service-key",
-        "SUPABASE_JWT_SECRET": "test-jwt-secret",
         "GEMINI_API_KEY": "test-gemini-key",
         "GUARDIAN_API_KEY": "test-guardian-key",
     }

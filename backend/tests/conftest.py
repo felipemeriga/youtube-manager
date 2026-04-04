@@ -8,7 +8,6 @@ def mock_settings():
     with patch("config.settings") as mock:
         mock.supabase_url = "https://test.supabase.co"
         mock.supabase_service_key = "test-service-key"
-        mock.supabase_jwt_secret = "test-jwt-secret"
         mock.gemini_api_key = "test-gemini-key"
         mock.guardian_url = "http://localhost:3000"
         mock.guardian_api_key = "test-guardian-key"
