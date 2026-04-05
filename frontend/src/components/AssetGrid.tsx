@@ -1,4 +1,10 @@
-import { Box, ImageList, ImageListItem, IconButton, Typography } from "@mui/material";
+import {
+  Box,
+  ImageList,
+  ImageListItem,
+  IconButton,
+  Typography,
+} from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DownloadIcon from "@mui/icons-material/Download";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
@@ -20,7 +26,12 @@ function isImage(name: string) {
   return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(name);
 }
 
-export default function AssetGrid({ files, bucket, onDelete, onDownload }: AssetGridProps) {
+export default function AssetGrid({
+  files,
+  bucket,
+  onDelete,
+  onDownload,
+}: AssetGridProps) {
   if (files.length === 0) {
     return (
       <Box sx={{ textAlign: "center", py: 4 }}>
@@ -30,7 +41,7 @@ export default function AssetGrid({ files, bucket, onDelete, onDownload }: Asset
   }
 
   return (
-    <ImageList cols={4} gap={12}>
+    <ImageList cols={3} gap={16}>
       {files.map((file) => (
         <ImageListItem
           key={file.name}
@@ -48,19 +59,21 @@ export default function AssetGrid({ files, bucket, onDelete, onDownload }: Asset
               component="img"
               src={file.public_url || `/api/assets/${bucket}/${file.name}`}
               alt={file.name}
-              sx={{ width: "100%", height: 150, objectFit: "cover" }}
+              sx={{ width: "100%", height: 280, objectFit: "cover" }}
             />
           ) : (
             <Box
               sx={{
                 width: "100%",
-                height: 150,
+                height: 280,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <InsertDriveFileIcon sx={{ fontSize: 48, color: "rgba(255,255,255,0.2)" }} />
+              <InsertDriveFileIcon
+                sx={{ fontSize: 48, color: "rgba(255,255,255,0.2)" }}
+              />
             </Box>
           )}
 
