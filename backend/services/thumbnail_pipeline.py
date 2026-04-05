@@ -1,6 +1,7 @@
 import json
 import base64
 import logging
+import random
 import uuid
 from typing import AsyncGenerator
 
@@ -46,18 +47,19 @@ async def fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
     return result
 
 
+MAX_PERSONAL_PHOTOS = 5
+
 SYSTEM_PROMPT = """You are a professional YouTube thumbnail designer. The user will describe what thumbnail they want.
 
 You will receive:
 - Reference thumbnails with public URLs — view each one to understand the visual style
-- Personal photo filenames — choose the best one by name for the thumbnail
 - Available font names for text
 
 View all reference thumbnail URLs to analyze their visual style. Then propose a detailed thumbnail plan including:
 - Which reference thumbnail style to follow and why (reference by name)
-- Which personal photo to use and why (pick by filename)
-- Text placement, font choice, and color scheme
-- Overall composition and mood
+- Text content, placement, font choice, and color scheme
+- Overall composition, mood, and color palette
+- How to incorporate the user's personal photo (pose, position, treatment)
 
 Be specific and visual in your description. The plan will be used to generate the actual thumbnail."""
 
@@ -97,33 +99,28 @@ async def handle_text_message(
 
     yield sse_event({"stage": "analyzing"})
 
-    # Get assets — URLs for reference thumbs (few, need visual analysis),
-    # filenames only for personal photos (many, Guardian picks by name)
+    # Get reference thumbs (URLs for Guardian visual analysis) and font names.
+    # Personal photos are NOT sent to Guardian — they go directly to nano-banana.
     logger.info("listing assets for user=%s", user_id)
     ref_thumbs = await list_asset_urls(sb, user_id, "reference-thumbs")
-    photo_files = await sb.storage.from_("personal-photos").list(path=user_id)
-    photo_names = [f["name"] for f in photo_files if f.get("name")]
     font_files = await sb.storage.from_("fonts").list(path=user_id)
     font_names = [f["name"] for f in font_files if f.get("name")]
     logger.info(
-        "assets found: ref_thumbs=%d photos=%d fonts=%d",
+        "assets found: ref_thumbs=%d fonts=%d",
         len(ref_thumbs),
-        len(photo_names),
         len(font_names),
     )
 
-    # Build prompt — URLs for refs, names only for photos
+    # Build prompt — reference thumb URLs + font names only
     ref_lines = (
         "\n".join(f"  - {a['name']}: {a['url']}" for a in ref_thumbs)
         if ref_thumbs
         else "  none"
     )
-    photo_list = ", ".join(photo_names) if photo_names else "none"
     font_list = ", ".join(font_names) if font_names else "none"
 
     asset_summary = (
         f"Reference thumbnails ({len(ref_thumbs)}):\n{ref_lines}\n"
-        f"Personal photos ({len(photo_names)}): {photo_list}\n"
         f"Fonts ({len(font_names)}): {font_list}"
     )
     full_prompt = f"{asset_summary}\n\nUser request: {content}"
@@ -203,15 +200,26 @@ async def handle_approval(
         "Generate a professional YouTube thumbnail based on the above plan."
     )
 
-    # Fetch assets
+    # Fetch assets — all ref thumbs + random sample of personal photos
     logger.info("downloading assets for thumbnail generation")
     ref_thumbs = await fetch_all_assets(sb, user_id, "reference-thumbs")
-    photos = await fetch_all_assets(sb, user_id, "personal-photos")
     fonts = await fetch_all_assets(sb, user_id, "fonts")
+
+    # Pick up to MAX_PERSONAL_PHOTOS random photos to send to nano-banana
+    all_photo_files = await sb.storage.from_("personal-photos").list(path=user_id)
+    photo_names = [f["name"] for f in all_photo_files if f.get("name")]
+    selected_names = random.sample(
+        photo_names, min(MAX_PERSONAL_PHOTOS, len(photo_names))
+    )
+    photos = []
+    for name in selected_names:
+        data = await sb.storage.from_("personal-photos").download(f"{user_id}/{name}")
+        photos.append(data)
     logger.info(
-        "downloaded: ref_thumbs=%d photos=%d fonts=%d",
+        "downloaded: ref_thumbs=%d photos=%d/%d fonts=%d",
         len(ref_thumbs),
         len(photos),
+        len(photo_names),
         len(fonts),
     )
 
