@@ -1,5 +1,6 @@
 import json
 import base64
+import logging
 import uuid
 from typing import AsyncGenerator
 
@@ -8,6 +9,8 @@ from supabase import create_client
 from config import settings
 from services.guardian import ask_guardian
 from services.nano_banana import generate_thumbnail
+
+logger = logging.getLogger(__name__)
 
 
 def get_supabase():
@@ -58,6 +61,13 @@ Be specific and visual in your description. The plan will be used to generate th
 async def handle_text_message(
     sb, conversation_id: str, content: str, user_id: str
 ) -> AsyncGenerator[str, None]:
+    logger.info(
+        "text_message conversation=%s user=%s content=%s",
+        conversation_id,
+        user_id,
+        content[:80],
+    )
+
     # Save user message
     sb.table("messages").insert(
         {
@@ -67,6 +77,7 @@ async def handle_text_message(
             "type": "text",
         }
     ).execute()
+    logger.debug("saved user message to db")
 
     # Update conversation title from first message
     sb.table("conversations").update({"title": content[:50]}).eq(
@@ -76,10 +87,17 @@ async def handle_text_message(
     yield sse_event({"stage": "analyzing"})
 
     # Get public URLs for all assets so Guardian can view them
+    logger.info("listing assets for user=%s", user_id)
     ref_thumbs = list_asset_urls(sb, user_id, "reference-thumbs")
     photos = list_asset_urls(sb, user_id, "personal-photos")
     font_files = sb.storage.from_("fonts").list(path=user_id)
     font_names = [f["name"] for f in font_files if f.get("name")]
+    logger.info(
+        "assets found: ref_thumbs=%d photos=%d fonts=%d",
+        len(ref_thumbs),
+        len(photos),
+        len(font_names),
+    )
 
     def format_assets(label: str, assets: list[dict]) -> str:
         if not assets:
@@ -98,7 +116,9 @@ async def handle_text_message(
     full_prompt = f"{asset_summary}\n\nUser request: {content}"
 
     # Ask Guardian for a plan
+    logger.info("sending prompt to Guardian (%d chars)", len(full_prompt))
     plan = await ask_guardian(prompt=full_prompt, system=SYSTEM_PROMPT)
+    logger.info("Guardian responded with plan (%d chars)", len(plan))
 
     # Stream plan tokens
     for token in plan.split():
@@ -113,6 +133,7 @@ async def handle_text_message(
             "type": "plan",
         }
     ).execute()
+    logger.info("plan saved to db, streaming done")
 
     yield sse_event({"message_type": "plan"})
     yield sse_event({"done": True})
@@ -121,6 +142,8 @@ async def handle_text_message(
 async def handle_approval(
     sb, conversation_id: str, user_id: str
 ) -> AsyncGenerator[str, None]:
+    logger.info("approval conversation=%s user=%s", conversation_id, user_id)
+
     # Save approval message
     sb.table("messages").insert(
         {
@@ -144,6 +167,11 @@ async def handle_approval(
     )
     plan_message = next((m for m in reversed(messages) if m["type"] == "plan"), None)
     user_request = next((m for m in messages if m["type"] == "text"), None)
+    logger.info(
+        "found plan=%s user_request=%s",
+        bool(plan_message),
+        bool(user_request),
+    )
 
     prompt_parts = []
     if user_request:
@@ -155,17 +183,26 @@ async def handle_approval(
     )
 
     # Fetch assets
+    logger.info("downloading assets for thumbnail generation")
     ref_thumbs = fetch_all_assets(sb, user_id, "reference-thumbs")
     photos = fetch_all_assets(sb, user_id, "personal-photos")
     fonts = fetch_all_assets(sb, user_id, "fonts")
+    logger.info(
+        "downloaded: ref_thumbs=%d photos=%d fonts=%d",
+        len(ref_thumbs),
+        len(photos),
+        len(fonts),
+    )
 
     # Generate thumbnail
+    logger.info("calling generate_thumbnail")
     image_bytes = await generate_thumbnail(
         prompt="\n".join(prompt_parts),
         reference_images=ref_thumbs,
         personal_photos=photos,
         font_files=fonts,
     )
+    logger.info("thumbnail generated, size=%d bytes", len(image_bytes))
 
     # Store temporarily in outputs bucket
     temp_filename = f"temp_{uuid.uuid4().hex[:8]}.png"
@@ -173,6 +210,7 @@ async def handle_approval(
     sb.storage.from_("outputs").upload(
         storage_path, image_bytes, {"content-type": "image/png"}
     )
+    logger.info("uploaded temp thumbnail to %s", storage_path)
 
     # Save image message
     image_base64 = base64.b64encode(image_bytes).decode()
@@ -199,6 +237,8 @@ async def handle_approval(
 async def handle_save(
     sb, conversation_id: str, user_id: str
 ) -> AsyncGenerator[str, None]:
+    logger.info("save conversation=%s user=%s", conversation_id, user_id)
+
     # Save the save message
     sb.table("messages").insert(
         {
@@ -221,18 +261,16 @@ async def handle_save(
     image_message = next((m for m in reversed(messages) if m["type"] == "image"), None)
 
     if image_message and image_message.get("image_url"):
-        # Image is already in outputs bucket from handle_approval
-        # Rename from temp to final
         temp_path = image_message["image_url"]
         final_filename = f"thumbnail_{uuid.uuid4().hex[:8]}.png"
         final_path = f"{user_id}/{final_filename}"
+        logger.info("renaming %s -> %s", temp_path, final_path)
 
         # Download and re-upload with final name
         image_data = sb.storage.from_("outputs").download(temp_path)
         sb.storage.from_("outputs").upload(
             final_path, image_data, {"content-type": "image/png"}
         )
-        # Remove temp file
         sb.storage.from_("outputs").remove([temp_path])
 
         # Update the image message with final URL
@@ -249,6 +287,7 @@ async def handle_save(
                 "type": "text",
             }
         ).execute()
+        logger.info("thumbnail saved as %s", final_filename)
 
         yield sse_event(
             {
@@ -259,12 +298,20 @@ async def handle_save(
             }
         )
     else:
+        logger.warning("no image found to save in conversation=%s", conversation_id)
         yield sse_event({"done": True, "error": "No image found to save"})
 
 
 async def handle_regenerate(
     sb, conversation_id: str, content: str, user_id: str
 ) -> AsyncGenerator[str, None]:
+    logger.info(
+        "regenerate conversation=%s user=%s feedback=%s",
+        conversation_id,
+        user_id,
+        (content or "none")[:80],
+    )
+
     # Save regenerate message
     sb.table("messages").insert(
         {
@@ -286,6 +333,12 @@ async def handle_chat_message(
     msg_type: str,
     user_id: str,
 ) -> AsyncGenerator[str, None]:
+    logger.info(
+        "chat_message type=%s conversation=%s user=%s",
+        msg_type,
+        conversation_id,
+        user_id,
+    )
     sb = get_supabase()
 
     if msg_type == "text":
@@ -300,3 +353,5 @@ async def handle_chat_message(
     elif msg_type == "regenerate":
         async for event in handle_regenerate(sb, conversation_id, content, user_id):
             yield event
+    else:
+        logger.warning("unknown message type=%s", msg_type)
