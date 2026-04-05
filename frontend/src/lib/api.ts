@@ -11,7 +11,10 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
-export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
   const headers = await getAuthHeaders();
   const response = await fetch(path, {
     ...options,
@@ -23,7 +26,10 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return response.json();
 }
 
-export async function apiUpload(path: string, file: File): Promise<Record<string, string>> {
+export async function apiUpload(
+  path: string,
+  file: File
+): Promise<Record<string, string>> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -70,6 +76,7 @@ export async function streamChat(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let lastMessageType: string | undefined;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -89,8 +96,15 @@ export async function streamChat(
 
         if (data.token) callbacks.onToken(data.token);
         if (data.stage) callbacks.onStage(data.stage);
-        if (data.image_base64) callbacks.onImage(data.image_base64, data.image_url || "");
-        if (data.done) callbacks.onDone(data);
+        if (data.message_type) lastMessageType = data.message_type;
+        if (data.image_base64)
+          callbacks.onImage(data.image_base64, data.image_url || "");
+        if (data.done) {
+          if (lastMessageType && !data.message_type) {
+            data.message_type = lastMessageType;
+          }
+          callbacks.onDone(data);
+        }
       } catch {
         // Incomplete JSON, will be handled in next chunk
       }
@@ -98,12 +112,18 @@ export async function streamChat(
   }
 }
 
-export const listConversations = () => apiFetch<Array<Record<string, unknown>>>("/api/conversations");
-export const createConversation = () => apiFetch<Record<string, unknown>>("/api/conversations", { method: "POST" });
-export const getConversation = (id: string) => apiFetch<Record<string, unknown>>(`/api/conversations/${id}`);
-export const deleteConversation = (id: string) => apiFetch<void>(`/api/conversations/${id}`, { method: "DELETE" });
+export const listConversations = () =>
+  apiFetch<Array<Record<string, unknown>>>("/api/conversations");
+export const createConversation = () =>
+  apiFetch<Record<string, unknown>>("/api/conversations", { method: "POST" });
+export const getConversation = (id: string) =>
+  apiFetch<Record<string, unknown>>(`/api/conversations/${id}`);
+export const deleteConversation = (id: string) =>
+  apiFetch<void>(`/api/conversations/${id}`, { method: "DELETE" });
 
-export const listAssets = (bucket: string) => apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`);
+export const listAssets = (bucket: string) =>
+  apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`);
 export const deleteAsset = (bucket: string, name: string) =>
   apiFetch<void>(`/api/assets/${bucket}/${name}`, { method: "DELETE" });
-export const uploadAsset = (bucket: string, file: File) => apiUpload(`/api/assets/${bucket}/upload`, file);
+export const uploadAsset = (bucket: string, file: File) =>
+  apiUpload(`/api/assets/${bucket}/upload`, file);
