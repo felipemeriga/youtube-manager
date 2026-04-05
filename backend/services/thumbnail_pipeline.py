@@ -29,7 +29,9 @@ async def list_asset_urls(sb, user_id: str, bucket: str) -> list[dict]:
     result = []
     for f in files:
         if f.get("name"):
-            url = await sb.storage.from_(bucket).get_public_url(f"{user_id}/{f['name']}")
+            url = await sb.storage.from_(bucket).get_public_url(
+                f"{user_id}/{f['name']}"
+            )
             result.append({"name": f["name"], "url": url})
     return result
 
@@ -47,13 +49,13 @@ async def fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
 SYSTEM_PROMPT = """You are a professional YouTube thumbnail designer. The user will describe what thumbnail they want.
 
 You will receive:
-- Reference thumbnails with public URLs — view them to understand the style
-- Personal photos with public URLs — view them to choose the best one
+- Reference thumbnails with public URLs — view each one to understand the visual style
+- Personal photo filenames — choose the best one by name for the thumbnail
 - Available font names for text
 
-View all provided image URLs to analyze them visually. Then propose a detailed thumbnail plan including:
+View all reference thumbnail URLs to analyze their visual style. Then propose a detailed thumbnail plan including:
 - Which reference thumbnail style to follow and why (reference by name)
-- Which personal photo to use and why (reference by name)
+- Which personal photo to use and why (pick by filename)
 - Text placement, font choice, and color scheme
 - Overall composition and mood
 
@@ -95,38 +97,40 @@ async def handle_text_message(
 
     yield sse_event({"stage": "analyzing"})
 
-    # Get public URLs for all assets so Guardian can view them
+    # Get assets — URLs for reference thumbs (few, need visual analysis),
+    # filenames only for personal photos (many, Guardian picks by name)
     logger.info("listing assets for user=%s", user_id)
     ref_thumbs = await list_asset_urls(sb, user_id, "reference-thumbs")
-    photos = await list_asset_urls(sb, user_id, "personal-photos")
+    photo_files = await sb.storage.from_("personal-photos").list(path=user_id)
+    photo_names = [f["name"] for f in photo_files if f.get("name")]
     font_files = await sb.storage.from_("fonts").list(path=user_id)
     font_names = [f["name"] for f in font_files if f.get("name")]
     logger.info(
         "assets found: ref_thumbs=%d photos=%d fonts=%d",
         len(ref_thumbs),
-        len(photos),
+        len(photo_names),
         len(font_names),
     )
 
-    def format_assets(label: str, assets: list[dict]) -> str:
-        if not assets:
-            return f"{label}: none"
-        lines = [f"  - {a['name']}: {a['url']}" for a in assets]
-        return f"{label} ({len(assets)}):\n" + "\n".join(lines)
+    # Build prompt — URLs for refs, names only for photos
+    ref_lines = (
+        "\n".join(f"  - {a['name']}: {a['url']}" for a in ref_thumbs)
+        if ref_thumbs
+        else "  none"
+    )
+    photo_list = ", ".join(photo_names) if photo_names else "none"
+    font_list = ", ".join(font_names) if font_names else "none"
 
-    # Build prompt with public URLs for images
-    asset_summary = "\n".join(
-        [
-            format_assets("Reference thumbnails", ref_thumbs),
-            format_assets("Personal photos", photos),
-            f"Fonts ({len(font_names)}): {', '.join(font_names) or 'none'}",
-        ]
+    asset_summary = (
+        f"Reference thumbnails ({len(ref_thumbs)}):\n{ref_lines}\n"
+        f"Personal photos ({len(photo_names)}): {photo_list}\n"
+        f"Fonts ({len(font_names)}): {font_list}"
     )
     full_prompt = f"{asset_summary}\n\nUser request: {content}"
 
-    # Ask Guardian for a plan
+    # Ask Guardian for a plan (longer timeout for image analysis)
     logger.info("sending prompt to Guardian (%d chars)", len(full_prompt))
-    plan = await ask_guardian(prompt=full_prompt, system=SYSTEM_PROMPT)
+    plan = await ask_guardian(prompt=full_prompt, system=SYSTEM_PROMPT, timeout=300)
     logger.info("Guardian responded with plan (%d chars)", len(plan))
 
     # Stream plan tokens
