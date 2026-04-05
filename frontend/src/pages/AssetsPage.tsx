@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Box, Typography, Tabs, Tab, Snackbar, Alert } from "@mui/material";
 import AssetGrid from "../components/AssetGrid";
 import AssetUpload from "../components/AssetUpload";
+import type { FileUploadItem } from "../components/AssetUpload";
 import { listAssets, uploadAsset, deleteAsset } from "../lib/api";
 
 const BUCKETS = [
@@ -21,8 +22,7 @@ export default function AssetsPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [files, setFiles] = useState<AssetFile[]>([]);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [fileStatuses, setFileStatuses] = useState<FileUploadItem[]>([]);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -43,24 +43,40 @@ export default function AssetsPage() {
   }, [loadFiles]);
 
   const handleUpload = async (fileList: FileList) => {
-    const total = fileList.length;
-    setUploading(true);
-    setUploadProgress({ current: 0, total });
+    const items: FileUploadItem[] = Array.from(fileList).map((f) => ({
+      name: f.name,
+      status: "pending" as const,
+    }));
+    setFileStatuses(items);
 
     let succeeded = 0;
     let failed = 0;
 
-    for (let i = 0; i < total; i++) {
+    for (let i = 0; i < fileList.length; i++) {
+      setFileStatuses((prev) =>
+        prev.map((item, idx) =>
+          idx === i ? { ...item, status: "uploading" } : item
+        )
+      );
+
       try {
         await uploadAsset(currentBucket.key, fileList[i]);
         succeeded++;
+        setFileStatuses((prev) =>
+          prev.map((item, idx) =>
+            idx === i ? { ...item, status: "done" } : item
+          )
+        );
       } catch {
         failed++;
+        setFileStatuses((prev) =>
+          prev.map((item, idx) =>
+            idx === i ? { ...item, status: "error" } : item
+          )
+        );
       }
-      setUploadProgress({ current: i + 1, total });
     }
 
-    setUploading(false);
     loadFiles();
 
     if (failed > 0) {
@@ -76,6 +92,9 @@ export default function AssetsPage() {
         severity: "success",
       });
     }
+
+    // Clear file list after a delay so user can see final states
+    setTimeout(() => setFileStatuses([]), 3000);
   };
 
   const handleDelete = async (name: string) => {
@@ -128,8 +147,7 @@ export default function AssetsPage() {
           <AssetUpload
             onUpload={handleUpload}
             accept={currentBucket.accept}
-            uploading={uploading}
-            uploadProgress={uploadProgress}
+            fileStatuses={fileStatuses}
           />
         </Box>
       )}
