@@ -1,10 +1,4 @@
-import {
-  Box,
-  ImageList,
-  ImageListItem,
-  IconButton,
-  Typography,
-} from "@mui/material";
+import { Box, IconButton, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DownloadIcon from "@mui/icons-material/Download";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
@@ -41,9 +35,15 @@ export default function AssetGrid({
   }
 
   return (
-    <ImageList cols={3} gap={16}>
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: 2,
+      }}
+    >
       {files.map((file) => (
-        <ImageListItem
+        <Box
           key={file.name}
           sx={{
             borderRadius: 2,
@@ -59,7 +59,12 @@ export default function AssetGrid({
               component="img"
               src={file.public_url || `/api/assets/${bucket}/${file.name}`}
               alt={file.name}
-              sx={{ width: "100%", height: 280, objectFit: "cover" }}
+              sx={{
+                width: "100%",
+                height: 280,
+                objectFit: "cover",
+                display: "block",
+              }}
             />
           ) : (
             <Box
@@ -110,8 +115,8 @@ export default function AssetGrid({
               <DeleteOutlineIcon fontSize="small" />
             </IconButton>
           </Box>
-        </ImageListItem>
+        </Box>
       ))}
-    </ImageList>
+    </Box>
   );
 }
