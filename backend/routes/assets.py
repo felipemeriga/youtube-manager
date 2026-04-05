@@ -32,6 +32,10 @@ async def list_assets(bucket: str, user_id: str = Depends(get_current_user)):
     validate_bucket(bucket)
     sb = get_supabase()
     files = sb.storage.from_(bucket).list(path=user_id)
+    for f in files:
+        f["public_url"] = sb.storage.from_(bucket).get_public_url(
+            f"{user_id}/{f['name']}"
+        )
     return files
 
 

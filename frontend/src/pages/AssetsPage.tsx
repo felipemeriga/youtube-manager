@@ -13,6 +13,7 @@ const BUCKETS = [
 
 interface AssetFile {
   name: string;
+  public_url?: string;
   metadata?: { size?: number };
 }
 

@@ -5,6 +5,7 @@ import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 
 interface AssetFile {
   name: string;
+  public_url?: string;
   metadata?: { size?: number };
 }
 
@@ -45,7 +46,7 @@ export default function AssetGrid({ files, bucket, onDelete, onDownload }: Asset
           {isImage(file.name) ? (
             <Box
               component="img"
-              src={`/api/assets/${bucket}/${file.name}`}
+              src={file.public_url || `/api/assets/${bucket}/${file.name}`}
               alt={file.name}
               sx={{ width: "100%", height: 150, objectFit: "cover" }}
             />
