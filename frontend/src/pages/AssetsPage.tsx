@@ -89,7 +89,9 @@ export default function AssetsPage() {
   };
 
   const handleDownload = (name: string) => {
-    window.open(`/api/assets/${currentBucket.key}/${name}`, "_blank");
+    const file = files.find((f) => f.name === name);
+    const url = file?.public_url || `/api/assets/${currentBucket.key}/${name}`;
+    window.open(url, "_blank");
   };
 
   return (
