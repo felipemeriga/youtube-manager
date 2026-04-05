@@ -20,6 +20,113 @@ interface MessageBubbleProps {
   isStreaming?: boolean;
 }
 
+const markdownStyles = {
+  "& h1": {
+    fontSize: 20,
+    fontWeight: 700,
+    mt: 2,
+    mb: 1,
+    color: "rgba(255,255,255,0.95)",
+    "&:first-of-type": { mt: 0 },
+  },
+  "& h2": {
+    fontSize: 17,
+    fontWeight: 600,
+    mt: 2,
+    mb: 0.75,
+    color: "rgba(255,255,255,0.9)",
+    borderBottom: "1px solid rgba(255,255,255,0.1)",
+    pb: 0.5,
+  },
+  "& h3": {
+    fontSize: 15,
+    fontWeight: 600,
+    mt: 1.5,
+    mb: 0.5,
+    color: "#a78bfa",
+  },
+  "& p": {
+    m: 0,
+    mb: 1,
+    lineHeight: 1.7,
+    color: "rgba(255,255,255,0.8)",
+    "&:last-child": { mb: 0 },
+  },
+  "& ul, & ol": {
+    pl: 2.5,
+    my: 0.75,
+    "& li": {
+      mb: 0.5,
+      lineHeight: 1.6,
+      color: "rgba(255,255,255,0.8)",
+      "& p": { mb: 0 },
+    },
+  },
+  "& strong": {
+    color: "rgba(255,255,255,0.95)",
+    fontWeight: 600,
+  },
+  "& em": {
+    color: "rgba(255,255,255,0.7)",
+    fontStyle: "italic",
+  },
+  "& code": {
+    backgroundColor: "rgba(124,58,237,0.15)",
+    border: "1px solid rgba(124,58,237,0.2)",
+    borderRadius: 0.5,
+    px: 0.75,
+    py: 0.25,
+    fontSize: 13,
+    fontFamily: "monospace",
+    color: "#c4b5fd",
+  },
+  "& pre": {
+    backgroundColor: "rgba(0,0,0,0.3)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 1,
+    p: 1.5,
+    my: 1,
+    overflow: "auto",
+    "& code": {
+      backgroundColor: "transparent",
+      border: "none",
+      p: 0,
+      color: "rgba(255,255,255,0.85)",
+    },
+  },
+  "& hr": {
+    border: "none",
+    borderTop: "1px solid rgba(255,255,255,0.1)",
+    my: 2,
+  },
+  "& table": {
+    width: "100%",
+    borderCollapse: "collapse",
+    my: 1,
+    fontSize: 13,
+    "& th": {
+      textAlign: "left",
+      p: 0.75,
+      borderBottom: "1px solid rgba(255,255,255,0.15)",
+      color: "rgba(255,255,255,0.9)",
+      fontWeight: 600,
+    },
+    "& td": {
+      p: 0.75,
+      borderBottom: "1px solid rgba(255,255,255,0.06)",
+      color: "rgba(255,255,255,0.7)",
+    },
+  },
+  "& blockquote": {
+    borderLeft: "3px solid #7c3aed",
+    pl: 1.5,
+    ml: 0,
+    my: 1,
+    color: "rgba(255,255,255,0.6)",
+    fontStyle: "italic",
+  },
+};
+
 export default function MessageBubble({
   message,
   onApprove,
@@ -29,6 +136,7 @@ export default function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const showButtons = isLatest && !isStreaming && onApprove && onReject;
+  const isPlan = message.type === "plan";
 
   return (
     <Box
@@ -60,7 +168,7 @@ export default function MessageBubble({
 
       <Box
         sx={{
-          maxWidth: "70%",
+          maxWidth: isPlan ? "85%" : "70%",
           p: 2,
           borderRadius: 2,
           backgroundColor: isUser
@@ -85,15 +193,23 @@ export default function MessageBubble({
           />
         )}
 
-        <Box sx={{ "& p": { m: 0 }, "& p + p": { mt: 1 }, fontSize: 14, lineHeight: 1.6 }}>
+        <Box sx={{ fontSize: 14, lineHeight: 1.6, ...markdownStyles }}>
           <ReactMarkdown>{message.content}</ReactMarkdown>
         </Box>
 
         {showButtons && message.type === "plan" && (
-          <ApprovalButtons type="plan" onApprove={onApprove} onReject={onReject} />
+          <ApprovalButtons
+            type="plan"
+            onApprove={onApprove}
+            onReject={onReject}
+          />
         )}
         {showButtons && message.type === "image" && (
-          <ApprovalButtons type="image" onApprove={onApprove} onReject={onReject} />
+          <ApprovalButtons
+            type="image"
+            onApprove={onApprove}
+            onReject={onReject}
+          />
         )}
       </Box>
     </Box>
