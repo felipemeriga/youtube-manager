@@ -32,8 +32,7 @@ def make_async_sb(**overrides):
     storage.download = AsyncMock(return_value=overrides.get("download", b"fake-bytes"))
     storage.upload = AsyncMock(return_value=overrides.get("upload", {}))
     storage.remove = AsyncMock(return_value=[])
-    # get_public_url is sync (returns a string, no I/O)
-    storage.get_public_url = MagicMock(
+    storage.get_public_url = AsyncMock(
         side_effect=lambda path: f"https://storage.example.com/{path}"
     )
 

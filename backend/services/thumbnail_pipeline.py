@@ -29,7 +29,7 @@ async def list_asset_urls(sb, user_id: str, bucket: str) -> list[dict]:
     result = []
     for f in files:
         if f.get("name"):
-            url = sb.storage.from_(bucket).get_public_url(f"{user_id}/{f['name']}")
+            url = await sb.storage.from_(bucket).get_public_url(f"{user_id}/{f['name']}")
             result.append({"name": f["name"], "url": url})
     return result
 
