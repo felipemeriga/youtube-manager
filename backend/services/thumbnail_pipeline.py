@@ -4,7 +4,7 @@ import logging
 import uuid
 from typing import AsyncGenerator
 
-from supabase import create_client
+from supabase._async.client import create_client as create_async_client
 
 from config import settings
 from services.guardian import ask_guardian
@@ -13,17 +13,19 @@ from services.nano_banana import generate_thumbnail
 logger = logging.getLogger(__name__)
 
 
-def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_key)
+async def get_supabase():
+    return await create_async_client(
+        settings.supabase_url, settings.supabase_service_key
+    )
 
 
 def sse_event(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
 
-def list_asset_urls(sb, user_id: str, bucket: str) -> list[dict]:
+async def list_asset_urls(sb, user_id: str, bucket: str) -> list[dict]:
     """Return list of {name, url} for all files in a user's bucket folder."""
-    files = sb.storage.from_(bucket).list(path=user_id)
+    files = await sb.storage.from_(bucket).list(path=user_id)
     result = []
     for f in files:
         if f.get("name"):
@@ -32,12 +34,12 @@ def list_asset_urls(sb, user_id: str, bucket: str) -> list[dict]:
     return result
 
 
-def fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
-    files = sb.storage.from_(bucket).list(path=user_id)
+async def fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
+    files = await sb.storage.from_(bucket).list(path=user_id)
     result = []
     for f in files:
         if f.get("name"):
-            data = sb.storage.from_(bucket).download(f"{user_id}/{f['name']}")
+            data = await sb.storage.from_(bucket).download(f"{user_id}/{f['name']}")
             result.append(data)
     return result
 
@@ -69,28 +71,35 @@ async def handle_text_message(
     )
 
     # Save user message
-    sb.table("messages").insert(
-        {
-            "conversation_id": conversation_id,
-            "role": "user",
-            "content": content,
-            "type": "text",
-        }
-    ).execute()
+    await (
+        sb.table("messages")
+        .insert(
+            {
+                "conversation_id": conversation_id,
+                "role": "user",
+                "content": content,
+                "type": "text",
+            }
+        )
+        .execute()
+    )
     logger.debug("saved user message to db")
 
     # Update conversation title from first message
-    sb.table("conversations").update({"title": content[:50]}).eq(
-        "id", conversation_id
-    ).execute()
+    await (
+        sb.table("conversations")
+        .update({"title": content[:50]})
+        .eq("id", conversation_id)
+        .execute()
+    )
 
     yield sse_event({"stage": "analyzing"})
 
     # Get public URLs for all assets so Guardian can view them
     logger.info("listing assets for user=%s", user_id)
-    ref_thumbs = list_asset_urls(sb, user_id, "reference-thumbs")
-    photos = list_asset_urls(sb, user_id, "personal-photos")
-    font_files = sb.storage.from_("fonts").list(path=user_id)
+    ref_thumbs = await list_asset_urls(sb, user_id, "reference-thumbs")
+    photos = await list_asset_urls(sb, user_id, "personal-photos")
+    font_files = await sb.storage.from_("fonts").list(path=user_id)
     font_names = [f["name"] for f in font_files if f.get("name")]
     logger.info(
         "assets found: ref_thumbs=%d photos=%d fonts=%d",
@@ -125,14 +134,18 @@ async def handle_text_message(
         yield sse_event({"token": token + " "})
 
     # Save plan message
-    sb.table("messages").insert(
-        {
-            "conversation_id": conversation_id,
-            "role": "assistant",
-            "content": plan,
-            "type": "plan",
-        }
-    ).execute()
+    await (
+        sb.table("messages")
+        .insert(
+            {
+                "conversation_id": conversation_id,
+                "role": "assistant",
+                "content": plan,
+                "type": "plan",
+            }
+        )
+        .execute()
+    )
     logger.info("plan saved to db, streaming done")
 
     yield sse_event({"message_type": "plan"})
@@ -145,26 +158,30 @@ async def handle_approval(
     logger.info("approval conversation=%s user=%s", conversation_id, user_id)
 
     # Save approval message
-    sb.table("messages").insert(
-        {
-            "conversation_id": conversation_id,
-            "role": "user",
-            "content": "APPROVED",
-            "type": "approval",
-        }
-    ).execute()
+    await (
+        sb.table("messages")
+        .insert(
+            {
+                "conversation_id": conversation_id,
+                "role": "user",
+                "content": "APPROVED",
+                "type": "approval",
+            }
+        )
+        .execute()
+    )
 
     yield sse_event({"stage": "generating"})
 
     # Get conversation history to find the plan
-    messages = (
-        sb.table("messages")
+    response = (
+        await sb.table("messages")
         .select("*")
         .eq("conversation_id", conversation_id)
         .order("created_at")
         .execute()
-        .data
     )
+    messages = response.data
     plan_message = next((m for m in reversed(messages) if m["type"] == "plan"), None)
     user_request = next((m for m in messages if m["type"] == "text"), None)
     logger.info(
@@ -184,9 +201,9 @@ async def handle_approval(
 
     # Fetch assets
     logger.info("downloading assets for thumbnail generation")
-    ref_thumbs = fetch_all_assets(sb, user_id, "reference-thumbs")
-    photos = fetch_all_assets(sb, user_id, "personal-photos")
-    fonts = fetch_all_assets(sb, user_id, "fonts")
+    ref_thumbs = await fetch_all_assets(sb, user_id, "reference-thumbs")
+    photos = await fetch_all_assets(sb, user_id, "personal-photos")
+    fonts = await fetch_all_assets(sb, user_id, "fonts")
     logger.info(
         "downloaded: ref_thumbs=%d photos=%d fonts=%d",
         len(ref_thumbs),
@@ -207,22 +224,26 @@ async def handle_approval(
     # Store temporarily in outputs bucket
     temp_filename = f"temp_{uuid.uuid4().hex[:8]}.png"
     storage_path = f"{user_id}/{temp_filename}"
-    sb.storage.from_("outputs").upload(
+    await sb.storage.from_("outputs").upload(
         storage_path, image_bytes, {"content-type": "image/png"}
     )
     logger.info("uploaded temp thumbnail to %s", storage_path)
 
     # Save image message
     image_base64 = base64.b64encode(image_bytes).decode()
-    sb.table("messages").insert(
-        {
-            "conversation_id": conversation_id,
-            "role": "assistant",
-            "content": "Here's your generated thumbnail:",
-            "type": "image",
-            "image_url": storage_path,
-        }
-    ).execute()
+    await (
+        sb.table("messages")
+        .insert(
+            {
+                "conversation_id": conversation_id,
+                "role": "assistant",
+                "content": "Here's your generated thumbnail:",
+                "type": "image",
+                "image_url": storage_path,
+            }
+        )
+        .execute()
+    )
 
     yield sse_event(
         {
@@ -240,24 +261,28 @@ async def handle_save(
     logger.info("save conversation=%s user=%s", conversation_id, user_id)
 
     # Save the save message
-    sb.table("messages").insert(
-        {
-            "conversation_id": conversation_id,
-            "role": "user",
-            "content": "SAVE_OUTPUT",
-            "type": "save",
-        }
-    ).execute()
+    await (
+        sb.table("messages")
+        .insert(
+            {
+                "conversation_id": conversation_id,
+                "role": "user",
+                "content": "SAVE_OUTPUT",
+                "type": "save",
+            }
+        )
+        .execute()
+    )
 
     # Find the most recent image message
-    messages = (
-        sb.table("messages")
+    response = (
+        await sb.table("messages")
         .select("*")
         .eq("conversation_id", conversation_id)
         .order("created_at")
         .execute()
-        .data
     )
+    messages = response.data
     image_message = next((m for m in reversed(messages) if m["type"] == "image"), None)
 
     if image_message and image_message.get("image_url"):
@@ -267,26 +292,33 @@ async def handle_save(
         logger.info("renaming %s -> %s", temp_path, final_path)
 
         # Download and re-upload with final name
-        image_data = sb.storage.from_("outputs").download(temp_path)
-        sb.storage.from_("outputs").upload(
+        image_data = await sb.storage.from_("outputs").download(temp_path)
+        await sb.storage.from_("outputs").upload(
             final_path, image_data, {"content-type": "image/png"}
         )
-        sb.storage.from_("outputs").remove([temp_path])
+        await sb.storage.from_("outputs").remove([temp_path])
 
         # Update the image message with final URL
-        sb.table("messages").update({"image_url": final_path}).eq(
-            "id", image_message["id"]
-        ).execute()
+        await (
+            sb.table("messages")
+            .update({"image_url": final_path})
+            .eq("id", image_message["id"])
+            .execute()
+        )
 
         # Save confirmation message
-        sb.table("messages").insert(
-            {
-                "conversation_id": conversation_id,
-                "role": "assistant",
-                "content": f"Thumbnail saved to outputs as {final_filename}",
-                "type": "text",
-            }
-        ).execute()
+        await (
+            sb.table("messages")
+            .insert(
+                {
+                    "conversation_id": conversation_id,
+                    "role": "assistant",
+                    "content": f"Thumbnail saved to outputs as {final_filename}",
+                    "type": "text",
+                }
+            )
+            .execute()
+        )
         logger.info("thumbnail saved as %s", final_filename)
 
         yield sse_event(
@@ -313,14 +345,18 @@ async def handle_regenerate(
     )
 
     # Save regenerate message
-    sb.table("messages").insert(
-        {
-            "conversation_id": conversation_id,
-            "role": "user",
-            "content": content or "REGENERATE",
-            "type": "regenerate",
-        }
-    ).execute()
+    await (
+        sb.table("messages")
+        .insert(
+            {
+                "conversation_id": conversation_id,
+                "role": "user",
+                "content": content or "REGENERATE",
+                "type": "regenerate",
+            }
+        )
+        .execute()
+    )
 
     # Re-run generation with optional feedback
     async for event in handle_approval(sb, conversation_id, user_id):
@@ -339,7 +375,7 @@ async def handle_chat_message(
         conversation_id,
         user_id,
     )
-    sb = get_supabase()
+    sb = await get_supabase()
 
     if msg_type == "text":
         async for event in handle_text_message(sb, conversation_id, content, user_id):
