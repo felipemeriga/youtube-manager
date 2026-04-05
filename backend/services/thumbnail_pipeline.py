@@ -64,13 +64,21 @@ async def handle_text_message(
 
     yield sse_event({"stage": "analyzing"})
 
-    # Fetch all assets
-    ref_thumbs = fetch_all_assets(sb, user_id, "reference-thumbs")
-    photos = fetch_all_assets(sb, user_id, "personal-photos")
-    fonts = fetch_all_assets(sb, user_id, "fonts")
+    # List assets (metadata only — no downloads needed for the plan)
+    ref_thumb_files = sb.storage.from_("reference-thumbs").list(path=user_id)
+    photo_files = sb.storage.from_("personal-photos").list(path=user_id)
+    font_files = sb.storage.from_("fonts").list(path=user_id)
+
+    ref_names = [f["name"] for f in ref_thumb_files if f.get("name")]
+    photo_names = [f["name"] for f in photo_files if f.get("name")]
+    font_names = [f["name"] for f in font_files if f.get("name")]
 
     # Build prompt for Guardian
-    asset_summary = f"Reference thumbnails: {len(ref_thumbs)} images. Personal photos: {len(photos)} images. Fonts: {len(fonts)} files."
+    asset_summary = (
+        f"Reference thumbnails ({len(ref_names)}): {', '.join(ref_names) or 'none'}.\n"
+        f"Personal photos ({len(photo_names)}): {', '.join(photo_names) or 'none'}.\n"
+        f"Fonts ({len(font_names)}): {', '.join(font_names) or 'none'}."
+    )
     full_prompt = f"{asset_summary}\n\nUser request: {content}"
 
     # Ask Guardian for a plan
