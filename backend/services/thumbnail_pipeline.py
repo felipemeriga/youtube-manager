@@ -18,6 +18,17 @@ def sse_event(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
 
+def list_asset_urls(sb, user_id: str, bucket: str) -> list[dict]:
+    """Return list of {name, url} for all files in a user's bucket folder."""
+    files = sb.storage.from_(bucket).list(path=user_id)
+    result = []
+    for f in files:
+        if f.get("name"):
+            url = sb.storage.from_(bucket).get_public_url(f"{user_id}/{f['name']}")
+            result.append({"name": f["name"], "url": url})
+    return result
+
+
 def fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
     files = sb.storage.from_(bucket).list(path=user_id)
     result = []
@@ -31,13 +42,13 @@ def fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
 SYSTEM_PROMPT = """You are a professional YouTube thumbnail designer. The user will describe what thumbnail they want.
 
 You will receive:
-- Reference thumbnails for style inspiration
-- The user's personal photos to choose from
-- Available fonts for text
+- Reference thumbnails with public URLs — view them to understand the style
+- Personal photos with public URLs — view them to choose the best one
+- Available font names for text
 
-Analyze all provided assets and propose a detailed thumbnail plan including:
-- Which reference thumbnail style to follow and why
-- Which personal photo to use and why
+View all provided image URLs to analyze them visually. Then propose a detailed thumbnail plan including:
+- Which reference thumbnail style to follow and why (reference by name)
+- Which personal photo to use and why (reference by name)
 - Text placement, font choice, and color scheme
 - Overall composition and mood
 
@@ -64,20 +75,25 @@ async def handle_text_message(
 
     yield sse_event({"stage": "analyzing"})
 
-    # List assets (metadata only — no downloads needed for the plan)
-    ref_thumb_files = sb.storage.from_("reference-thumbs").list(path=user_id)
-    photo_files = sb.storage.from_("personal-photos").list(path=user_id)
+    # Get public URLs for all assets so Guardian can view them
+    ref_thumbs = list_asset_urls(sb, user_id, "reference-thumbs")
+    photos = list_asset_urls(sb, user_id, "personal-photos")
     font_files = sb.storage.from_("fonts").list(path=user_id)
-
-    ref_names = [f["name"] for f in ref_thumb_files if f.get("name")]
-    photo_names = [f["name"] for f in photo_files if f.get("name")]
     font_names = [f["name"] for f in font_files if f.get("name")]
 
-    # Build prompt for Guardian
-    asset_summary = (
-        f"Reference thumbnails ({len(ref_names)}): {', '.join(ref_names) or 'none'}.\n"
-        f"Personal photos ({len(photo_names)}): {', '.join(photo_names) or 'none'}.\n"
-        f"Fonts ({len(font_names)}): {', '.join(font_names) or 'none'}."
+    def format_assets(label: str, assets: list[dict]) -> str:
+        if not assets:
+            return f"{label}: none"
+        lines = [f"  - {a['name']}: {a['url']}" for a in assets]
+        return f"{label} ({len(assets)}):\n" + "\n".join(lines)
+
+    # Build prompt with public URLs for images
+    asset_summary = "\n".join(
+        [
+            format_assets("Reference thumbnails", ref_thumbs),
+            format_assets("Personal photos", photos),
+            f"Fonts ({len(font_names)}): {', '.join(font_names) or 'none'}",
+        ]
     )
     full_prompt = f"{asset_summary}\n\nUser request: {content}"
 
