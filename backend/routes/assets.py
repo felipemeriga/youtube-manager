@@ -1,8 +1,21 @@
+import re
+import unicodedata
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from supabase import create_client
 
 from auth import get_current_user
 from config import settings
+
+
+def sanitize_filename(name: str) -> str:
+    """Normalize unicode and strip characters that Supabase Storage rejects."""
+    name = unicodedata.normalize("NFKD", name)
+    name = name.encode("ascii", "ignore").decode("ascii")
+    name = re.sub(r"[^\w.\-]", "_", name)
+    name = re.sub(r"_+", "_", name).strip("_")
+    return name or "file"
+
 
 router = APIRouter()
 
@@ -52,11 +65,12 @@ async def upload_asset(
         )
 
     sb = get_supabase()
-    storage_path = f"{user_id}/{file.filename}"
+    safe_name = sanitize_filename(file.filename or "file")
+    storage_path = f"{user_id}/{safe_name}"
     sb.storage.from_(bucket).upload(
         storage_path, content, {"content-type": file.content_type}
     )
-    return {"name": file.filename, "bucket": bucket, "path": storage_path}
+    return {"name": safe_name, "bucket": bucket, "path": storage_path}
 
 
 @router.delete("/api/assets/{bucket}/{filename}")
