@@ -1,12 +1,15 @@
 import { Box, Typography, IconButton, List, ListItemButton, ListItemText } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DescriptionIcon from "@mui/icons-material/Description";
+import ImageIcon from "@mui/icons-material/Image";
 import { useState } from "react";
 
 interface Conversation {
   id: string;
   title: string | null;
   updated_at: string;
+  mode?: string;
 }
 
 interface ContextPanelProps {
@@ -62,14 +65,21 @@ export default function ContextPanel({
               },
             }}
           >
-            <ListItemText
-              primary={conv.title || "New conversation"}
-              primaryTypographyProps={{
-                noWrap: true,
-                fontSize: 13,
-                color: "text.primary",
-              }}
-            />
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flex: 1, minWidth: 0 }}>
+              {conv.mode === "script" ? (
+                <DescriptionIcon sx={{ fontSize: 14, color: "rgba(255,255,255,0.3)", flexShrink: 0 }} />
+              ) : (
+                <ImageIcon sx={{ fontSize: 14, color: "rgba(255,255,255,0.3)", flexShrink: 0 }} />
+              )}
+              <ListItemText
+                primary={conv.title || "New conversation"}
+                primaryTypographyProps={{
+                  noWrap: true,
+                  fontSize: 13,
+                  color: "text.primary",
+                }}
+              />
+            </Box>
             {hoveredId === conv.id && (
               <IconButton
                 size="small"
