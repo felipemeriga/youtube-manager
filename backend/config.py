@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_service_key: str
     gemini_api_key: str
+    guardian_url: str = "http://localhost:3000"
     cors_origins: str = "http://localhost:5173"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
