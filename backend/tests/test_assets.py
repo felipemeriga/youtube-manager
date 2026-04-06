@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from auth import get_current_user
 from routes.assets import router
 
-VALID_BUCKETS = ["reference-thumbs", "personal-photos", "logos", "outputs"]
+VALID_BUCKETS = ["reference-thumbs", "personal-photos", "logos", "outputs", "scripts"]
 
 
 def create_app(user_id: str) -> TestClient:
@@ -284,3 +284,15 @@ def test_list_assets_empty():
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_list_scripts_bucket():
+    """Scripts bucket should be accepted for listing."""
+    client = create_app("test-user")
+    mock_sb = MagicMock()
+    mock_sb.storage.from_.return_value.list.return_value = []
+
+    with patch("routes.assets.get_supabase", return_value=mock_sb):
+        response = client.get("/api/assets/scripts")
+
+    assert response.status_code == 200
