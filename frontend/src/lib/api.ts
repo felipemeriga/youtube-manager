@@ -54,6 +54,7 @@ interface StreamCallbacks {
   onImage: (base64: string, url: string) => void;
   onDone: (data: Record<string, unknown>) => void;
   onError?: (error: string) => void;
+  onTopics?: (content: string) => void;
 }
 
 export async function streamChat(
@@ -98,6 +99,9 @@ export async function streamChat(
         if (data.token) callbacks.onToken(data.token);
         if (data.stage) callbacks.onStage(data.stage);
         if (data.message_type) lastMessageType = data.message_type;
+        if (data.message_type === "topics" && data.content && callbacks.onTopics) {
+          callbacks.onTopics(data.content as string);
+        }
         if (data.image_base64)
           callbacks.onImage(data.image_base64, data.image_url || "");
         if (data.error && callbacks.onError) {
@@ -118,8 +122,11 @@ export async function streamChat(
 
 export const listConversations = () =>
   apiFetch<Array<Record<string, unknown>>>("/api/conversations");
-export const createConversation = () =>
-  apiFetch<Record<string, unknown>>("/api/conversations", { method: "POST" });
+export const createConversation = (mode: string = "thumbnail") =>
+  apiFetch<Record<string, unknown>>("/api/conversations", {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  });
 export const getConversation = (id: string) =>
   apiFetch<Record<string, unknown>>(`/api/conversations/${id}`);
 export const deleteConversation = (id: string) =>
