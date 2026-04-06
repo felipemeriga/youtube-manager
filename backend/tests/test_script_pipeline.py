@@ -64,13 +64,12 @@ async def test_handle_ideation_streams_topics():
 
 
 @pytest.mark.asyncio
-async def test_handle_topic_selection_streams_research_and_outline():
+async def test_handle_topic_selection_streams_script():
     sb = make_async_sb()
 
-    # Messages returned: user text, then topics
     messages_data = MagicMock()
     messages_data.data = [
-        {"role": "user", "content": "Give me ideas", "type": "text"},
+        {"role": "user", "content": "Give me ideas about AI", "type": "text"},
         {
             "role": "assistant",
             "content": '[{"title": "AI in 2026", "angle": "test"}]',
@@ -81,50 +80,14 @@ async def test_handle_topic_selection_streams_research_and_outline():
         return_value=messages_data
     )
 
-    guardian_responses = iter(["Research content here", "Outline content here"])
-
     with patch(
         "services.script_pipeline.ask_guardian",
         new_callable=AsyncMock,
-        side_effect=lambda prompt, context="": next(guardian_responses),
+        return_value="# Full Script\n\nContent here",
     ):
-        events = await collect_events("conv-1", "0", "topic_selection", "test-user", sb)
-
-    stages = [e.get("stage") for e in events if "stage" in e]
-    done = [e for e in events if e.get("done")]
-
-    assert "researching" in stages
-    assert "writing_outline" in stages
-    assert len(done) == 1
-    assert done[0].get("message_type") == "outline"
-
-
-@pytest.mark.asyncio
-async def test_handle_outline_approval_approved():
-    sb = make_async_sb()
-
-    messages_data = MagicMock()
-    messages_data.data = [
-        {"role": "user", "content": "Give me ideas", "type": "text"},
-        {
-            "role": "assistant",
-            "content": '[{"title": "AI in 2026"}]',
-            "type": "topics",
-        },
-        {"role": "user", "content": "0", "type": "topic_selection"},
-        {"role": "assistant", "content": "Research data", "type": "research"},
-        {"role": "assistant", "content": "Outline data", "type": "outline"},
-    ]
-    sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(
-        return_value=messages_data
-    )
-
-    with patch(
-        "services.script_pipeline.ask_guardian",
-        new_callable=AsyncMock,
-        return_value="Full script content here",
-    ):
-        events = await collect_events("conv-1", "", "approve_outline", "test-user", sb)
+        events = await collect_events(
+            "conv-1", "0", "topic_selection", "test-user", sb
+        )
 
     stages = [e.get("stage") for e in events if "stage" in e]
     done = [e for e in events if e.get("done")]
@@ -135,36 +98,40 @@ async def test_handle_outline_approval_approved():
 
 
 @pytest.mark.asyncio
-async def test_handle_outline_approval_rejected():
+async def test_handle_topic_selection_extracts_duration():
     sb = make_async_sb()
 
     messages_data = MagicMock()
     messages_data.data = [
-        {"role": "user", "content": "Give me ideas", "type": "text"},
+        {
+            "role": "user",
+            "content": "Give me ideas about AI, 20 min video",
+            "type": "text",
+        },
         {
             "role": "assistant",
-            "content": '[{"title": "AI in 2026"}]',
+            "content": '[{"title": "AI in 2026", "angle": "test"}]',
             "type": "topics",
         },
-        {"role": "user", "content": "0", "type": "topic_selection"},
-        {"role": "assistant", "content": "Research data", "type": "research"},
-        {"role": "assistant", "content": "Old outline", "type": "outline"},
     ]
     sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(
         return_value=messages_data
     )
 
+    captured_prompt = None
+
+    async def capture_guardian(prompt, context=""):
+        nonlocal captured_prompt
+        captured_prompt = prompt
+        return "# Script"
+
     with patch(
         "services.script_pipeline.ask_guardian",
-        new_callable=AsyncMock,
-        return_value="New outline content",
+        side_effect=capture_guardian,
     ):
-        events = await collect_events(
-            "conv-1", "Make it shorter", "reject_outline", "test-user", sb
-        )
+        await collect_events("conv-1", "0", "topic_selection", "test-user", sb)
 
-    stages = [e.get("stage") for e in events if "stage" in e]
-    assert "writing_outline" in stages
+    assert "20 minutos" in captured_prompt
 
 
 @pytest.mark.asyncio
@@ -180,8 +147,6 @@ async def test_handle_script_approval_saves_to_storage():
             "type": "topics",
         },
         {"role": "user", "content": "0", "type": "topic_selection"},
-        {"role": "assistant", "content": "Research data", "type": "research"},
-        {"role": "assistant", "content": "Outline data", "type": "outline"},
         {
             "role": "assistant",
             "content": "# Full Script\n\nContent here",
@@ -203,3 +168,43 @@ async def test_handle_script_approval_saves_to_storage():
     upload_args = sb.storage.from_.return_value.upload.call_args
     assert upload_args[0][0].startswith("test-user/")
     assert upload_args[0][0].endswith(".md")
+
+
+@pytest.mark.asyncio
+async def test_handle_script_approval_rejected():
+    sb = make_async_sb()
+
+    messages_data = MagicMock()
+    messages_data.data = [
+        {"role": "user", "content": "Give me ideas", "type": "text"},
+        {
+            "role": "assistant",
+            "content": '[{"title": "AI in 2026"}]',
+            "type": "topics",
+        },
+        {"role": "user", "content": "0", "type": "topic_selection"},
+        {
+            "role": "assistant",
+            "content": "# Old Script",
+            "type": "script",
+        },
+    ]
+    sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(
+        return_value=messages_data
+    )
+
+    with patch(
+        "services.script_pipeline.ask_guardian",
+        new_callable=AsyncMock,
+        return_value="# Revised Script",
+    ):
+        events = await collect_events(
+            "conv-1", "Make it shorter", "reject_script", "test-user", sb
+        )
+
+    stages = [e.get("stage") for e in events if "stage" in e]
+    done = [e for e in events if e.get("done")]
+
+    assert "writing_script" in stages
+    assert len(done) == 1
+    assert done[0].get("message_type") == "script"

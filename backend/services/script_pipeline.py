@@ -13,6 +13,8 @@ from services.guardian import ask_guardian
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_DURATION = "12 minutos"
+
 
 async def get_supabase():
     return await create_async_client(
@@ -32,8 +34,7 @@ def slugify(text: str) -> str:
 
 
 _NO_TOOLS = (
-    "\n\nIMPORTANT: Respond with text only. Do NOT use any tools. "
-    "Do NOT create, read, or write any files. Do NOT run any commands. "
+    "\n\nDo NOT create, read, or write any files. Do NOT run any commands. "
     "Just reply with the requested content directly in your response."
 )
 
@@ -43,40 +44,59 @@ IDEATION_PROMPT_TEMPLATE = (
     "You are ONLY suggesting topics.\n\n"
     "The user wants to make a video about this general area:\n"
     '"""\n{user_input}\n"""\n\n'
-    "Based on that, suggest 5-10 specific video topics related to RECENT news and "
-    "trends (last 1-2 weeks). The channel is a Brazilian Portuguese tech channel.\n\n"
+    "IMPORTANT: Your training data is outdated. You MUST search the web for "
+    "current news and trends from the last 1-2 weeks before suggesting topics. "
+    "Use external sources to find what is trending RIGHT NOW.\n\n"
+    "Based on your research, suggest 5-10 specific video topics. The channel is a "
+    "Brazilian Portuguese tech channel.\n\n"
     "Return ONLY a valid JSON array. No markdown fences. No explanation. No extra text. "
     "No script. No outline. Just the JSON array.\n\n"
     "Each element must have: "
     '"title" (string), "angle" (string), "why_timely" (string), '
+    '"source_url" (string — the real URL you found), '
     '"interest" (string: "high", "medium", or "low").\n\n'
     "Example of the EXACT format expected:\n"
-    '[{{"title": "Topic A", "angle": "Unique angle", "why_timely": "Recent event", "interest": "high"}}]'
-    + _NO_TOOLS
+    '[{{"title": "Topic A", "angle": "Unique angle", "why_timely": "Recent event", '
+    '"source_url": "https://example.com/article", "interest": "high"}}]' + _NO_TOOLS
 )
 
-RESEARCH_PROMPT = (
-    "Research this topic in depth: {topic}. Find recent articles, data, statistics, "
-    "expert opinions, and real-world examples. Provide a structured summary with "
-    "sources. Focus on content from the last 1-2 weeks."
-    + _NO_TOOLS
-)
-
-OUTLINE_PROMPT = (
-    "{persona}\n\nBased on this research:\n{research}\n\nCreate a video outline for "
-    "the topic: {topic}. Include:\n- Hook (first 30 seconds)\n- Sections with key "
-    "points and estimated duration\n- Transitions between sections\n- Call to action\n"
-    "- Total estimated video duration\n\nFormat as structured markdown."
-    + _NO_TOOLS
-)
-
-SCRIPT_PROMPT = (
-    "{persona}\n\nBased on this outline:\n{outline}\n\nAnd this research:\n{research}"
-    "\n\nWrite a complete video script in Brazilian Portuguese. Include:\n"
-    "- Word-for-word dialogue for each section\n- Timing markers\n"
-    "- Stats and data with inline citations from the research\n\n"
-    "Format as markdown with clear section headers."
-    + _NO_TOOLS
+SCRIPT_PROMPT_TEMPLATE = (
+    "{persona}\n\n"
+    "You are writing a complete YouTube video script in Brazilian Portuguese.\n\n"
+    "Topic: {topic}\n\n"
+    "Target duration: {duration}.\n\n"
+    "IMPORTANT: Your training data is outdated. You MUST search the web for current "
+    "information, statistics, data, and expert opinions about this topic. Use REAL, "
+    "RECENT sources (last 1-2 weeks). Every fact must have a real, verifiable source URL.\n\n"
+    "Write the script using this EXACT structure:\n\n"
+    "# {{title}}\n\n"
+    "## ⏱️ TIMING ({{duration}})\n\n"
+    "A markdown table with columns: Seção | Tempo | Duração\n"
+    "Sections must fit within the target duration of {duration}.\n\n"
+    "---\n\n"
+    "## 📊 STATS E DADOS (com fontes pra citar)\n\n"
+    "Each stat as a blockquote with:\n"
+    "> **Dado N**: [the fact/stat]\n"
+    ">\n"
+    "> *Fonte: [Source Name](real URL)*\n\n"
+    "Include 6-10 verified stats with real URLs.\n\n"
+    "---\n\n"
+    "## 🎙️ TALKING POINTS (frases prontas pra falar)\n\n"
+    '5-8 punchy one-liner quotes ready to say on camera, using "-" bullets.\n\n'
+    "---\n\n"
+    "## 📝 ROTEIRO COMPLETO\n\n"
+    "### 🎬 ABERTURA (timing)\n"
+    "Word-for-word dialogue. Provocative hook in the first 30 seconds.\n\n"
+    "### 📌 SEÇÃO N: TITLE (timing)\n"
+    "Word-for-word dialogue for each section with inline data citations.\n\n"
+    "### 🎬 FECHAMENTO (timing)\n"
+    "Strong closing + call to action.\n\n"
+    "---\n\n"
+    "## 🔗 FONTES VERIFICADAS\n\n"
+    "Numbered list of ALL sources used, each with:\n"
+    "N. **Source Name** — Article title (date) — real full URL\n\n"
+    "CRITICAL: Every URL in this script must be a REAL, clickable link that you "
+    "found by searching the web. Do NOT invent or hallucinate URLs." + _NO_TOOLS
 )
 
 
@@ -119,6 +139,13 @@ def _find_message(messages: list[dict], msg_type: str) -> dict | None:
 
 def _find_last_message(messages: list[dict], msg_type: str) -> dict | None:
     return next((m for m in reversed(messages) if m["type"] == msg_type), None)
+
+
+def _extract_duration(user_message: str) -> str:
+    match = re.search(r"(\d+)\s*min", user_message, re.IGNORECASE)
+    if match:
+        return f"{match.group(1)} minutos"
+    return DEFAULT_DURATION
 
 
 # ---------------------------------------------------------------------------
@@ -170,94 +197,25 @@ async def handle_topic_selection(
 
     messages = await _get_messages(sb, conversation_id)
     topics_msg = _find_message(messages, "topics")
+    user_msg = _find_message(messages, "text")
 
     topics = json.loads(topics_msg["content"])
     topic = topics[topic_index]
     topic_title = topic.get("title", str(topic))
 
-    # Stage 1: Research
-    yield sse_event({"stage": "researching"})
+    duration = _extract_duration(user_msg["content"]) if user_msg else DEFAULT_DURATION
 
-    research_prompt = RESEARCH_PROMPT.format(topic=topic_title)
-    research = await ask_guardian(research_prompt)
-
-    await _save_message(sb, conversation_id, "assistant", research, "research")
-
-    # Stage 2: Outline
-    yield sse_event({"stage": "writing_outline"})
+    yield sse_event({"stage": "writing_script"})
 
     persona = format_persona()
-    outline_prompt = OUTLINE_PROMPT.format(
-        persona=persona, research=research, topic=topic_title
+    script_prompt = SCRIPT_PROMPT_TEMPLATE.format(
+        persona=persona, topic=topic_title, duration=duration
     )
-    outline = await ask_guardian(outline_prompt)
+    script = await ask_guardian(script_prompt)
 
-    await _save_message(sb, conversation_id, "assistant", outline, "outline")
+    await _save_message(sb, conversation_id, "assistant", script, "script")
 
-    yield sse_event({"done": True, "message_type": "outline", "content": outline})
-
-
-async def handle_outline_approval(
-    conversation_id: str, approved: bool, feedback: str, user_id: str
-) -> AsyncGenerator[str, None]:
-    logger.info(
-        "outline_approval conversation=%s approved=%s user=%s",
-        conversation_id,
-        approved,
-        user_id,
-    )
-    sb = await get_supabase()
-
-    approval_content = "approved" if approved else f"rejected: {feedback}"
-    await _save_message(sb, conversation_id, "user", approval_content, "approval")
-
-    messages = await _get_messages(sb, conversation_id)
-    research_msg = _find_last_message(messages, "research")
-    research = research_msg["content"] if research_msg else ""
-
-    topics_msg = _find_message(messages, "topics")
-    selection_msg = _find_message(messages, "topic_selection")
-    topic_title = ""
-    if topics_msg and selection_msg:
-        topics = json.loads(topics_msg["content"])
-        idx = int(selection_msg["content"])
-        topic_title = topics[idx].get("title", "")
-
-    if approved:
-        yield sse_event({"stage": "writing_script"})
-
-        outline_msg = _find_last_message(messages, "outline")
-        outline = outline_msg["content"] if outline_msg else ""
-        persona = format_persona()
-
-        script_prompt = SCRIPT_PROMPT.format(
-            persona=persona, outline=outline, research=research
-        )
-        script = await ask_guardian(script_prompt)
-
-        await _save_message(sb, conversation_id, "assistant", script, "script")
-
-        yield sse_event({"done": True, "message_type": "script", "content": script})
-    else:
-        yield sse_event({"stage": "writing_outline"})
-
-        outline_msg = _find_last_message(messages, "outline")
-        old_outline = outline_msg["content"] if outline_msg else ""
-        persona = format_persona()
-
-        outline_prompt = OUTLINE_PROMPT.format(
-            persona=persona, research=research, topic=topic_title
-        )
-        outline_prompt += (
-            f"\n\nPrevious outline:\n{old_outline}\n\nFeedback: {feedback}"
-        )
-        new_outline = await ask_guardian(outline_prompt)
-
-        await _save_message(sb, conversation_id, "assistant", new_outline, "outline")
-
-        yield sse_event(
-            {"done": True, "message_type": "outline", "content": new_outline}
-        )
+    yield sse_event({"done": True, "message_type": "script", "content": script})
 
 
 async def handle_script_approval(
@@ -307,16 +265,25 @@ async def handle_script_approval(
     else:
         yield sse_event({"stage": "writing_script"})
 
-        research_msg = _find_last_message(messages, "research")
-        research = research_msg["content"] if research_msg else ""
-        outline_msg = _find_last_message(messages, "outline")
-        outline = outline_msg["content"] if outline_msg else ""
         script_msg = _find_last_message(messages, "script")
         old_script = script_msg["content"] if script_msg else ""
-        persona = format_persona()
 
-        script_prompt = SCRIPT_PROMPT.format(
-            persona=persona, outline=outline, research=research
+        topics_msg = _find_message(messages, "topics")
+        selection_msg = _find_message(messages, "topic_selection")
+        topic_title = ""
+        if topics_msg and selection_msg:
+            topics = json.loads(topics_msg["content"])
+            idx = int(selection_msg["content"])
+            topic_title = topics[idx].get("title", "")
+
+        user_msg = _find_message(messages, "text")
+        duration = (
+            _extract_duration(user_msg["content"]) if user_msg else DEFAULT_DURATION
+        )
+
+        persona = format_persona()
+        script_prompt = SCRIPT_PROMPT_TEMPLATE.format(
+            persona=persona, topic=topic_title, duration=duration
         )
         script_prompt += f"\n\nPrevious script:\n{old_script}\n\nFeedback: {feedback}"
         new_script = await ask_guardian(script_prompt)
@@ -351,16 +318,6 @@ async def handle_script_chat_message(
             topic_index = int(content)
             async for event in handle_topic_selection(
                 conversation_id, topic_index, user_id
-            ):
-                yield event
-        elif msg_type == "approve_outline":
-            async for event in handle_outline_approval(
-                conversation_id, True, content, user_id
-            ):
-                yield event
-        elif msg_type == "reject_outline":
-            async for event in handle_outline_approval(
-                conversation_id, False, content, user_id
             ):
                 yield event
         elif msg_type == "approve_script":

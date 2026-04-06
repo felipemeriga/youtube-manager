@@ -65,12 +65,11 @@ export default function ChatPage() {
     if (lastMsg.role !== "user") return null;
 
     if (lastMsg.type === "text") return "finding_trends";
-    if (lastMsg.type === "topic_selection") return "researching";
+    if (lastMsg.type === "topic_selection") return "writing_script";
     if (lastMsg.type === "approval") {
       const lastAssistant = [...msgs]
         .reverse()
         .find((m) => m.role === "assistant");
-      if (lastAssistant?.type === "outline") return "writing_script";
       if (lastAssistant?.type === "script") return "saving";
     }
     return null;
@@ -270,8 +269,6 @@ export default function ChatPage() {
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.type === "image") {
       sendMessage("SAVE_OUTPUT", "save");
-    } else if (lastMsg?.type === "outline") {
-      doStream(selectedId, "", "approve_outline");
     } else if (lastMsg?.type === "script") {
       doStream(selectedId, "", "approve_script");
     }
@@ -282,8 +279,6 @@ export default function ChatPage() {
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.type === "image") {
       sendMessage("REGENERATE", "regenerate");
-    } else if (lastMsg?.type === "outline") {
-      doStream(selectedId, "", "reject_outline");
     } else if (lastMsg?.type === "script") {
       doStream(selectedId, "", "reject_script");
     }

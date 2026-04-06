@@ -3,10 +3,8 @@ import { Box, Typography, LinearProgress } from "@mui/material";
 const STAGE_LABELS: Record<string, string> = {
   analyzing: "Analyzing your assets...",
   generating: "Generating thumbnail...",
-  finding_trends: "Finding recent trends...",
-  researching: "Researching topic in depth...",
-  writing_outline: "Writing video outline...",
-  writing_script: "Writing full script...",
+  finding_trends: "Searching for recent trends...",
+  writing_script: "Researching & writing full script...",
   saving: "Saving script...",
 };
 
@@ -21,7 +19,11 @@ export default function ThinkingBar({ stage }: { stage: string }) {
           border: "1px solid rgba(124, 58, 237, 0.2)",
         }}
       >
-        <Typography variant="caption" color="primary" sx={{ mb: 0.5, display: "block" }}>
+        <Typography
+          variant="caption"
+          color="primary"
+          sx={{ mb: 0.5, display: "block" }}
+        >
           {STAGE_LABELS[stage] || stage}
         </Typography>
         <LinearProgress

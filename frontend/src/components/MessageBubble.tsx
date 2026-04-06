@@ -199,41 +199,51 @@ export default function MessageBubble({
           />
         )}
 
-        {message.type === "topics" && (() => {
-          try {
-            const topics = JSON.parse(message.content);
-            return (
-              <ScriptTopicList
-                topics={topics}
-                onSelect={onTopicSelect || (() => {})}
-                disabled={!isLatest || isStreaming}
-              />
-            );
-          } catch {
-            return (
-              <Box sx={{ fontSize: 14, lineHeight: 1.6, ...markdownStyles }}>
-                <ReactMarkdown>{message.content}</ReactMarkdown>
-              </Box>
-            );
-          }
-        })()}
+        {message.type === "topics" &&
+          (() => {
+            try {
+              const topics = JSON.parse(message.content);
+              return (
+                <ScriptTopicList
+                  topics={topics}
+                  onSelect={onTopicSelect || (() => {})}
+                  disabled={!isLatest || isStreaming}
+                />
+              );
+            } catch {
+              return (
+                <Box sx={{ fontSize: 14, lineHeight: 1.6, ...markdownStyles }}>
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                </Box>
+              );
+            }
+          })()}
 
-        {(message.type === "outline" || message.type === "script" || message.type === "research") && (
+        {(message.type === "outline" ||
+          message.type === "script" ||
+          message.type === "research") && (
           <ScriptViewer content={message.content} />
         )}
 
-        {message.type !== "topics" && message.type !== "outline" && message.type !== "script" && message.type !== "research" && (
-          <Box sx={{ fontSize: 14, lineHeight: 1.6, ...markdownStyles }}>
-            <ReactMarkdown>{message.content}</ReactMarkdown>
-          </Box>
-        )}
+        {message.type !== "topics" &&
+          message.type !== "outline" &&
+          message.type !== "script" &&
+          message.type !== "research" && (
+            <Box sx={{ fontSize: 14, lineHeight: 1.6, ...markdownStyles }}>
+              <ReactMarkdown>{message.content}</ReactMarkdown>
+            </Box>
+          )}
 
         {showButtons && message.type === "image" && (
           <ApprovalButtons onApprove={onApprove} onReject={onReject} />
         )}
 
-        {showButtons && (message.type === "outline" || message.type === "script") && (
-          <ApprovalButtons onApprove={onApprove!} onReject={onReject!} variant="script" />
+        {showButtons && message.type === "script" && (
+          <ApprovalButtons
+            onApprove={onApprove!}
+            onReject={onReject!}
+            variant="script"
+          />
         )}
       </Box>
     </Box>
