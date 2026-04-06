@@ -32,11 +32,16 @@ def slugify(text: str) -> str:
 
 
 IDEATION_PROMPT = (
-    "You are a YouTube content strategist. Suggest 5-10 video topics based on "
-    "RECENT news and trends (last 1-2 weeks). The channel is a Brazilian Portuguese "
-    "tech channel. For each topic, provide: title, angle, why it's timely, and "
-    "estimated audience interest (high/medium/low). Return ONLY a valid JSON array, "
-    "no markdown fences."
+    "You are a YouTube content strategist. Your ONLY task is to suggest video topics. "
+    "Do NOT write scripts, outlines, or any content. Do NOT create any files.\n\n"
+    "Based on the user's input, suggest 5-10 video topics related to RECENT news and "
+    "trends (last 1-2 weeks). The channel is a Brazilian Portuguese tech channel.\n\n"
+    "Return ONLY a valid JSON array with no markdown fences, no explanation, no extra text. "
+    "Each element must have: "
+    '"title" (string), "angle" (string), "why_timely" (string), '
+    '"interest" (string: "high", "medium", or "low").\n\n'
+    "Example format:\n"
+    '[{"title": "...", "angle": "...", "why_timely": "...", "interest": "high"}]'
 )
 
 RESEARCH_PROMPT = (
