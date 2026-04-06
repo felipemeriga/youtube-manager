@@ -9,8 +9,6 @@ def mock_settings():
         mock.supabase_url = "https://test.supabase.co"
         mock.supabase_service_key = "test-service-key"
         mock.gemini_api_key = "test-gemini-key"
-        mock.guardian_url = "http://localhost:3000"
-        mock.guardian_api_key = "test-guardian-key"
         mock.cors_origins = "http://localhost:5173"
         yield mock
 

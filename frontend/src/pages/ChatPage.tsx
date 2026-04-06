@@ -80,7 +80,11 @@ export default function ChatPage() {
     }
   };
 
-  const doStream = async (conversationId: string, content: string, type: string) => {
+  const doStream = async (
+    conversationId: string,
+    content: string,
+    type: string
+  ) => {
     // Add user message to UI immediately
     if (type === "text") {
       setMessages((prev) => [...prev, { role: "user", content, type: "text" }]);
@@ -92,57 +96,76 @@ export default function ChatPage() {
     streamingRef.current = "";
     imageRef.current = null;
 
-    await streamChat(conversationId, content, type, {
-      onToken: (token) => {
-        streamingRef.current += token;
-        setStreamingContent(streamingRef.current);
-      },
-      onStage: (stage) => {
-        setCurrentStage(stage);
-      },
-      onImage: (base64, url) => {
-        imageRef.current = { base64, url };
-      },
-      onDone: (data) => {
-        const messageType = (data.message_type as string) || "text";
-        const newMessage: Message = {
+    try {
+      await streamChat(conversationId, content, type, {
+        onToken: (token) => {
+          streamingRef.current += token;
+          setStreamingContent(streamingRef.current);
+        },
+        onStage: (stage) => {
+          setCurrentStage(stage);
+        },
+        onImage: (base64, url) => {
+          imageRef.current = { base64, url };
+        },
+        onError: (error) => {
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: `Error: ${error}`, type: "text" },
+          ]);
+          setStreamingContent("");
+          setIsStreaming(false);
+          setCurrentStage(null);
+        },
+        onDone: (data) => {
+          const messageType = (data.message_type as string) || "text";
+          const newMessage: Message = {
+            role: "assistant",
+            content: streamingRef.current || (data.content as string) || "",
+            type: messageType,
+          };
+          if (imageRef.current) {
+            newMessage.image_base64 = imageRef.current.base64;
+            newMessage.image_url = imageRef.current.url;
+          }
+          if (data.saved) {
+            newMessage.content = (data.content as string) || "Thumbnail saved!";
+            newMessage.type = "text";
+          }
+          setMessages((prev) => [...prev, newMessage]);
+          setStreamingContent("");
+          setIsStreaming(false);
+          setCurrentStage(null);
+          loadConversations();
+        },
+      });
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
           role: "assistant",
-          content: streamingRef.current || (data.content as string) || "",
-          type: messageType,
-        };
-        if (imageRef.current) {
-          newMessage.image_base64 = imageRef.current.base64;
-          newMessage.image_url = imageRef.current.url;
-        }
-        if (data.saved) {
-          newMessage.content = data.content as string || "Thumbnail saved!";
-          newMessage.type = "text";
-        }
-        setMessages((prev) => [...prev, newMessage]);
-        setStreamingContent("");
-        setIsStreaming(false);
-        setCurrentStage(null);
-        loadConversations();
-      },
-    });
+          content: "Something went wrong. Please try again.",
+          type: "text",
+        },
+      ]);
+      setStreamingContent("");
+      setIsStreaming(false);
+      setCurrentStage(null);
+    }
   };
 
   const handleSend = (content: string) => sendMessage(content, "text");
 
   const handleApprove = () => {
     const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.type === "plan") {
-      sendMessage("APPROVED", "approval");
-    } else if (lastMsg?.type === "image") {
+    if (lastMsg?.type === "image") {
       sendMessage("SAVE_OUTPUT", "save");
     }
   };
 
   const handleReject = () => {
     const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.type === "plan") {
-      // Let user type feedback — just focus the input
-    } else if (lastMsg?.type === "image") {
+    if (lastMsg?.type === "image") {
       sendMessage("REGENERATE", "regenerate");
     }
   };

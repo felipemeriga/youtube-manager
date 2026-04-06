@@ -1,5 +1,6 @@
 services:
   backend:
+    image: felipemeriga1/youtube-manager-backend:${TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -7,8 +8,6 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GUARDIAN_URL=${GUARDIAN_URL}
-      - GUARDIAN_API_KEY=${GUARDIAN_API_KEY}
       - CORS_ORIGINS=https://youtube.merigafy.com
     restart: unless-stopped
     healthcheck:
@@ -27,6 +26,7 @@ services:
       - "traefik.http.services.yt-backend.loadbalancer.server.port=8000"
 
   frontend:
+    image: felipemeriga1/youtube-manager-frontend:${TAG:-latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile

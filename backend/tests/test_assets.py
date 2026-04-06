@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from auth import get_current_user
 from routes.assets import router
 
-VALID_BUCKETS = ["reference-thumbs", "personal-photos", "fonts", "outputs"]
+VALID_BUCKETS = ["reference-thumbs", "personal-photos", "logos", "outputs"]
 
 
 def create_app(user_id: str) -> TestClient:
@@ -84,13 +84,13 @@ def test_download_asset():
 
 def test_upload_file_too_large():
     client = create_app("test-user")
-    # fonts bucket has a 5MB limit
+    # logos bucket has a 5MB limit
     large_content = b"x" * (5 * 1024 * 1024 + 1)
 
     with patch("routes.assets.get_supabase", return_value=MagicMock()):
         response = client.post(
-            "/api/assets/fonts/upload",
-            files={"file": ("big-font.ttf", large_content, "font/ttf")},
+            "/api/assets/logos/upload",
+            files={"file": ("big-logo.png", large_content, "image/png")},
         )
 
     assert response.status_code == 400
@@ -145,15 +145,15 @@ def test_upload_asset_response_structure():
 
     with patch("routes.assets.get_supabase", return_value=mock_sb):
         response = client.post(
-            "/api/assets/fonts/upload",
-            files={"file": ("myfont.ttf", b"font-data", "font/ttf")},
+            "/api/assets/logos/upload",
+            files={"file": ("logo.png", b"logo-data", "image/png")},
         )
 
     data = response.json()
     assert data == {
-        "name": "myfont.ttf",
-        "bucket": "fonts",
-        "path": "test-user/myfont.ttf",
+        "name": "logo.png",
+        "bucket": "logos",
+        "path": "test-user/logo.png",
     }
 
 
@@ -175,11 +175,11 @@ def test_upload_file_exactly_at_max_size():
     mock_sb = MagicMock()
     mock_sb.storage.from_.return_value.upload.return_value = {}
 
-    exact_content = b"x" * (5 * 1024 * 1024)  # exactly 5MB for fonts
+    exact_content = b"x" * (5 * 1024 * 1024)  # exactly 5MB for logos
     with patch("routes.assets.get_supabase", return_value=mock_sb):
         response = client.post(
-            "/api/assets/fonts/upload",
-            files={"file": ("font.ttf", exact_content, "font/ttf")},
+            "/api/assets/logos/upload",
+            files={"file": ("logo.png", exact_content, "image/png")},
         )
 
     assert response.status_code == 200
@@ -280,7 +280,7 @@ def test_list_assets_empty():
     mock_sb.storage.from_.return_value.list.return_value = []
 
     with patch("routes.assets.get_supabase", return_value=mock_sb):
-        response = client.get("/api/assets/fonts")
+        response = client.get("/api/assets/logos")
 
     assert response.status_code == 200
     assert response.json() == []

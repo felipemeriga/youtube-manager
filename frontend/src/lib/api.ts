@@ -53,6 +53,7 @@ interface StreamCallbacks {
   onStage: (stage: string) => void;
   onImage: (base64: string, url: string) => void;
   onDone: (data: Record<string, unknown>) => void;
+  onError?: (error: string) => void;
 }
 
 export async function streamChat(
@@ -99,6 +100,9 @@ export async function streamChat(
         if (data.message_type) lastMessageType = data.message_type;
         if (data.image_base64)
           callbacks.onImage(data.image_base64, data.image_url || "");
+        if (data.error && callbacks.onError) {
+          callbacks.onError(data.error as string);
+        }
         if (data.done) {
           if (lastMessageType && !data.message_type) {
             data.message_type = lastMessageType;
