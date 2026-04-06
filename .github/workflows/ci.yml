@@ -38,8 +38,6 @@ jobs:
           SUPABASE_URL: https://test.supabase.co
           SUPABASE_SERVICE_KEY: test-service-key
           GEMINI_API_KEY: test-gemini-key
-          GUARDIAN_URL: http://localhost:3000
-          GUARDIAN_API_KEY: test-guardian-key
         run: uv run pytest -v
 
   frontend:

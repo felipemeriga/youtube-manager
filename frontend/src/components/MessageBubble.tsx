@@ -136,7 +136,6 @@ export default function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const showButtons = isLatest && !isStreaming && onApprove && onReject;
-  const isPlan = message.type === "plan";
 
   return (
     <Box
@@ -168,7 +167,7 @@ export default function MessageBubble({
 
       <Box
         sx={{
-          maxWidth: isPlan ? "85%" : "70%",
+          maxWidth: "70%",
           p: 2,
           borderRadius: 2,
           backgroundColor: isUser
@@ -197,19 +196,8 @@ export default function MessageBubble({
           <ReactMarkdown>{message.content}</ReactMarkdown>
         </Box>
 
-        {showButtons && message.type === "plan" && (
-          <ApprovalButtons
-            type="plan"
-            onApprove={onApprove}
-            onReject={onReject}
-          />
-        )}
         {showButtons && message.type === "image" && (
-          <ApprovalButtons
-            type="image"
-            onApprove={onApprove}
-            onReject={onReject}
-          />
+          <ApprovalButtons onApprove={onApprove} onReject={onReject} />
         )}
       </Box>
     </Box>

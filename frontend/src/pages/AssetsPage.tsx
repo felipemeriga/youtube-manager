@@ -8,7 +8,7 @@ import { listAssets, uploadAsset, deleteAsset } from "../lib/api";
 const BUCKETS = [
   { key: "reference-thumbs", label: "Reference Thumbnails", accept: "image/*" },
   { key: "personal-photos", label: "Personal Photos", accept: "image/*" },
-  { key: "fonts", label: "Fonts", accept: ".ttf,.otf,.woff,.woff2" },
+  { key: "logos", label: "Logos", accept: "image/*" },
   { key: "outputs", label: "Generated Outputs", accept: "image/*" },
 ];
 
@@ -82,13 +82,17 @@ export default function AssetsPage() {
     if (failed > 0) {
       setSnackbar({
         open: true,
-        message: `Uploaded ${succeeded} file${succeeded !== 1 ? "s" : ""}. ${failed} failed.`,
+        message: `Uploaded ${succeeded} file${
+          succeeded !== 1 ? "s" : ""
+        }. ${failed} failed.`,
         severity: "error",
       });
     } else {
       setSnackbar({
         open: true,
-        message: `${succeeded} file${succeeded !== 1 ? "s" : ""} uploaded successfully`,
+        message: `${succeeded} file${
+          succeeded !== 1 ? "s" : ""
+        } uploaded successfully`,
         severity: "success",
       });
     }
@@ -114,7 +118,15 @@ export default function AssetsPage() {
   };
 
   return (
-    <Box sx={{ flex: 1, display: "flex", flexDirection: "column", p: 3, overflow: "auto" }}>
+    <Box
+      sx={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        p: 3,
+        overflow: "auto",
+      }}
+    >
       <Typography
         variant="h5"
         sx={{
@@ -178,7 +190,11 @@ export default function AssetsPage() {
                 ? "rgba(16,185,129,0.15)"
                 : "rgba(239,68,68,0.15)",
             color: snackbar.severity === "success" ? "#10b981" : "#ef4444",
-            border: `1px solid ${snackbar.severity === "success" ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`,
+            border: `1px solid ${
+              snackbar.severity === "success"
+                ? "rgba(16,185,129,0.3)"
+                : "rgba(239,68,68,0.3)"
+            }`,
           }}
         >
           {snackbar.message}

@@ -19,11 +19,11 @@ def sanitize_filename(name: str) -> str:
 
 router = APIRouter()
 
-VALID_BUCKETS = {"reference-thumbs", "personal-photos", "fonts", "outputs"}
+VALID_BUCKETS = {"reference-thumbs", "personal-photos", "logos", "outputs"}
 MAX_FILE_SIZES = {
     "reference-thumbs": 10 * 1024 * 1024,
     "personal-photos": 10 * 1024 * 1024,
-    "fonts": 5 * 1024 * 1024,
+    "logos": 5 * 1024 * 1024,
     "outputs": 10 * 1024 * 1024,
 }
 
