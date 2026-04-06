@@ -44,9 +44,73 @@ export default function ChatPage() {
   const [currentStage, setCurrentStage] = useState<string | null>(null);
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
   const [showModeDialog, setShowModeDialog] = useState(false);
-  const pendingMessageRef = useRef<{ content: string; type: string } | null>(null);
+  const pendingMessageRef = useRef<{ content: string; type: string } | null>(
+    null
+  );
   const streamingRef = useRef("");
   const imageRef = useRef<{ base64: string; url: string } | null>(null);
+
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const detectPendingStage = (msgs: Message[], mode: string): string | null => {
+    if (mode !== "script" || msgs.length === 0) return null;
+    const lastMsg = msgs[msgs.length - 1];
+    if (lastMsg.role !== "user") return null;
+
+    if (lastMsg.type === "text") return "finding_trends";
+    if (lastMsg.type === "topic_selection") return "researching";
+    if (lastMsg.type === "approval") {
+      const lastAssistant = [...msgs]
+        .reverse()
+        .find((m) => m.role === "assistant");
+      if (lastAssistant?.type === "outline") return "writing_script";
+      if (lastAssistant?.type === "script") return "saving";
+    }
+    return null;
+  };
+
+  const startPolling = useCallback(
+    (convId: string, initialCount: number) => {
+      stopPolling();
+      let attempts = 0;
+      const maxAttempts = 60; // ~5 minutes at 5s intervals
+
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          stopPolling();
+          setCurrentStage(null);
+          setIsStreaming(false);
+          return;
+        }
+        try {
+          const data = await getConversation(convId);
+          const convData = data as { messages: Message[]; mode?: string };
+          const newMsgs = convData.messages || [];
+          if (newMsgs.length > initialCount) {
+            setMessages(newMsgs);
+            stopPolling();
+            setCurrentStage(null);
+            setIsStreaming(false);
+          }
+        } catch {
+          // ignore poll errors
+        }
+      }, 5000);
+    },
+    [stopPolling]
+  );
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
 
   const loadConversations = useCallback(async () => {
     const data = await listConversations();
@@ -58,11 +122,24 @@ export default function ChatPage() {
   }, [loadConversations]);
 
   const handleSelectConversation = async (id: string) => {
+    stopPolling();
     setSelectedId(id);
+    setCurrentStage(null);
+    setIsStreaming(false);
+
     const data = await getConversation(id);
     const convData = data as { messages: Message[]; mode?: string };
-    setMessages(convData.messages || []);
-    setConversationMode(convData.mode || "thumbnail");
+    const msgs = convData.messages || [];
+    const mode = convData.mode || "thumbnail";
+    setMessages(msgs);
+    setConversationMode(mode);
+
+    const pendingStage = detectPendingStage(msgs, mode);
+    if (pendingStage) {
+      setCurrentStage(pendingStage);
+      setIsStreaming(true);
+      startPolling(id, msgs.length);
+    }
   };
 
   const handleCreateConversation = () => {
