@@ -3,6 +3,11 @@ import { Box, Typography, LinearProgress } from "@mui/material";
 const STAGE_LABELS: Record<string, string> = {
   analyzing: "Analyzing your assets...",
   generating: "Generating thumbnail...",
+  finding_trends: "Finding recent trends...",
+  researching: "Researching topic in depth...",
+  writing_outline: "Writing video outline...",
+  writing_script: "Writing full script...",
+  saving: "Saving script...",
 };
 
 export default function ThinkingBar({ stage }: { stage: string }) {
