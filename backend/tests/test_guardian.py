@@ -7,6 +7,7 @@ import httpx
 def mock_guardian_settings():
     with patch("services.guardian.settings") as mock:
         mock.guardian_url = "http://localhost:3000"
+        mock.guardian_api_key = "test-key"
         yield mock
 
 
@@ -30,6 +31,7 @@ class TestAskGuardian:
         mock_client.post.assert_called_once_with(
             "http://localhost:3000/api/ask",
             json={"message": "What is Python?"},
+            headers={"x-api-key": "test-key"},
         )
 
     async def test_with_context_concatenates_prompt(self, mock_guardian_settings):
@@ -51,6 +53,7 @@ class TestAskGuardian:
         mock_client.post.assert_called_once_with(
             "http://localhost:3000/api/ask",
             json={"message": "Summarize this\n\nSome context"},
+            headers={"x-api-key": "test-key"},
         )
 
     async def test_http_error_raises(self, mock_guardian_settings):
@@ -109,5 +112,6 @@ class TestAskGuardian:
         mock_client.post.assert_called_once_with(
             "http://localhost:3000/api/ask",
             json={"message": "prompt"},
+            headers={"x-api-key": "test-key"},
         )
         assert result == "answer"
