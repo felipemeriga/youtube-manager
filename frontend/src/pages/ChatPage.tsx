@@ -1,5 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Box } from "@mui/material";
+import {
+  Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  Button,
+  Stack,
+  Typography,
+} from "@mui/material";
+import DescriptionIcon from "@mui/icons-material/Description";
+import ImageIcon from "@mui/icons-material/Image";
 import ContextPanel from "../components/ContextPanel";
 import ChatArea from "../components/ChatArea";
 import {
@@ -32,6 +42,8 @@ export default function ChatPage() {
   const [streamingContent, setStreamingContent] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStage, setCurrentStage] = useState<string | null>(null);
+  const [conversationMode, setConversationMode] = useState<string>("thumbnail");
+  const [showModeDialog, setShowModeDialog] = useState(false);
   const streamingRef = useRef("");
   const imageRef = useRef<{ base64: string; url: string } | null>(null);
 
@@ -47,15 +59,23 @@ export default function ChatPage() {
   const handleSelectConversation = async (id: string) => {
     setSelectedId(id);
     const data = await getConversation(id);
-    setMessages((data as { messages: Message[] }).messages || []);
+    const convData = data as { messages: Message[]; mode?: string };
+    setMessages(convData.messages || []);
+    setConversationMode(convData.mode || "thumbnail");
   };
 
-  const handleCreateConversation = async () => {
-    const conv = await createConversation();
+  const handleCreateConversation = () => {
+    setShowModeDialog(true);
+  };
+
+  const handleModeSelect = async (mode: string) => {
+    setShowModeDialog(false);
+    const conv = await createConversation(mode);
     const newConv = conv as unknown as Conversation;
     setConversations((prev) => [newConv, ...prev]);
     setSelectedId(newConv.id);
     setMessages([]);
+    setConversationMode(mode);
   };
 
   const handleDeleteConversation = async (id: string) => {
@@ -70,7 +90,7 @@ export default function ChatPage() {
   const sendMessage = async (content: string, type: string = "text") => {
     if (!selectedId) {
       // Auto-create conversation
-      const conv = await createConversation();
+      const conv = await createConversation(conversationMode);
       const newConv = conv as unknown as Conversation;
       setConversations((prev) => [newConv, ...prev]);
       setSelectedId(newConv.id);
@@ -156,17 +176,32 @@ export default function ChatPage() {
 
   const handleSend = (content: string) => sendMessage(content, "text");
 
+  const handleTopicSelect = (index: number) => {
+    if (!selectedId) return;
+    doStream(selectedId, String(index), "topic_selection");
+  };
+
   const handleApprove = () => {
+    if (!selectedId) return;
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.type === "image") {
       sendMessage("SAVE_OUTPUT", "save");
+    } else if (lastMsg?.type === "outline") {
+      doStream(selectedId, "", "approve_outline");
+    } else if (lastMsg?.type === "script") {
+      doStream(selectedId, "", "approve_script");
     }
   };
 
   const handleReject = () => {
+    if (!selectedId) return;
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.type === "image") {
       sendMessage("REGENERATE", "regenerate");
+    } else if (lastMsg?.type === "outline") {
+      doStream(selectedId, "", "reject_outline");
+    } else if (lastMsg?.type === "script") {
+      doStream(selectedId, "", "reject_script");
     }
   };
 
@@ -187,7 +222,64 @@ export default function ChatPage() {
         onSend={handleSend}
         onApprove={handleApprove}
         onReject={handleReject}
+        onTopicSelect={handleTopicSelect}
+        conversationMode={conversationMode}
       />
+      <Dialog
+        open={showModeDialog}
+        onClose={() => setShowModeDialog(false)}
+        PaperProps={{
+          sx: {
+            backgroundColor: "rgba(30,30,40,0.95)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 3,
+          },
+        }}
+      >
+        <DialogTitle>New Conversation</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            What would you like to create?
+          </Typography>
+          <Stack spacing={1.5}>
+            <Button
+              variant="outlined"
+              startIcon={<ImageIcon />}
+              onClick={() => handleModeSelect("thumbnail")}
+              sx={{
+                justifyContent: "flex-start",
+                borderColor: "rgba(255,255,255,0.15)",
+                color: "text.primary",
+                py: 1.5,
+                "&:hover": {
+                  borderColor: "#7c3aed",
+                  backgroundColor: "rgba(124,58,237,0.08)",
+                },
+              }}
+            >
+              Thumbnail
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<DescriptionIcon />}
+              onClick={() => handleModeSelect("script")}
+              sx={{
+                justifyContent: "flex-start",
+                borderColor: "rgba(255,255,255,0.15)",
+                color: "text.primary",
+                py: 1.5,
+                "&:hover": {
+                  borderColor: "#7c3aed",
+                  backgroundColor: "rgba(124,58,237,0.08)",
+                },
+              }}
+            >
+              Video Script
+            </Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }
