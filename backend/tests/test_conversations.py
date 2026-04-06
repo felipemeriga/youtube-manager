@@ -134,7 +134,9 @@ def test_create_conversation_with_title_in_insert():
 
     assert response.status_code == 200
     # Verify the insert was called with the correct user_id
-    mock_sb.table.return_value.insert.assert_called_once_with({"user_id": user_id})
+    mock_sb.table.return_value.insert.assert_called_once_with(
+        {"user_id": user_id, "mode": "thumbnail"}
+    )
 
 
 def test_get_nonexistent_conversation_returns_404():
@@ -281,6 +283,55 @@ def test_get_conversation_with_multiple_messages():
     assert len(data["messages"]) == 3
     assert data["messages"][0]["id"] == "msg-1"
     assert data["messages"][2]["type"] == "approval"
+
+
+def test_create_conversation_with_script_mode():
+    user_id = "test-user-id"
+    client = create_app(user_id)
+
+    mock_sb = mock_supabase()
+    mock_sb.table.return_value.insert.return_value.execute.return_value.data = [
+        {
+            "id": "new-conv",
+            "user_id": user_id,
+            "mode": "script",
+            "created_at": "2026-04-03T00:00:00Z",
+            "updated_at": "2026-04-03T00:00:00Z",
+        }
+    ]
+
+    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+        response = client.post("/api/conversations", json={"mode": "script"})
+
+    assert response.status_code == 200
+    assert response.json()["mode"] == "script"
+    mock_sb.table.return_value.insert.assert_called_once_with(
+        {"user_id": user_id, "mode": "script"}
+    )
+
+
+def test_create_conversation_default_mode_is_thumbnail():
+    user_id = "test-user-id"
+    client = create_app(user_id)
+
+    mock_sb = mock_supabase()
+    mock_sb.table.return_value.insert.return_value.execute.return_value.data = [
+        {
+            "id": "new-conv",
+            "user_id": user_id,
+            "mode": "thumbnail",
+            "created_at": "2026-04-03T00:00:00Z",
+            "updated_at": "2026-04-03T00:00:00Z",
+        }
+    ]
+
+    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+        response = client.post("/api/conversations")
+
+    assert response.status_code == 200
+    mock_sb.table.return_value.insert.assert_called_once_with(
+        {"user_id": user_id, "mode": "thumbnail"}
+    )
 
 
 def test_list_conversations_preserves_order():
