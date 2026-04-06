@@ -13,11 +13,11 @@ async def ask_guardian(prompt: str, context: str = "") -> str:
     logger.info("ask_guardian prompt=%s", full_prompt[:120])
     headers = {}
     if settings.guardian_api_key:
-        headers["x-api-key"] = settings.guardian_api_key
+        headers["Authorization"] = f"Bearer {settings.guardian_api_key}"
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         response = await client.post(
             f"{settings.guardian_url}/api/ask",
-            json={"message": full_prompt},
+            json={"prompt": full_prompt},
             headers=headers,
         )
         response.raise_for_status()

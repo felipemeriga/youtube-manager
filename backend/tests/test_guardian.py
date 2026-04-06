@@ -30,8 +30,8 @@ class TestAskGuardian:
         assert result == "Generated answer"
         mock_client.post.assert_called_once_with(
             "http://localhost:3000/api/ask",
-            json={"message": "What is Python?"},
-            headers={"x-api-key": "test-key"},
+            json={"prompt": "What is Python?"},
+            headers={"Authorization": "Bearer test-key"},
         )
 
     async def test_with_context_concatenates_prompt(self, mock_guardian_settings):
@@ -52,8 +52,8 @@ class TestAskGuardian:
         assert result == "Contextual answer"
         mock_client.post.assert_called_once_with(
             "http://localhost:3000/api/ask",
-            json={"message": "Summarize this\n\nSome context"},
-            headers={"x-api-key": "test-key"},
+            json={"prompt": "Summarize this\n\nSome context"},
+            headers={"Authorization": "Bearer test-key"},
         )
 
     async def test_http_error_raises(self, mock_guardian_settings):
@@ -111,7 +111,7 @@ class TestAskGuardian:
 
         mock_client.post.assert_called_once_with(
             "http://localhost:3000/api/ask",
-            json={"message": "prompt"},
-            headers={"x-api-key": "test-key"},
+            json={"prompt": "prompt"},
+            headers={"Authorization": "Bearer test-key"},
         )
         assert result == "answer"
