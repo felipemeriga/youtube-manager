@@ -22,6 +22,8 @@ interface ChatAreaProps {
   onSend: (content: string) => void;
   onApprove: () => void;
   onReject: () => void;
+  onTopicSelect?: (index: number) => void;
+  conversationMode?: string;
 }
 
 export default function ChatArea({
@@ -32,6 +34,8 @@ export default function ChatArea({
   onSend,
   onApprove,
   onReject,
+  onTopicSelect,
+  conversationMode,
 }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -69,10 +73,14 @@ export default function ChatArea({
               <AutoAwesomeIcon sx={{ color: "#fff", fontSize: 28 }} />
             </Box>
             <Typography variant="h6" color="text.secondary">
-              Describe the thumbnail you want
+              {conversationMode === "script"
+                ? "Describe the video you want to create"
+                : "Describe the thumbnail you want"}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400, textAlign: "center" }}>
-              Include the video title and any style preferences. The agent will analyze your references and create a plan.
+              {conversationMode === "script"
+                ? "Tell me about the topic or ask for trending suggestions..."
+                : "Include the video title and any style preferences. The agent will analyze your references and create a plan."}
             </Typography>
           </Box>
         )}
@@ -85,6 +93,8 @@ export default function ChatArea({
             isStreaming={false}
             onApprove={onApprove}
             onReject={onReject}
+            onTopicSelect={onTopicSelect}
+            conversationMode={conversationMode}
           />
         ))}
 
