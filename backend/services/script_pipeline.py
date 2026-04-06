@@ -56,7 +56,6 @@ SCRIPT_PROMPT = (
     "{persona}\n\nBased on this outline:\n{outline}\n\nAnd this research:\n{research}"
     "\n\nWrite a complete video script in Brazilian Portuguese. Include:\n"
     "- Word-for-word dialogue for each section\n- Timing markers\n"
-    "- Notes for visual cues / B-roll suggestions\n"
     "- Stats and data with inline citations from the research\n\n"
     "Format as markdown with clear section headers."
 )
