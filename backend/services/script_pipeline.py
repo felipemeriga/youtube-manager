@@ -31,9 +31,15 @@ def slugify(text: str) -> str:
     return text[:60]
 
 
+_NO_TOOLS = (
+    "\n\nIMPORTANT: Respond with text only. Do NOT use any tools. "
+    "Do NOT create, read, or write any files. Do NOT run any commands. "
+    "Just reply with the requested content directly in your response."
+)
+
 IDEATION_PROMPT = (
     "You are a YouTube content strategist. Your ONLY task is to suggest video topics. "
-    "Do NOT write scripts, outlines, or any content. Do NOT create any files.\n\n"
+    "Do NOT write scripts, outlines, or any content.\n\n"
     "Based on the user's input, suggest 5-10 video topics related to RECENT news and "
     "trends (last 1-2 weeks). The channel is a Brazilian Portuguese tech channel.\n\n"
     "Return ONLY a valid JSON array with no markdown fences, no explanation, no extra text. "
@@ -42,12 +48,14 @@ IDEATION_PROMPT = (
     '"interest" (string: "high", "medium", or "low").\n\n'
     "Example format:\n"
     '[{"title": "...", "angle": "...", "why_timely": "...", "interest": "high"}]'
+    + _NO_TOOLS
 )
 
 RESEARCH_PROMPT = (
     "Research this topic in depth: {topic}. Find recent articles, data, statistics, "
     "expert opinions, and real-world examples. Provide a structured summary with "
     "sources. Focus on content from the last 1-2 weeks."
+    + _NO_TOOLS
 )
 
 OUTLINE_PROMPT = (
@@ -55,6 +63,7 @@ OUTLINE_PROMPT = (
     "the topic: {topic}. Include:\n- Hook (first 30 seconds)\n- Sections with key "
     "points and estimated duration\n- Transitions between sections\n- Call to action\n"
     "- Total estimated video duration\n\nFormat as structured markdown."
+    + _NO_TOOLS
 )
 
 SCRIPT_PROMPT = (
@@ -63,6 +72,7 @@ SCRIPT_PROMPT = (
     "- Word-for-word dialogue for each section\n- Timing markers\n"
     "- Stats and data with inline citations from the research\n\n"
     "Format as markdown with clear section headers."
+    + _NO_TOOLS
 )
 
 
