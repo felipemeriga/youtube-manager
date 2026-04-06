@@ -44,6 +44,7 @@ export default function ChatPage() {
   const [currentStage, setCurrentStage] = useState<string | null>(null);
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
   const [showModeDialog, setShowModeDialog] = useState(false);
+  const pendingMessageRef = useRef<{ content: string; type: string } | null>(null);
   const streamingRef = useRef("");
   const imageRef = useRef<{ base64: string; url: string } | null>(null);
 
@@ -76,6 +77,12 @@ export default function ChatPage() {
     setSelectedId(newConv.id);
     setMessages([]);
     setConversationMode(mode);
+
+    if (pendingMessageRef.current) {
+      const { content, type } = pendingMessageRef.current;
+      pendingMessageRef.current = null;
+      await doStream(newConv.id, content, type);
+    }
   };
 
   const handleDeleteConversation = async (id: string) => {
@@ -89,15 +96,11 @@ export default function ChatPage() {
 
   const sendMessage = async (content: string, type: string = "text") => {
     if (!selectedId) {
-      // Auto-create conversation
-      const conv = await createConversation(conversationMode);
-      const newConv = conv as unknown as Conversation;
-      setConversations((prev) => [newConv, ...prev]);
-      setSelectedId(newConv.id);
-      await doStream(newConv.id, content, type);
-    } else {
-      await doStream(selectedId, content, type);
+      pendingMessageRef.current = { content, type };
+      setShowModeDialog(true);
+      return;
     }
+    await doStream(selectedId, content, type);
   };
 
   const doStream = async (
