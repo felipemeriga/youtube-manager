@@ -1,3 +1,10 @@
 .superpowers/
 node_modules/
 .env
+.npmrc
+__pycache__/
+.venv/
+dist/
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
