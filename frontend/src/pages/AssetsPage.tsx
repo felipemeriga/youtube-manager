@@ -10,6 +10,7 @@ const BUCKETS = [
   { key: "personal-photos", label: "Personal Photos", accept: "image/*" },
   { key: "logos", label: "Logos", accept: "image/*" },
   { key: "outputs", label: "Generated Outputs", accept: "image/*" },
+  { key: "scripts", label: "Scripts", accept: ".md" },
 ];
 
 interface AssetFile {
@@ -154,7 +155,7 @@ export default function AssetsPage() {
         ))}
       </Tabs>
 
-      {currentBucket.key !== "outputs" && (
+      {currentBucket.key !== "outputs" && currentBucket.key !== "scripts" && (
         <Box sx={{ mb: 3 }}>
           <AssetUpload
             onUpload={handleUpload}
