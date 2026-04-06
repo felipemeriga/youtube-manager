@@ -37,17 +37,21 @@ _NO_TOOLS = (
     "Just reply with the requested content directly in your response."
 )
 
-IDEATION_PROMPT = (
-    "You are a YouTube content strategist. Your ONLY task is to suggest video topics. "
-    "Do NOT write scripts, outlines, or any content.\n\n"
-    "Based on the user's input, suggest 5-10 video topics related to RECENT news and "
+IDEATION_PROMPT_TEMPLATE = (
+    "You are a YouTube content strategist. Your ONLY task right now is to suggest "
+    "video topic IDEAS. You are NOT writing a script. You are NOT creating content. "
+    "You are ONLY suggesting topics.\n\n"
+    "The user wants to make a video about this general area:\n"
+    '"""\n{user_input}\n"""\n\n'
+    "Based on that, suggest 5-10 specific video topics related to RECENT news and "
     "trends (last 1-2 weeks). The channel is a Brazilian Portuguese tech channel.\n\n"
-    "Return ONLY a valid JSON array with no markdown fences, no explanation, no extra text. "
+    "Return ONLY a valid JSON array. No markdown fences. No explanation. No extra text. "
+    "No script. No outline. Just the JSON array.\n\n"
     "Each element must have: "
     '"title" (string), "angle" (string), "why_timely" (string), '
     '"interest" (string: "high", "medium", or "low").\n\n'
-    "Example format:\n"
-    '[{"title": "...", "angle": "...", "why_timely": "...", "interest": "high"}]'
+    "Example of the EXACT format expected:\n"
+    '[{{"title": "Topic A", "angle": "Unique angle", "why_timely": "Recent event", "interest": "high"}}]'
     + _NO_TOOLS
 )
 
@@ -139,7 +143,8 @@ async def handle_ideation(
 
     yield sse_event({"stage": "finding_trends"})
 
-    topics_response = await ask_guardian(IDEATION_PROMPT, context=user_message)
+    ideation_prompt = IDEATION_PROMPT_TEMPLATE.format(user_input=user_message)
+    topics_response = await ask_guardian(ideation_prompt)
 
     await _save_message(sb, conversation_id, "assistant", topics_response, "topics")
 
