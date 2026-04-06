@@ -229,7 +229,11 @@ export default function ChatPage() {
             newMessage.image_url = imageRef.current.url;
           }
           if (data.saved) {
-            newMessage.content = (data.content as string) || "Thumbnail saved!";
+            const savedLabel =
+              conversationMode === "script" ? "Script" : "Thumbnail";
+            newMessage.content =
+              (data.content as string) ||
+              `${savedLabel} saved to ${(data.path as string) || "storage"}!`;
             newMessage.type = "text";
           }
           setMessages((prev) => [...prev, newMessage]);
