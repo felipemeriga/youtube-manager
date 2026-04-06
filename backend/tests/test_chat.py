@@ -1,5 +1,5 @@
 import json
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -18,6 +18,14 @@ def create_app(user_id: str) -> TestClient:
     return TestClient(app)
 
 
+def mock_supabase_with_mode(mode: str = "thumbnail"):
+    mock_sb = MagicMock()
+    mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value.data = {
+        "mode": mode
+    }
+    return mock_sb
+
+
 def test_chat_endpoint_returns_sse_stream():
     client = create_app("test-user")
 
@@ -26,9 +34,14 @@ def test_chat_endpoint_returns_sse_stream():
         yield f"data: {json.dumps({'token': 'Hello '})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
-    with patch(
-        "routes.chat.handle_chat_message", side_effect=fake_stream
-    ) as mock_handle:
+    mock_sb = mock_supabase_with_mode("thumbnail")
+
+    with (
+        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.handle_chat_message", side_effect=fake_stream
+        ) as mock_handle,
+    ):
         response = client.post(
             "/api/chat",
             json={
@@ -54,9 +67,14 @@ def test_chat_endpoint_default_type_is_text():
     async def fake_stream(*args, **kwargs):
         yield f"data: {json.dumps({'done': True})}\n\n"
 
-    with patch(
-        "routes.chat.handle_chat_message", side_effect=fake_stream
-    ) as mock_handle:
+    mock_sb = mock_supabase_with_mode("thumbnail")
+
+    with (
+        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.handle_chat_message", side_effect=fake_stream
+        ) as mock_handle,
+    ):
         response = client.post(
             "/api/chat",
             json={
@@ -81,9 +99,14 @@ def test_chat_endpoint_approval_type():
         yield f"data: {json.dumps({'stage': 'generating'})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
-    with patch(
-        "routes.chat.handle_chat_message", side_effect=fake_stream
-    ) as mock_handle:
+    mock_sb = mock_supabase_with_mode("thumbnail")
+
+    with (
+        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.handle_chat_message", side_effect=fake_stream
+        ) as mock_handle,
+    ):
         response = client.post(
             "/api/chat",
             json={
@@ -127,9 +150,14 @@ def test_chat_endpoint_save_type():
     async def fake_stream(*args, **kwargs):
         yield f"data: {json.dumps({'done': True, 'saved': True})}\n\n"
 
-    with patch(
-        "routes.chat.handle_chat_message", side_effect=fake_stream
-    ) as mock_handle:
+    mock_sb = mock_supabase_with_mode("thumbnail")
+
+    with (
+        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.handle_chat_message", side_effect=fake_stream
+        ) as mock_handle,
+    ):
         response = client.post(
             "/api/chat",
             json={
@@ -156,9 +184,14 @@ def test_chat_endpoint_regenerate_type():
         yield f"data: {json.dumps({'stage': 'generating'})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
-    with patch(
-        "routes.chat.handle_chat_message", side_effect=fake_stream
-    ) as mock_handle:
+    mock_sb = mock_supabase_with_mode("thumbnail")
+
+    with (
+        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.handle_chat_message", side_effect=fake_stream
+        ) as mock_handle,
+    ):
         response = client.post(
             "/api/chat",
             json={
@@ -192,7 +225,12 @@ def test_chat_endpoint_stream_body_content():
         yield f"data: {json.dumps({'stage': 'analyzing'})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
-    with patch("routes.chat.handle_chat_message", side_effect=fake_stream):
+    mock_sb = mock_supabase_with_mode("thumbnail")
+
+    with (
+        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch("routes.chat.handle_chat_message", side_effect=fake_stream),
+    ):
         response = client.post(
             "/api/chat",
             json={
@@ -205,3 +243,73 @@ def test_chat_endpoint_stream_body_content():
     body = response.text
     assert 'data: {"stage": "analyzing"}' in body
     assert 'data: {"done": true}' in body
+
+
+def test_chat_dispatches_to_script_pipeline_for_script_mode():
+    """When conversation mode is 'script', handle_script_chat_message is called."""
+    client = create_app("test-user")
+
+    async def fake_stream(*args, **kwargs):
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    mock_sb = mock_supabase_with_mode("script")
+
+    with (
+        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.handle_script_chat_message", side_effect=fake_stream
+        ) as mock_script,
+        patch("routes.chat.handle_chat_message") as mock_thumbnail,
+    ):
+        response = client.post(
+            "/api/chat",
+            json={
+                "conversation_id": "conv-1",
+                "content": "Write a script",
+                "type": "text",
+            },
+        )
+
+    assert response.status_code == 200
+    mock_script.assert_called_once_with(
+        conversation_id="conv-1",
+        content="Write a script",
+        msg_type="text",
+        user_id="test-user",
+    )
+    mock_thumbnail.assert_not_called()
+
+
+def test_chat_dispatches_to_thumbnail_pipeline_for_thumbnail_mode():
+    """When conversation mode is 'thumbnail', handle_chat_message is called."""
+    client = create_app("test-user")
+
+    async def fake_stream(*args, **kwargs):
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    mock_sb = mock_supabase_with_mode("thumbnail")
+
+    with (
+        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.handle_chat_message", side_effect=fake_stream
+        ) as mock_thumbnail,
+        patch("routes.chat.handle_script_chat_message") as mock_script,
+    ):
+        response = client.post(
+            "/api/chat",
+            json={
+                "conversation_id": "conv-1",
+                "content": "Create a thumbnail",
+                "type": "text",
+            },
+        )
+
+    assert response.status_code == 200
+    mock_thumbnail.assert_called_once_with(
+        conversation_id="conv-1",
+        content="Create a thumbnail",
+        msg_type="text",
+        user_id="test-user",
+    )
+    mock_script.assert_not_called()
