@@ -1,8 +1,16 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from supabase import create_client
 
 from auth import get_current_user
 from config import settings
+
+
+class CreateConversationRequest(BaseModel):
+    mode: str = "thumbnail"
+
 
 router = APIRouter()
 
@@ -25,9 +33,15 @@ async def list_conversations(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/api/conversations")
-async def create_conversation(user_id: str = Depends(get_current_user)):
+async def create_conversation(
+    request: Optional[CreateConversationRequest] = None,
+    user_id: str = Depends(get_current_user),
+):
     sb = get_supabase()
-    result = sb.table("conversations").insert({"user_id": user_id}).execute()
+    mode = request.mode if request else "thumbnail"
+    result = (
+        sb.table("conversations").insert({"user_id": user_id, "mode": mode}).execute()
+    )
     return result.data[0]
 
 
