@@ -5,6 +5,8 @@ import ApprovalButtons from "./ApprovalButtons";
 import ScriptTopicList from "./ScriptTopicList";
 import ScriptViewer from "./ScriptViewer";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
 interface Message {
   id?: string;
   role: "user" | "assistant";
@@ -184,10 +186,14 @@ export default function MessageBubble({
           border: "1px solid rgba(255,255,255,0.08)",
         }}
       >
-        {message.image_base64 && (
+        {(message.image_base64 || message.image_url) && (
           <Box
             component="img"
-            src={`data:image/png;base64,${message.image_base64}`}
+            src={
+              message.image_base64
+                ? `data:image/png;base64,${message.image_base64}`
+                : `${SUPABASE_URL}/storage/v1/object/public/outputs/${message.image_url}`
+            }
             alt="Generated thumbnail"
             sx={{
               width: "100%",
