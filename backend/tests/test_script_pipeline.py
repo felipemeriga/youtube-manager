@@ -85,9 +85,7 @@ async def test_handle_topic_selection_streams_script():
         new_callable=AsyncMock,
         return_value="# Full Script\n\nContent here",
     ):
-        events = await collect_events(
-            "conv-1", "0", "topic_selection", "test-user", sb
-        )
+        events = await collect_events("conv-1", "0", "topic_selection", "test-user", sb)
 
     stages = [e.get("stage") for e in events if "stage" in e]
     done = [e for e in events if e.get("done")]
