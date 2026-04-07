@@ -60,17 +60,23 @@ export default function ChatPage() {
   }, []);
 
   const detectPendingStage = (msgs: Message[], mode: string): string | null => {
-    if (mode !== "script" || msgs.length === 0) return null;
+    if (msgs.length === 0) return null;
     const lastMsg = msgs[msgs.length - 1];
     if (lastMsg.role !== "user") return null;
 
-    if (lastMsg.type === "text") return "finding_trends";
-    if (lastMsg.type === "topic_selection") return "writing_script";
-    if (lastMsg.type === "approval") {
-      const lastAssistant = [...msgs]
-        .reverse()
-        .find((m) => m.role === "assistant");
-      if (lastAssistant?.type === "script") return "saving";
+    if (mode === "script") {
+      if (lastMsg.type === "text") return "finding_trends";
+      if (lastMsg.type === "topic_selection") return "writing_script";
+      if (lastMsg.type === "approval") {
+        const lastAssistant = [...msgs]
+          .reverse()
+          .find((m) => m.role === "assistant");
+        if (lastAssistant?.type === "script") return "saving";
+      }
+    } else {
+      if (lastMsg.type === "text") return "generating";
+      if (lastMsg.type === "save") return "generating";
+      if (lastMsg.type === "regenerate") return "generating";
     }
     return null;
   };
