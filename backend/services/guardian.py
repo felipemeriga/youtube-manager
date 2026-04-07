@@ -5,7 +5,7 @@ import httpx
 from config import settings
 
 logger = logging.getLogger(__name__)
-TIMEOUT = 300.0
+TIMEOUT = 600.0
 
 
 async def ask_guardian(prompt: str, context: str = "") -> str:
