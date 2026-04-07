@@ -1,10 +1,21 @@
-import { Box, Card, CardActionArea, CardContent, Typography, Chip } from "@mui/material";
+import {
+  Box,
+  Card,
+  CardActionArea,
+  CardContent,
+  Typography,
+  Chip,
+  Link,
+} from "@mui/material";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
 interface Topic {
   title: string;
   angle: string;
-  timeliness: string;
+  why_timely?: string;
+  timeliness?: string;
+  source_url?: string;
   interest: string;
 }
 
@@ -44,9 +55,14 @@ export default function ScriptTopicList({
         >
           <CardActionArea onClick={() => onSelect(index)} disabled={disabled}>
             <CardContent sx={{ py: 1.5, px: 2 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+              <Box
+                sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}
+              >
                 <TrendingUpIcon sx={{ fontSize: 16, color: "#7c3aed" }} />
-                <Typography variant="subtitle2" sx={{ color: "rgba(255,255,255,0.95)" }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ color: "rgba(255,255,255,0.95)" }}
+                >
                   {topic.title}
                 </Typography>
                 <Chip
@@ -56,18 +72,51 @@ export default function ScriptTopicList({
                     ml: "auto",
                     height: 20,
                     fontSize: 11,
-                    backgroundColor: `${interestColors[topic.interest] || "#6b7280"}22`,
+                    backgroundColor: `${
+                      interestColors[topic.interest] || "#6b7280"
+                    }22`,
                     color: interestColors[topic.interest] || "#6b7280",
-                    border: `1px solid ${interestColors[topic.interest] || "#6b7280"}44`,
+                    border: `1px solid ${
+                      interestColors[topic.interest] || "#6b7280"
+                    }44`,
                   }}
                 />
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: 13 }}
+              >
                 {topic.angle}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, mt: 0.5, display: "block" }}>
-                {topic.timeliness}
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontSize: 12, mt: 0.5, display: "block" }}
+              >
+                {topic.why_timely || topic.timeliness}
               </Typography>
+              {topic.source_url && (
+                <Link
+                  href={topic.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    fontSize: 11,
+                    color: "#7c3aed",
+                    mt: 0.5,
+                    textDecoration: "none",
+                    "&:hover": { textDecoration: "underline" },
+                  }}
+                >
+                  <OpenInNewIcon sx={{ fontSize: 12 }} />
+                  Source
+                </Link>
+              )}
             </CardContent>
           </CardActionArea>
         </Card>

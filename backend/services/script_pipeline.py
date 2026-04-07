@@ -141,6 +141,31 @@ def _find_last_message(messages: list[dict], msg_type: str) -> dict | None:
     return next((m for m in reversed(messages) if m["type"] == msg_type), None)
 
 
+def _extract_json_array(text: str) -> str:
+    """Extract a JSON array from text that may contain markdown fences or extra prose."""
+    # Try to find a JSON array directly
+    match = re.search(r"\[[\s\S]*\]", text)
+    if match:
+        candidate = match.group(0)
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            pass
+    # Strip markdown fences and try again
+    stripped = re.sub(r"```(?:json)?\s*", "", text).strip()
+    stripped = re.sub(r"```\s*$", "", stripped).strip()
+    match = re.search(r"\[[\s\S]*\]", stripped)
+    if match:
+        candidate = match.group(0)
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            pass
+    return text
+
+
 def _extract_duration(user_message: str) -> str:
     match = re.search(r"(\d+)\s*min", user_message, re.IGNORECASE)
     if match:
@@ -172,12 +197,11 @@ async def handle_ideation(
 
     ideation_prompt = IDEATION_PROMPT_TEMPLATE.format(user_input=user_message)
     topics_response = await ask_guardian(ideation_prompt)
+    topics_clean = _extract_json_array(topics_response)
 
-    await _save_message(sb, conversation_id, "assistant", topics_response, "topics")
+    await _save_message(sb, conversation_id, "assistant", topics_clean, "topics")
 
-    yield sse_event(
-        {"done": True, "message_type": "topics", "content": topics_response}
-    )
+    yield sse_event({"done": True, "message_type": "topics", "content": topics_clean})
 
 
 async def handle_topic_selection(
