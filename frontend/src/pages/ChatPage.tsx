@@ -93,6 +93,14 @@ export default function ChatPage() {
           stopPolling();
           setCurrentStage(null);
           setIsStreaming(false);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: "Request timed out. Please try again.",
+              type: "text",
+            },
+          ]);
           return;
         }
         try {
