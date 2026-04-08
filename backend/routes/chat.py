@@ -38,7 +38,6 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         stream = handle_script_chat_message(
             conversation_id=request.conversation_id,
             content=request.content,
-            msg_type=request.type,
             user_id=user_id,
         )
     else:

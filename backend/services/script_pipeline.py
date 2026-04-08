@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -8,11 +9,47 @@ from typing import AsyncGenerator
 from supabase._async.client import create_client as create_async_client
 
 from config import settings
-from services.guardian import ask_guardian
+from services.llm import ask_llm
+from services.memory_extractor import extract_memory
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DURATION = "12 minutos"
+SYSTEM_PROMPT_TEMPLATE = """You are a YouTube content strategist and scriptwriter.
+
+## Channel Persona: {channel_name}
+
+**Language:** {language}
+
+{persona_text}
+
+{memories_section}
+
+You help the user create YouTube video scripts through natural conversation. Based on the conversation context, decide what action to take.
+
+You MUST respond with ONLY a valid JSON object (no markdown fences, no extra text). Use one of these actions:
+
+1. Suggest topics — when the user describes a video idea or asks for topic suggestions:
+{{"action": "topics", "data": [{{"title": "...", "angle": "...", "why_timely": "...", "source_url": "...", "interest": "high|medium|low"}}, ...], "message": "optional conversational text"}}
+
+2. Write/rewrite a script — when the user picks a topic, asks you to write, or gives feedback on an existing script:
+{{"action": "script", "content": "...full markdown script...", "message": "optional conversational text"}}
+
+3. Save the script — when the user explicitly approves or says to save:
+{{"action": "save", "message": "optional conversational text"}}
+
+4. Conversational reply — when you need to ask for clarification, acknowledge something, or chat:
+{{"action": "message", "content": "your reply"}}
+
+Guidelines:
+- ALWAYS search the web for current information before suggesting topics or writing scripts
+- When suggesting topics, research current news and trends from the last 1-2 weeks
+- When writing scripts, include real statistics with verifiable source URLs
+- Write all script content in {language}
+- When the user gives feedback on a script (e.g. "too long", "more humor"), rewrite incorporating feedback — do NOT restart from topic suggestions
+- When the user says "save", "looks good", "approved", "perfect" about a script, use the "save" action
+- When unclear, ask for clarification using the "message" action
+- After a script is saved, if the user brings up a new topic, start fresh topic suggestions
+- Suggest 5-10 topics when using the "topics" action, each with title, angle, why_timely, source_url, and interest level"""
 
 
 async def get_supabase():
@@ -30,80 +67,6 @@ def slugify(text: str) -> str:
     text = re.sub(r"[^\w\s-]", "", text).strip().lower()
     text = re.sub(r"[-\s]+", "-", text)
     return text[:60]
-
-
-_NO_TOOLS = (
-    "\n\nDo NOT create, read, or write any files. Do NOT run any commands. "
-    "Just reply with the requested content directly in your response."
-)
-
-IDEATION_PROMPT_TEMPLATE = (
-    "You are a YouTube content strategist. Your ONLY task right now is to suggest "
-    "video topic IDEAS. You are NOT writing a script. You are NOT creating content. "
-    "You are ONLY suggesting topics.\n\n"
-    "The user wants to make a video about this general area:\n"
-    '"""\n{user_input}\n"""\n\n'
-    "IMPORTANT: Your training data is outdated. You MUST search the web for "
-    "current news and trends from the last 1-2 weeks before suggesting topics. "
-    "Use external sources to find what is trending RIGHT NOW.\n\n"
-    "Based on your research, suggest 5-10 specific video topics. The channel is "
-    "{channel_name} ({language}).\n\n"
-    "Return ONLY a valid JSON array. No markdown fences. No explanation. No extra text. "
-    "No script. No outline. Just the JSON array.\n\n"
-    "Each element must have: "
-    '"title" (string), "angle" (string), "why_timely" (string), '
-    '"source_url" (string — the real URL you found), '
-    '"interest" (string: "high", "medium", or "low").\n\n'
-    "Example of the EXACT format expected:\n"
-    '[{{"title": "Topic A", "angle": "Unique angle", "why_timely": "Recent event", '
-    '"source_url": "https://example.com/article", "interest": "high"}}]' + _NO_TOOLS
-)
-
-SCRIPT_PROMPT_TEMPLATE = (
-    "{persona}\n\n"
-    "You are writing a complete YouTube video script in {language}.\n\n"
-    "Topic: {topic}\n\n"
-    "Target duration: {duration}.\n\n"
-    "IMPORTANT: Your training data is outdated. You MUST search the web for current "
-    "information, statistics, data, and expert opinions about this topic. Use REAL, "
-    "RECENT sources (last 1-2 weeks). Every fact must have a real, verifiable source URL.\n\n"
-    "IMPORTANT: All section headings, labels, and script dialogue MUST be written "
-    "in {language}. Adapt the structure below to {language}.\n\n"
-    "Write the script using this EXACT structure:\n\n"
-    "# {{title}}\n\n"
-    "## ⏱️ TIMING ({{duration}})\n\n"
-    "A markdown table with columns: Section | Time | Duration (translate headers to {language})\n"
-    "Sections must fit within the target duration of {duration}.\n\n"
-    "---\n\n"
-    "## 📊 STATS & DATA (with sources to cite)\n\n"
-    "Each stat as a blockquote with:\n"
-    "> **Stat N**: [the fact/stat]\n"
-    ">\n"
-    "> *Source: [Source Name](real URL)*\n\n"
-    "Include 6-10 verified stats with real URLs.\n\n"
-    "---\n\n"
-    "## 🎙️ TALKING POINTS (ready-to-say phrases)\n\n"
-    '5-8 punchy one-liner quotes ready to say on camera, using "-" bullets.\n\n'
-    "---\n\n"
-    "## 📝 FULL SCRIPT\n\n"
-    "### 🎬 OPENING (timing)\n"
-    "Word-for-word dialogue. Provocative hook in the first 30 seconds.\n\n"
-    "### 📌 SECTION N: TITLE (timing)\n"
-    "Word-for-word dialogue for each section with inline data citations.\n\n"
-    "### 🎬 CLOSING (timing)\n"
-    "Strong closing + call to action.\n\n"
-    "---\n\n"
-    "## 🔗 VERIFIED SOURCES\n\n"
-    "Numbered list of ALL sources used, each with:\n"
-    "N. **Source Name** — Article title (date) — real full URL\n\n"
-    "CRITICAL: Every URL in this script must be a REAL, clickable link that you "
-    "found by searching the web. Do NOT invent or hallucinate URLs." + _NO_TOOLS
-)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 async def _save_message(
@@ -134,46 +97,6 @@ async def _get_messages(sb, conversation_id: str) -> list[dict]:
     return response.data
 
 
-def _find_message(messages: list[dict], msg_type: str) -> dict | None:
-    return next((m for m in messages if m["type"] == msg_type), None)
-
-
-def _find_last_message(messages: list[dict], msg_type: str) -> dict | None:
-    return next((m for m in reversed(messages) if m["type"] == msg_type), None)
-
-
-def _extract_json_array(text: str) -> str:
-    """Extract a JSON array from text that may contain markdown fences or extra prose."""
-    # Try to find a JSON array directly
-    match = re.search(r"\[[\s\S]*\]", text)
-    if match:
-        candidate = match.group(0)
-        try:
-            json.loads(candidate)
-            return candidate
-        except json.JSONDecodeError:
-            pass
-    # Strip markdown fences and try again
-    stripped = re.sub(r"```(?:json)?\s*", "", text).strip()
-    stripped = re.sub(r"```\s*$", "", stripped).strip()
-    match = re.search(r"\[[\s\S]*\]", stripped)
-    if match:
-        candidate = match.group(0)
-        try:
-            json.loads(candidate)
-            return candidate
-        except json.JSONDecodeError:
-            pass
-    return text
-
-
-def _extract_duration(user_message: str) -> str:
-    match = re.search(r"(\d+)\s*min", user_message, re.IGNORECASE)
-    if match:
-        return f"{match.group(1)} minutos"
-    return DEFAULT_DURATION
-
-
 async def _get_user_persona(sb, user_id: str) -> dict | None:
     result = (
         await sb.table("channel_personas")
@@ -182,240 +105,179 @@ async def _get_user_persona(sb, user_id: str) -> dict | None:
         .maybe_single()
         .execute()
     )
-    return result.data
+    return result.data if result else None
 
 
-def format_persona(persona: dict) -> str:
-    return (
-        f"# Channel Persona: {persona['channel_name']}\n\n"
-        f"**Language:** {persona['language']}\n\n"
-        f"{persona['persona_text']}\n"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Stage handlers
-# ---------------------------------------------------------------------------
-
-
-async def handle_ideation(
-    conversation_id: str, user_message: str, user_id: str
-) -> AsyncGenerator[str, None]:
-    logger.info("ideation conversation=%s user=%s", conversation_id, user_id)
-    sb = await get_supabase()
-
-    persona_row = await _get_user_persona(sb, user_id)
-    if not persona_row:
-        yield sse_event(
-            {
-                "error": "Please set up your channel persona in Settings before generating scripts.",
-                "done": True,
-            }
-        )
-        return
-
-    await _save_message(sb, conversation_id, "user", user_message, "text")
-
-    await (
-        sb.table("conversations")
-        .update({"title": user_message[:50]})
-        .eq("id", conversation_id)
+async def _get_user_memories(sb, user_id: str) -> list[dict]:
+    result = (
+        await sb.table("user_memories")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
         .execute()
     )
-
-    yield sse_event({"stage": "finding_trends"})
-
-    ideation_prompt = IDEATION_PROMPT_TEMPLATE.format(
-        user_input=user_message,
-        channel_name=persona_row["channel_name"],
-        language=persona_row["language"],
-    )
-    topics_response = await ask_guardian(ideation_prompt)
-    topics_clean = _extract_json_array(topics_response)
-
-    await _save_message(sb, conversation_id, "assistant", topics_clean, "topics")
-
-    yield sse_event({"done": True, "message_type": "topics", "content": topics_clean})
+    return result.data or []
 
 
-async def handle_topic_selection(
-    conversation_id: str, topic_index: int, user_id: str
-) -> AsyncGenerator[str, None]:
-    logger.info(
-        "topic_selection conversation=%s topic=%d user=%s",
-        conversation_id,
-        topic_index,
-        user_id,
-    )
-    sb = await get_supabase()
-
-    persona_row = await _get_user_persona(sb, user_id)
-    if not persona_row:
-        yield sse_event(
-            {
-                "error": "Please set up your channel persona in Settings before generating scripts.",
-                "done": True,
-            }
+def _build_system_prompt(persona: dict, memories: list[dict]) -> str:
+    if memories:
+        memories_text = "## Your Learned Preferences\n\n" + "\n".join(
+            f"- {m['content']}" for m in memories
         )
-        return
-
-    await _save_message(
-        sb, conversation_id, "user", str(topic_index), "topic_selection"
-    )
-
-    messages = await _get_messages(sb, conversation_id)
-    topics_msg = _find_message(messages, "topics")
-    user_msg = _find_message(messages, "text")
-
-    topics = json.loads(topics_msg["content"])
-    topic = topics[topic_index]
-    topic_title = topic.get("title", str(topic))
-
-    duration = _extract_duration(user_msg["content"]) if user_msg else DEFAULT_DURATION
-
-    yield sse_event({"stage": "writing_script"})
-
-    persona = format_persona(persona_row)
-    script_prompt = SCRIPT_PROMPT_TEMPLATE.format(
-        persona=persona,
-        topic=topic_title,
-        duration=duration,
-        language=persona_row["language"],
-    )
-    script = await ask_guardian(script_prompt)
-
-    await _save_message(sb, conversation_id, "assistant", script, "script")
-
-    yield sse_event({"done": True, "message_type": "script", "content": script})
-
-
-async def handle_script_approval(
-    conversation_id: str, approved: bool, feedback: str, user_id: str
-) -> AsyncGenerator[str, None]:
-    logger.info(
-        "script_approval conversation=%s approved=%s user=%s",
-        conversation_id,
-        approved,
-        user_id,
-    )
-    sb = await get_supabase()
-
-    persona_row = await _get_user_persona(sb, user_id)
-    if not persona_row:
-        yield sse_event(
-            {
-                "error": "Please set up your channel persona in Settings before generating scripts.",
-                "done": True,
-            }
-        )
-        return
-
-    approval_content = "approved" if approved else f"rejected: {feedback}"
-    await _save_message(sb, conversation_id, "user", approval_content, "approval")
-
-    messages = await _get_messages(sb, conversation_id)
-
-    if approved:
-        yield sse_event({"stage": "saving"})
-
-        script_msg = _find_last_message(messages, "script")
-        script_content = script_msg["content"] if script_msg else ""
-
-        topics_msg = _find_message(messages, "topics")
-        selection_msg = _find_message(messages, "topic_selection")
-        slug = "script"
-        if topics_msg and selection_msg:
-            topics = json.loads(topics_msg["content"])
-            idx = int(selection_msg["content"])
-            slug = slugify(topics[idx].get("title", "script"))
-
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        path = f"{user_id}/{slug}-{timestamp}.md"
-
-        await sb.storage.from_("scripts").upload(
-            path,
-            script_content.encode("utf-8"),
-            {"content-type": "text/markdown"},
-        )
-
-        await _save_message(
-            sb, conversation_id, "assistant", f"Script saved to {path}", "saved"
-        )
-
-        yield sse_event({"done": True, "saved": True, "path": path})
     else:
-        yield sse_event({"stage": "writing_script"})
+        memories_text = ""
 
-        script_msg = _find_last_message(messages, "script")
-        old_script = script_msg["content"] if script_msg else ""
-
-        topics_msg = _find_message(messages, "topics")
-        selection_msg = _find_message(messages, "topic_selection")
-        topic_title = ""
-        if topics_msg and selection_msg:
-            topics = json.loads(topics_msg["content"])
-            idx = int(selection_msg["content"])
-            topic_title = topics[idx].get("title", "")
-
-        user_msg = _find_message(messages, "text")
-        duration = (
-            _extract_duration(user_msg["content"]) if user_msg else DEFAULT_DURATION
-        )
-
-        persona = format_persona(persona_row)
-        script_prompt = SCRIPT_PROMPT_TEMPLATE.format(
-            persona=persona,
-            topic=topic_title,
-            duration=duration,
-            language=persona_row["language"],
-        )
-        script_prompt += f"\n\nPrevious script:\n{old_script}\n\nFeedback: {feedback}"
-        new_script = await ask_guardian(script_prompt)
-
-        await _save_message(sb, conversation_id, "assistant", new_script, "script")
-
-        yield sse_event({"done": True, "message_type": "script", "content": new_script})
+    return SYSTEM_PROMPT_TEMPLATE.format(
+        channel_name=persona["channel_name"],
+        language=persona["language"],
+        persona_text=persona["persona_text"],
+        memories_section=memories_text,
+    )
 
 
-# ---------------------------------------------------------------------------
-# Router
-# ---------------------------------------------------------------------------
+def _messages_to_chat(messages: list[dict]) -> list[dict]:
+    chat = []
+    for msg in messages:
+        role = msg["role"]
+        if role not in ("user", "assistant"):
+            continue
+        content = msg["content"]
+        if msg.get("type") == "topics" and role == "assistant":
+            content = json.dumps({"action": "topics", "data": json.loads(content)})
+        chat.append({"role": role, "content": content})
+    return chat
+
+
+def _parse_action(response_text: str) -> dict:
+    text = response_text.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    text = text.strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    return {"action": "message", "content": response_text}
 
 
 async def handle_script_chat_message(
     conversation_id: str,
     content: str,
-    msg_type: str,
     user_id: str,
 ) -> AsyncGenerator[str, None]:
     logger.info(
-        "script_chat_message type=%s conversation=%s user=%s",
-        msg_type,
+        "script_chat conversation=%s user=%s",
         conversation_id,
         user_id,
     )
     try:
-        if msg_type == "text":
-            async for event in handle_ideation(conversation_id, content, user_id):
-                yield event
-        elif msg_type == "topic_selection":
-            topic_index = int(content)
-            async for event in handle_topic_selection(
-                conversation_id, topic_index, user_id
-            ):
-                yield event
-        elif msg_type == "approve_script":
-            async for event in handle_script_approval(
-                conversation_id, True, content, user_id
-            ):
-                yield event
-        elif msg_type == "reject_script":
-            async for event in handle_script_approval(
-                conversation_id, False, content, user_id
-            ):
-                yield event
+        sb = await get_supabase()
+
+        persona = await _get_user_persona(sb, user_id)
+        if not persona:
+            yield sse_event(
+                {
+                    "error": "Please set up your channel persona in Settings before generating scripts.",
+                    "done": True,
+                }
+            )
+            return
+
+        memories = await _get_user_memories(sb, user_id)
+        existing_messages = await _get_messages(sb, conversation_id)
+
+        if not existing_messages:
+            await (
+                sb.table("conversations")
+                .update({"title": content[:50]})
+                .eq("id", conversation_id)
+                .execute()
+            )
+
+        await _save_message(sb, conversation_id, "user", content, "text")
+
+        yield sse_event({"stage": "thinking"})
+
+        system = _build_system_prompt(persona, memories)
+        chat_messages = _messages_to_chat(existing_messages)
+        chat_messages.append({"role": "user", "content": content})
+
+        response_text = await ask_llm(system, chat_messages)
+        action = _parse_action(response_text)
+        action_type = action.get("action", "message")
+
+        if action_type == "topics":
+            topics_data = action.get("data", [])
+            topics_json = json.dumps(topics_data)
+            await _save_message(sb, conversation_id, "assistant", topics_json, "topics")
+            yield sse_event(
+                {"done": True, "message_type": "topics", "content": topics_json}
+            )
+
+        elif action_type == "script":
+            script_content = action.get("content", "")
+            await _save_message(
+                sb, conversation_id, "assistant", script_content, "script"
+            )
+            yield sse_event(
+                {"done": True, "message_type": "script", "content": script_content}
+            )
+
+        elif action_type == "save":
+            all_messages = await _get_messages(sb, conversation_id)
+            script_msg = next(
+                (m for m in reversed(all_messages) if m["type"] == "script"),
+                None,
+            )
+            script_content = script_msg["content"] if script_msg else ""
+
+            slug = slugify(content) if content.strip() else "script"
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+            path = f"{user_id}/{slug}-{timestamp}.md"
+
+            await sb.storage.from_("scripts").upload(
+                path,
+                script_content.encode("utf-8"),
+                {"content-type": "text/markdown"},
+            )
+
+            save_message = action.get("message", f"Script saved to {path}")
+            await _save_message(sb, conversation_id, "assistant", save_message, "saved")
+
+            yield sse_event({"done": True, "saved": True, "path": path})
+
+            asyncio.create_task(
+                extract_memory(
+                    sb=sb,
+                    user_id=user_id,
+                    action="approved",
+                    topic=slug,
+                    feedback="",
+                )
+            )
+
+        elif action_type == "message":
+            msg_content = action.get("content", "")
+            await _save_message(sb, conversation_id, "assistant", msg_content, "text")
+            yield sse_event(
+                {"done": True, "message_type": "text", "content": msg_content}
+            )
+
         else:
-            logger.warning("unknown script message type=%s", msg_type)
+            await _save_message(sb, conversation_id, "assistant", response_text, "text")
+            yield sse_event(
+                {"done": True, "message_type": "text", "content": response_text}
+            )
+
     except Exception as e:
-        logger.exception("error in script pipeline type=%s: %s", msg_type, e)
+        logger.exception("error in script pipeline: %s", e)
         yield sse_event({"error": str(e), "done": True})
