@@ -9,6 +9,7 @@ from typing import AsyncGenerator
 from supabase._async.client import create_client as create_async_client
 
 from config import settings
+from routes.personas import DEFAULT_SCRIPT_SECTIONS
 from services.llm import ask_llm
 from services.memory_extractor import extract_memory
 
@@ -44,6 +45,7 @@ Guidelines:
 - ALWAYS search the web for current information before suggesting topics or writing scripts
 - When suggesting topics, research current news and trends from the last 1-2 weeks
 - When writing scripts, include real statistics with verifiable source URLs
+{script_structure}
 - Write all script content in {language}
 - When the user gives feedback on a script (e.g. "too long", "more humor"), rewrite incorporating feedback — do NOT restart from topic suggestions
 - When the user says "save", "looks good", "approved", "perfect" about a script, use the "save" action
@@ -127,11 +129,30 @@ def _build_system_prompt(persona: dict, memories: list[dict]) -> str:
     else:
         memories_text = ""
 
+    sections = persona.get("script_template") or DEFAULT_SCRIPT_SECTIONS
+    enabled = sorted(
+        [s for s in sections if s.get("enabled", True)],
+        key=lambda s: s.get("order", 0),
+    )
+    if enabled:
+        lines = [
+            "- When writing scripts, structure them with these sections in this order:\n"
+        ]
+        for i, s in enumerate(enabled, 1):
+            lines.append(f"  {i}. **{s['name']}** — {s['description']}")
+        lines.append(
+            "\n  Only include the sections listed above. Follow this structure exactly."
+        )
+        script_structure = "\n".join(lines)
+    else:
+        script_structure = ""
+
     return SYSTEM_PROMPT_TEMPLATE.format(
         channel_name=persona["channel_name"],
         language=persona["language"],
         persona_text=persona["persona_text"],
         memories_section=memories_text,
+        script_structure=script_structure,
     )
 
 

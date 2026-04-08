@@ -185,3 +185,55 @@ async def test_sets_conversation_title_on_first_message():
         await collect_events("conv-1", "AI video ideas", "test-user", sb)
 
     sb.table.return_value.update.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_includes_script_template():
+    from services.script_pipeline import _build_system_prompt
+
+    persona = {
+        "channel_name": "Test",
+        "language": "English",
+        "persona_text": "Casual",
+        "script_template": [
+            {
+                "name": "Hook",
+                "description": "Opening hook",
+                "enabled": True,
+                "order": 0,
+            },
+            {
+                "name": "Stats",
+                "description": "Data with sources",
+                "enabled": True,
+                "order": 1,
+            },
+            {
+                "name": "Outro",
+                "description": "Closing remarks",
+                "enabled": False,
+                "order": 2,
+            },
+        ],
+    }
+    result = _build_system_prompt(persona, [])
+
+    assert "Hook" in result
+    assert "Opening hook" in result
+    assert "Stats" in result
+    assert "Outro" not in result
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_uses_default_when_no_template():
+    from services.script_pipeline import _build_system_prompt
+
+    persona = {
+        "channel_name": "Test",
+        "language": "English",
+        "persona_text": "Casual",
+    }
+    result = _build_system_prompt(persona, [])
+
+    assert "Hook / Opening" in result
+    assert "Verified Sources" in result
