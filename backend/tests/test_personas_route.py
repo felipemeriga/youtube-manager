@@ -27,7 +27,7 @@ def test_get_persona_returns_404_when_not_found():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = None
+    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
     with patch("routes.personas.get_supabase", return_value=mock_sb):
         response = client.get("/api/personas")
@@ -41,7 +41,7 @@ def test_get_persona_returns_data_when_exists():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = {
+    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
         "user_id": user_id,
         "channel_name": "My Channel",
         "language": "en",

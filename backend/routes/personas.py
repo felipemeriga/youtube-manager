@@ -26,7 +26,7 @@ async def get_persona(user_id: str = Depends(get_current_user)):
         sb.table("channel_personas")
         .select("*")
         .eq("user_id", user_id)
-        .single()
+        .maybe_single()
         .execute()
     )
     if not result.data:
