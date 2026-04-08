@@ -21,7 +21,8 @@ import {
   listMemories,
   deleteMemory,
 } from "../lib/api";
-import type { Memory } from "../lib/api";
+import type { Memory, ScriptSection } from "../lib/api";
+import ScriptTemplateBuilder from "../components/ScriptTemplateBuilder";
 
 export default function SettingsPage() {
   const [channelName, setChannelName] = useState("");
@@ -35,6 +36,7 @@ export default function SettingsPage() {
     severity: "success" | "error";
   }>({ open: false, message: "", severity: "success" });
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [scriptTemplate, setScriptTemplate] = useState<ScriptSection[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -46,6 +48,7 @@ export default function SettingsPage() {
           setChannelName(persona.channel_name);
           setLanguage(persona.language);
           setPersonaText(persona.persona_text);
+          setScriptTemplate(persona.script_template || []);
         }
         setMemories(mems);
       })
@@ -75,6 +78,7 @@ export default function SettingsPage() {
         channel_name: channelName.trim(),
         language: language.trim(),
         persona_text: personaText.trim(),
+        script_template: scriptTemplate,
       });
       setSnackbar({
         open: true,
@@ -195,6 +199,11 @@ export default function SettingsPage() {
           {saving ? <CircularProgress size={20} /> : "Save"}
         </Button>
       </Paper>
+
+      <ScriptTemplateBuilder
+        sections={scriptTemplate}
+        onChange={setScriptTemplate}
+      />
 
       <Paper
         sx={{
