@@ -29,7 +29,7 @@ async def get_persona(user_id: str = Depends(get_current_user)):
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if not result or not result.data:
         raise HTTPException(status_code=404, detail="Persona not found")
     return result.data
 
