@@ -26,6 +26,13 @@ async def stream_llm(system: str, messages: list[dict]) -> AsyncGenerator[str, N
         yield result
 
 
+WEB_SEARCH_TOOL = {
+    "type": "web_search_20250305",
+    "name": "web_search",
+    "max_uses": 5,
+}
+
+
 async def _ask_anthropic(system: str, messages: list[dict]) -> str:
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     response = await client.messages.create(
@@ -33,8 +40,11 @@ async def _ask_anthropic(system: str, messages: list[dict]) -> str:
         max_tokens=16384,
         system=system,
         messages=messages,
+        tools=[WEB_SEARCH_TOOL],
     )
-    return response.content[0].text
+    # Extract the text block from the response (may include tool results)
+    text_blocks = [block.text for block in response.content if hasattr(block, "text")]
+    return text_blocks[-1] if text_blocks else ""
 
 
 async def _stream_anthropic(
@@ -46,6 +56,7 @@ async def _stream_anthropic(
         max_tokens=16384,
         system=system,
         messages=messages,
+        tools=[WEB_SEARCH_TOOL],
     ) as stream:
         async for text in stream.text_stream:
             yield text

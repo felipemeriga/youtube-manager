@@ -40,12 +40,12 @@ class TestAskLlm:
             )
 
         assert result == "Anthropic answer"
-        mock_client.messages.create.assert_called_once_with(
-            model="claude-sonnet-4-20250514",
-            max_tokens=16384,
-            system="You are helpful.",
-            messages=[{"role": "user", "content": "Hello"}],
-        )
+        mock_client.messages.create.assert_called_once()
+        call_kwargs = mock_client.messages.create.call_args[1]
+        assert call_kwargs["model"] == "claude-sonnet-4-20250514"
+        assert call_kwargs["system"] == "You are helpful."
+        assert call_kwargs["messages"] == [{"role": "user", "content": "Hello"}]
+        assert call_kwargs["tools"][0]["type"] == "web_search_20250305"
 
     async def test_falls_back_to_guardian_when_no_anthropic_key(
         self, mock_llm_settings_guardian
