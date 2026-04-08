@@ -103,3 +103,6 @@ CREATE POLICY user_memories_select ON user_memories
     FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY user_memories_delete ON user_memories
     FOR DELETE USING (auth.uid() = user_id);
+
+-- Migration: add script_template to channel_personas
+-- ALTER TABLE channel_personas ADD COLUMN script_template JSONB DEFAULT NULL;
