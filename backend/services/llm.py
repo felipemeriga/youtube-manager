@@ -1,0 +1,75 @@
+import logging
+from typing import AsyncGenerator
+
+import httpx
+from anthropic import AsyncAnthropic
+
+from config import settings
+
+logger = logging.getLogger(__name__)
+
+TIMEOUT = 600.0
+
+
+async def ask_llm(system: str, messages: list[dict]) -> str:
+    if settings.anthropic_api_key:
+        return await _ask_anthropic(system, messages)
+    return await _ask_guardian(system, messages)
+
+
+async def stream_llm(system: str, messages: list[dict]) -> AsyncGenerator[str, None]:
+    if settings.anthropic_api_key:
+        async for token in _stream_anthropic(system, messages):
+            yield token
+    else:
+        result = await _ask_guardian(system, messages)
+        yield result
+
+
+async def _ask_anthropic(system: str, messages: list[dict]) -> str:
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    response = await client.messages.create(
+        model=settings.anthropic_model,
+        max_tokens=16384,
+        system=system,
+        messages=messages,
+    )
+    return response.content[0].text
+
+
+async def _stream_anthropic(
+    system: str, messages: list[dict]
+) -> AsyncGenerator[str, None]:
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    async with client.messages.stream(
+        model=settings.anthropic_model,
+        max_tokens=16384,
+        system=system,
+        messages=messages,
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text
+
+
+async def _ask_guardian(system: str, messages: list[dict]) -> str:
+    prompt_parts = [f"System: {system}\n"]
+    for msg in messages:
+        role = msg["role"].capitalize()
+        prompt_parts.append(f"{role}: {msg['content']}\n")
+    full_prompt = "\n".join(prompt_parts).strip()
+
+    logger.info("ask_guardian prompt=%s", full_prompt[:120])
+    headers = {}
+    if settings.guardian_api_key:
+        headers["Authorization"] = f"Bearer {settings.guardian_api_key}"
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        response = await client.post(
+            f"{settings.guardian_url}/api/ask",
+            json={"prompt": full_prompt},
+            headers=headers,
+        )
+        response.raise_for_status()
+        data = response.json()
+    answer = data.get("response", "")
+    logger.info("llm responded via guardian, length=%d", len(answer))
+    return answer
