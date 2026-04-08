@@ -8,8 +8,20 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
 } from "@mui/material";
-import { getPersona, upsertPersona } from "../lib/api";
+import DeleteIcon from "@mui/icons-material/Delete";
+import {
+  getPersona,
+  upsertPersona,
+  listMemories,
+  deleteMemory,
+} from "../lib/api";
+import type { Memory } from "../lib/api";
 
 export default function SettingsPage() {
   const [channelName, setChannelName] = useState("");
@@ -22,20 +34,25 @@ export default function SettingsPage() {
     message: string;
     severity: "success" | "error";
   }>({ open: false, message: "", severity: "success" });
+  const [memories, setMemories] = useState<Memory[]>([]);
 
   useEffect(() => {
-    getPersona()
-      .then((persona) => {
+    Promise.all([
+      getPersona().catch(() => null),
+      listMemories().catch(() => []),
+    ])
+      .then(([persona, mems]) => {
         if (persona) {
           setChannelName(persona.channel_name);
           setLanguage(persona.language);
           setPersonaText(persona.persona_text);
         }
+        setMemories(mems);
       })
       .catch(() => {
         setSnackbar({
           open: true,
-          message: "Failed to load persona",
+          message: "Failed to load settings",
           severity: "error",
         });
       })
@@ -72,6 +89,19 @@ export default function SettingsPage() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteMemory = async (id: string) => {
+    try {
+      await deleteMemory(id);
+      setMemories((prev) => prev.filter((m) => m.id !== id));
+    } catch {
+      setSnackbar({
+        open: true,
+        message: "Failed to delete memory",
+        severity: "error",
+      });
     }
   };
 
@@ -164,6 +194,66 @@ export default function SettingsPage() {
         >
           {saving ? <CircularProgress size={20} /> : "Save"}
         </Button>
+      </Paper>
+
+      <Paper
+        sx={{
+          width: "100%",
+          maxWidth: 640,
+          p: 4,
+          mt: 3,
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+          Learned Preferences
+        </Typography>
+        <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.5)" }}>
+          Automatically extracted from your script feedback. These help the AI
+          match your style over time.
+        </Typography>
+
+        {memories.length === 0 ? (
+          <Typography
+            variant="body2"
+            sx={{ color: "rgba(255,255,255,0.3)", py: 2 }}
+          >
+            No preferences learned yet. They'll appear here as you approve and
+            reject scripts.
+          </Typography>
+        ) : (
+          <List disablePadding>
+            {memories.map((memory, index) => (
+              <Box key={memory.id}>
+                {index > 0 && (
+                  <Divider sx={{ borderColor: "rgba(255,255,255,0.08)" }} />
+                )}
+                <ListItem
+                  secondaryAction={
+                    <IconButton
+                      edge="end"
+                      onClick={() => handleDeleteMemory(memory.id)}
+                      sx={{
+                        color: "rgba(255,255,255,0.3)",
+                        "&:hover": { color: "#ef4444" },
+                      }}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  }
+                  sx={{ px: 0 }}
+                >
+                  <ListItemText
+                    primary={memory.content}
+                    primaryTypographyProps={{ variant: "body2" }}
+                  />
+                </ListItem>
+              </Box>
+            ))}
+          </List>
+        )}
       </Paper>
 
       <Snackbar
