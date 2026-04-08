@@ -7,6 +7,7 @@ from config import settings
 from routes.assets import router as assets_router
 from routes.chat import router as chat_router
 from routes.conversations import router as conversations_router
+from routes.memories import router as memories_router
 from routes.personas import router as personas_router
 
 logging.basicConfig(
@@ -28,6 +29,7 @@ app.include_router(conversations_router)
 app.include_router(assets_router)
 app.include_router(chat_router)
 app.include_router(personas_router)
+app.include_router(memories_router)
 
 
 @app.get("/api/health")
