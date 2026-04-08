@@ -2,6 +2,7 @@ import { Box, IconButton, Tooltip } from "@mui/material";
 import ChatIcon from "@mui/icons-material/Chat";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import LogoutIcon from "@mui/icons-material/Logout";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 
@@ -56,12 +57,27 @@ export default function IconRail() {
         </IconButton>
       </Tooltip>
 
+      <Tooltip title="Settings" placement="right">
+        <IconButton
+          onClick={() => navigate("/settings")}
+          sx={{
+            color: isActive("/settings") ? "#7c3aed" : "rgba(255,255,255,0.5)",
+            "&:hover": { color: "#7c3aed" },
+          }}
+        >
+          <SettingsIcon />
+        </IconButton>
+      </Tooltip>
+
       <Box sx={{ flex: 1 }} />
 
       <Tooltip title="Sign out" placement="right">
         <IconButton
           onClick={signOut}
-          sx={{ color: "rgba(255,255,255,0.5)", "&:hover": { color: "#ef4444" } }}
+          sx={{
+            color: "rgba(255,255,255,0.5)",
+            "&:hover": { color: "#ef4444" },
+          }}
         >
           <LogoutIcon />
         </IconButton>
