@@ -84,3 +84,22 @@ CREATE POLICY channel_personas_update ON channel_personas
     FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY channel_personas_delete ON channel_personas
     FOR DELETE USING (auth.uid() = user_id);
+
+-- user_memories
+CREATE TABLE user_memories (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    content         TEXT NOT NULL,
+    source_action   TEXT NOT NULL CHECK (source_action IN ('approved', 'rejected')),
+    source_feedback TEXT DEFAULT '',
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_user_memories_user_id ON user_memories(user_id);
+
+ALTER TABLE user_memories ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY user_memories_select ON user_memories
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY user_memories_delete ON user_memories
+    FOR DELETE USING (auth.uid() = user_id);
