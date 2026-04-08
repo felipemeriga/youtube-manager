@@ -222,9 +222,12 @@ export default function ChatPage() {
           imageRef.current = { base64, url };
         },
         onError: (error) => {
+          const content = error.toLowerCase().includes("persona")
+            ? `${error} [Go to Settings](/settings)`
+            : `Error: ${error}`;
           setMessages((prev) => [
             ...prev,
-            { role: "assistant", content: `Error: ${error}`, type: "text" },
+            { role: "assistant", content, type: "text" },
           ]);
           setStreamingContent("");
           setIsStreaming(false);
