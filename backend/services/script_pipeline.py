@@ -8,7 +8,6 @@ from typing import AsyncGenerator
 from supabase._async.client import create_client as create_async_client
 
 from config import settings
-from persona import format_persona
 from services.guardian import ask_guardian
 
 logger = logging.getLogger(__name__)
@@ -47,8 +46,8 @@ IDEATION_PROMPT_TEMPLATE = (
     "IMPORTANT: Your training data is outdated. You MUST search the web for "
     "current news and trends from the last 1-2 weeks before suggesting topics. "
     "Use external sources to find what is trending RIGHT NOW.\n\n"
-    "Based on your research, suggest 5-10 specific video topics. The channel is a "
-    "Brazilian Portuguese tech channel.\n\n"
+    "Based on your research, suggest 5-10 specific video topics. The channel is "
+    "{channel_name} ({language}).\n\n"
     "Return ONLY a valid JSON array. No markdown fences. No explanation. No extra text. "
     "No script. No outline. Just the JSON array.\n\n"
     "Each element must have: "
@@ -62,7 +61,7 @@ IDEATION_PROMPT_TEMPLATE = (
 
 SCRIPT_PROMPT_TEMPLATE = (
     "{persona}\n\n"
-    "You are writing a complete YouTube video script in Brazilian Portuguese.\n\n"
+    "You are writing a complete YouTube video script in {language}.\n\n"
     "Topic: {topic}\n\n"
     "Target duration: {duration}.\n\n"
     "IMPORTANT: Your training data is outdated. You MUST search the web for current "
@@ -173,6 +172,25 @@ def _extract_duration(user_message: str) -> str:
     return DEFAULT_DURATION
 
 
+async def _get_user_persona(sb, user_id: str) -> dict | None:
+    result = (
+        await sb.table("channel_personas")
+        .select("*")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    return result.data
+
+
+def format_persona(persona: dict) -> str:
+    return (
+        f"# Channel Persona: {persona['channel_name']}\n\n"
+        f"**Language:** {persona['language']}\n\n"
+        f"{persona['persona_text']}\n"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Stage handlers
 # ---------------------------------------------------------------------------
@@ -183,6 +201,16 @@ async def handle_ideation(
 ) -> AsyncGenerator[str, None]:
     logger.info("ideation conversation=%s user=%s", conversation_id, user_id)
     sb = await get_supabase()
+
+    persona_row = await _get_user_persona(sb, user_id)
+    if not persona_row:
+        yield sse_event(
+            {
+                "error": "Please set up your channel persona in Settings before generating scripts.",
+                "done": True,
+            }
+        )
+        return
 
     await _save_message(sb, conversation_id, "user", user_message, "text")
 
@@ -195,7 +223,11 @@ async def handle_ideation(
 
     yield sse_event({"stage": "finding_trends"})
 
-    ideation_prompt = IDEATION_PROMPT_TEMPLATE.format(user_input=user_message)
+    ideation_prompt = IDEATION_PROMPT_TEMPLATE.format(
+        user_input=user_message,
+        channel_name=persona_row["channel_name"],
+        language=persona_row["language"],
+    )
     topics_response = await ask_guardian(ideation_prompt)
     topics_clean = _extract_json_array(topics_response)
 
@@ -215,6 +247,16 @@ async def handle_topic_selection(
     )
     sb = await get_supabase()
 
+    persona_row = await _get_user_persona(sb, user_id)
+    if not persona_row:
+        yield sse_event(
+            {
+                "error": "Please set up your channel persona in Settings before generating scripts.",
+                "done": True,
+            }
+        )
+        return
+
     await _save_message(
         sb, conversation_id, "user", str(topic_index), "topic_selection"
     )
@@ -231,9 +273,12 @@ async def handle_topic_selection(
 
     yield sse_event({"stage": "writing_script"})
 
-    persona = format_persona()
+    persona = format_persona(persona_row)
     script_prompt = SCRIPT_PROMPT_TEMPLATE.format(
-        persona=persona, topic=topic_title, duration=duration
+        persona=persona,
+        topic=topic_title,
+        duration=duration,
+        language=persona_row["language"],
     )
     script = await ask_guardian(script_prompt)
 
@@ -252,6 +297,16 @@ async def handle_script_approval(
         user_id,
     )
     sb = await get_supabase()
+
+    persona_row = await _get_user_persona(sb, user_id)
+    if not persona_row:
+        yield sse_event(
+            {
+                "error": "Please set up your channel persona in Settings before generating scripts.",
+                "done": True,
+            }
+        )
+        return
 
     approval_content = "approved" if approved else f"rejected: {feedback}"
     await _save_message(sb, conversation_id, "user", approval_content, "approval")
@@ -305,9 +360,12 @@ async def handle_script_approval(
             _extract_duration(user_msg["content"]) if user_msg else DEFAULT_DURATION
         )
 
-        persona = format_persona()
+        persona = format_persona(persona_row)
         script_prompt = SCRIPT_PROMPT_TEMPLATE.format(
-            persona=persona, topic=topic_title, duration=duration
+            persona=persona,
+            topic=topic_title,
+            duration=duration,
+            language=persona_row["language"],
         )
         script_prompt += f"\n\nPrevious script:\n{old_script}\n\nFeedback: {feedback}"
         new_script = await ask_guardian(script_prompt)

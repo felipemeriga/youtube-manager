@@ -21,6 +21,21 @@ def make_async_sb(**overrides):
         return_value=execute_result
     )
 
+    # Persona mock: used for channel_personas table via .maybe_single()
+    persona_data = overrides.get(
+        "persona_data",
+        {
+            "channel_name": "Test Channel",
+            "language": "English",
+            "persona_text": "Casual and direct",
+        },
+    )
+    persona_result = MagicMock()
+    persona_result.data = persona_data
+    chain.select.return_value.eq.return_value.maybe_single.return_value.execute = (
+        AsyncMock(return_value=persona_result)
+    )
+
     storage = sb.storage.from_.return_value
     storage.upload = AsyncMock(return_value={})
 
@@ -206,3 +221,17 @@ async def test_handle_script_approval_rejected():
     assert "writing_script" in stages
     assert len(done) == 1
     assert done[0].get("message_type") == "script"
+
+
+@pytest.mark.asyncio
+async def test_handle_ideation_errors_when_no_persona():
+    sb = make_async_sb(persona_data=None)
+
+    events = await collect_events(
+        "conv-1", "Give me video ideas", "text", "test-user", sb
+    )
+
+    done = [e for e in events if e.get("done")]
+    assert len(done) == 1
+    assert "error" in done[0]
+    assert "persona" in done[0]["error"].lower()
