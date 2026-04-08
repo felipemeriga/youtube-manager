@@ -55,3 +55,32 @@ CREATE POLICY messages_delete ON messages
     FOR DELETE USING (
         conversation_id IN (SELECT id FROM conversations WHERE user_id = auth.uid())
     );
+
+-- channel_personas
+CREATE TABLE channel_personas (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+    channel_name TEXT NOT NULL,
+    language    TEXT NOT NULL,
+    persona_text TEXT NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT now(),
+    updated_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TRIGGER update_channel_personas_updated_at
+    BEFORE UPDATE ON channel_personas
+    FOR EACH ROW EXECUTE FUNCTION moddatetime(updated_at);
+
+CREATE INDEX idx_channel_personas_user_id ON channel_personas(user_id);
+
+-- RLS
+ALTER TABLE channel_personas ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY channel_personas_select ON channel_personas
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY channel_personas_insert ON channel_personas
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY channel_personas_update ON channel_personas
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY channel_personas_delete ON channel_personas
+    FOR DELETE USING (auth.uid() = user_id);
