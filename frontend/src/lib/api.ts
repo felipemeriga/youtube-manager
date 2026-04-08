@@ -99,7 +99,11 @@ export async function streamChat(
         if (data.token) callbacks.onToken(data.token);
         if (data.stage) callbacks.onStage(data.stage);
         if (data.message_type) lastMessageType = data.message_type;
-        if (data.message_type === "topics" && data.content && callbacks.onTopics) {
+        if (
+          data.message_type === "topics" &&
+          data.content &&
+          callbacks.onTopics
+        ) {
           callbacks.onTopics(data.content as string);
         }
         if (data.image_base64)
@@ -138,3 +142,32 @@ export const deleteAsset = (bucket: string, name: string) =>
   apiFetch<void>(`/api/assets/${bucket}/${name}`, { method: "DELETE" });
 export const uploadAsset = (bucket: string, file: File) =>
   apiUpload(`/api/assets/${bucket}/upload`, file);
+
+export interface Persona {
+  id: string;
+  user_id: string;
+  channel_name: string;
+  language: string;
+  persona_text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getPersona = () =>
+  apiFetch<Persona>("/api/personas").catch((err) => {
+    if (err.message.includes("404")) return null;
+    throw err;
+  });
+
+export const upsertPersona = (data: {
+  channel_name: string;
+  language: string;
+  persona_text: string;
+}) =>
+  apiFetch<Persona>("/api/personas", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
+export const deletePersona = () =>
+  apiFetch<void>("/api/personas", { method: "DELETE" });
