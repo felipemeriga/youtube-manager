@@ -65,14 +65,7 @@ export default function ChatPage() {
     if (lastMsg.role !== "user") return null;
 
     if (mode === "script") {
-      if (lastMsg.type === "text") return "finding_trends";
-      if (lastMsg.type === "topic_selection") return "writing_script";
-      if (lastMsg.type === "approval") {
-        const lastAssistant = [...msgs]
-          .reverse()
-          .find((m) => m.role === "assistant");
-        if (lastAssistant?.type === "script") return "saving";
-      }
+      if (lastMsg.type === "text") return "thinking";
     } else {
       if (lastMsg.type === "text") return "generating";
       if (lastMsg.type === "save") return "generating";
@@ -278,7 +271,19 @@ export default function ChatPage() {
 
   const handleTopicSelect = (index: number) => {
     if (!selectedId) return;
-    doStream(selectedId, String(index), "topic_selection");
+    const topicsMsg = messages.find((m) => m.type === "topics");
+    if (topicsMsg) {
+      try {
+        const topics = JSON.parse(topicsMsg.content);
+        const topic = topics[index];
+        const title = topic?.title || `Topic ${index + 1}`;
+        sendMessage(`I want to make a video about: ${title}`);
+      } catch {
+        sendMessage(`I choose topic ${index + 1}`);
+      }
+    } else {
+      sendMessage(`I choose topic ${index + 1}`);
+    }
   };
 
   const handleApprove = () => {
@@ -287,7 +292,7 @@ export default function ChatPage() {
     if (lastMsg?.type === "image") {
       sendMessage("SAVE_OUTPUT", "save");
     } else if (lastMsg?.type === "script") {
-      doStream(selectedId, "", "approve_script");
+      sendMessage("Save this script");
     }
   };
 
@@ -297,7 +302,7 @@ export default function ChatPage() {
     if (lastMsg?.type === "image") {
       sendMessage("REGENERATE", "regenerate");
     } else if (lastMsg?.type === "script") {
-      doStream(selectedId, "", "reject_script");
+      sendMessage("Please rewrite this script with improvements");
     }
   };
 

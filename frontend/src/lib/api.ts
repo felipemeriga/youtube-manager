@@ -171,3 +171,17 @@ export const upsertPersona = (data: {
 
 export const deletePersona = () =>
   apiFetch<void>("/api/personas", { method: "DELETE" });
+
+export interface Memory {
+  id: string;
+  user_id: string;
+  content: string;
+  source_action: string;
+  source_feedback: string;
+  created_at: string;
+}
+
+export const listMemories = () => apiFetch<Memory[]>("/api/memories");
+
+export const deleteMemory = (id: string) =>
+  apiFetch<void>(`/api/memories/${id}`, { method: "DELETE" });
