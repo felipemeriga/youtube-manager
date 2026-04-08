@@ -143,12 +143,20 @@ export const deleteAsset = (bucket: string, name: string) =>
 export const uploadAsset = (bucket: string, file: File) =>
   apiUpload(`/api/assets/${bucket}/upload`, file);
 
+export interface ScriptSection {
+  name: string;
+  description: string;
+  enabled: boolean;
+  order: number;
+}
+
 export interface Persona {
   id: string;
   user_id: string;
   channel_name: string;
   language: string;
   persona_text: string;
+  script_template: ScriptSection[];
   created_at: string;
   updated_at: string;
 }
@@ -163,6 +171,7 @@ export const upsertPersona = (data: {
   channel_name: string;
   language: string;
   persona_text: string;
+  script_template?: ScriptSection[];
 }) =>
   apiFetch<Persona>("/api/personas", {
     method: "PUT",
