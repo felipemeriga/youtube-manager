@@ -147,6 +147,38 @@ async def reindex_photos(user_id: str = Depends(get_current_user)):
     }
 
 
+@router.post("/api/assets/reference-thumbs/analyze")
+async def analyze_reference_thumbs(user_id: str = Depends(get_current_user)):
+    """Analyze reference thumbnails and store text style info."""
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=400, detail="Anthropic API key required")
+
+    sb_async = await create_async_client(settings.supabase_url, settings.supabase_service_key)
+
+    # Fetch reference images
+    files = await sb_async.storage.from_("reference-thumbs").list(path=user_id)
+    images = []
+    for f in files:
+        if f.get("name"):
+            data = await sb_async.storage.from_("reference-thumbs").download(f"{user_id}/{f['name']}")
+            images.append(data)
+
+    if not images:
+        raise HTTPException(status_code=400, detail="No reference thumbnails found")
+
+    from services.reference_analyzer import analyze_references
+    style = await analyze_references(images)
+
+    if not style:
+        raise HTTPException(status_code=500, detail="Analysis failed")
+
+    # Store in channel_personas
+    sb_sync = get_supabase()
+    sb_sync.table("channel_personas").update({"text_style": style}).eq("user_id", user_id).execute()
+
+    return style
+
+
 @router.delete("/api/assets/{bucket}/{filename}")
 async def delete_asset(
     bucket: str, filename: str, user_id: str = Depends(get_current_user)
