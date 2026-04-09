@@ -73,6 +73,8 @@ export default function ChatPage() {
       if (lastMsg.type === "text") return "generating";
       if (lastMsg.type === "save") return "generating";
       if (lastMsg.type === "regenerate") return "generating";
+      if (lastMsg.type === "approval") return "generating";
+      if (lastMsg.type === "photo_selected") return "generating";
     }
     return null;
   };
@@ -295,10 +297,19 @@ export default function ChatPage() {
     }
   };
 
+  const handlePhotoSelect = (photoName: string) => {
+    if (!selectedId) return;
+    doStream(selectedId, photoName, "select_photo");
+  };
+
   const handleApprove = () => {
     if (!selectedId) return;
     const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.type === "image") {
+    if (lastMsg?.type === "background") {
+      doStream(selectedId, "approved_background", "approve_background");
+    } else if (lastMsg?.type === "composite") {
+      doStream(selectedId, "approved_composite", "approve_composite");
+    } else if (lastMsg?.type === "image") {
       sendMessage("SAVE_OUTPUT", "save");
     } else if (lastMsg?.type === "script") {
       sendMessage("Save this script");
@@ -308,7 +319,11 @@ export default function ChatPage() {
   const handleReject = () => {
     if (!selectedId) return;
     const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.type === "image") {
+    if (
+      lastMsg?.type === "background" ||
+      lastMsg?.type === "composite" ||
+      lastMsg?.type === "image"
+    ) {
       sendMessage("REGENERATE", "regenerate");
     } else if (lastMsg?.type === "script") {
       sendMessage("Please rewrite this script with improvements");
@@ -339,6 +354,7 @@ export default function ChatPage() {
         onApprove={handleApprove}
         onReject={handleReject}
         onTopicSelect={handleTopicSelect}
+        onPhotoSelect={handlePhotoSelect}
         conversationMode={conversationMode}
         models={
           conversationMode === "script" && selectedId

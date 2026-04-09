@@ -1,6 +1,7 @@
 import { Box } from "@mui/material";
 import ReactMarkdown from "react-markdown";
 import ApprovalButtons from "./ApprovalButtons";
+import PhotoGrid from "./PhotoGrid";
 import ScriptTopicList from "./ScriptTopicList";
 import ScriptViewer from "./ScriptViewer";
 import AssistantLogo from "./AssistantLogo";
@@ -21,6 +22,7 @@ interface MessageBubbleProps {
   onApprove?: () => void;
   onReject?: () => void;
   onTopicSelect?: (index: number) => void;
+  onPhotoSelect?: (name: string) => void;
   isLatest?: boolean;
   isStreaming?: boolean;
   conversationMode?: string;
@@ -138,6 +140,7 @@ export default function MessageBubble({
   onApprove,
   onReject,
   onTopicSelect,
+  onPhotoSelect,
   isLatest,
   isStreaming,
   conversationMode,
@@ -145,6 +148,11 @@ export default function MessageBubble({
   void conversationMode;
   const isUser = message.role === "user";
   const showButtons = isLatest && !isStreaming && onApprove && onReject;
+  const showImageButtons =
+    showButtons &&
+    (message.type === "image" ||
+      message.type === "background" ||
+      message.type === "composite");
 
   return (
     <Box
@@ -208,6 +216,26 @@ export default function MessageBubble({
           />
         )}
 
+        {message.type === "photo_grid" &&
+          (() => {
+            try {
+              const photos = JSON.parse(message.content);
+              return (
+                <PhotoGrid
+                  photos={photos}
+                  onSelect={onPhotoSelect || (() => {})}
+                  disabled={!isLatest || isStreaming}
+                />
+              );
+            } catch {
+              return (
+                <Box sx={{ fontSize: 14, lineHeight: 1.6, ...markdownStyles }}>
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                </Box>
+              );
+            }
+          })()}
+
         {message.type === "topics" &&
           (() => {
             try {
@@ -235,6 +263,7 @@ export default function MessageBubble({
         )}
 
         {message.type !== "topics" &&
+          message.type !== "photo_grid" &&
           message.type !== "outline" &&
           message.type !== "script" &&
           message.type !== "research" && (
@@ -243,8 +272,8 @@ export default function MessageBubble({
             </Box>
           )}
 
-        {showButtons && message.type === "image" && (
-          <ApprovalButtons onApprove={onApprove} onReject={onReject} />
+        {showImageButtons && (
+          <ApprovalButtons onApprove={onApprove!} onReject={onReject!} />
         )}
 
         {showButtons && message.type === "script" && (

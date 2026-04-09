@@ -28,8 +28,14 @@ interface AssetUploadProps {
 }
 
 const statusIcon: Record<FileUploadStatus, React.ReactNode> = {
-  pending: <HourglassTopIcon sx={{ color: "rgba(255,255,255,0.3)", fontSize: 20 }} />,
-  uploading: <UploadFileIcon sx={{ color: "#7c3aed", fontSize: 20, animation: "pulse 1.5s infinite" }} />,
+  pending: (
+    <HourglassTopIcon sx={{ color: "rgba(255,255,255,0.3)", fontSize: 20 }} />
+  ),
+  uploading: (
+    <UploadFileIcon
+      sx={{ color: "#7c3aed", fontSize: 20, animation: "pulse 1.5s infinite" }}
+    />
+  ),
   done: <CheckCircleIcon sx={{ color: "#10b981", fontSize: 20 }} />,
   error: <ErrorIcon sx={{ color: "#ef4444", fontSize: 20 }} />,
 };
@@ -41,13 +47,17 @@ export default function AssetUpload({
 }: AssetUploadProps) {
   const [dragOver, setDragOver] = useState(false);
 
-  const isUploading = fileStatuses && fileStatuses.some(
-    (f) => f.status === "uploading" || f.status === "pending"
-  );
+  const isUploading =
+    fileStatuses &&
+    fileStatuses.some(
+      (f) => f.status === "uploading" || f.status === "pending"
+    );
 
-  const completedCount = fileStatuses?.filter((f) => f.status === "done").length ?? 0;
+  const completedCount =
+    fileStatuses?.filter((f) => f.status === "done").length ?? 0;
   const totalCount = fileStatuses?.length ?? 0;
-  const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  const progressPercent =
+    totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -83,8 +93,8 @@ export default function AssetUpload({
           borderColor: dragOver
             ? "#7c3aed"
             : isUploading
-              ? "rgba(124,58,237,0.5)"
-              : "rgba(124,58,237,0.3)",
+            ? "rgba(124,58,237,0.5)"
+            : "rgba(124,58,237,0.3)",
           borderRadius: 2,
           p: 3,
           textAlign: "center",
@@ -120,8 +130,8 @@ export default function AssetUpload({
           {isUploading
             ? `Uploading ${completedCount}/${totalCount}...`
             : dragOver
-              ? "Drop files to upload"
-              : "Drag & drop files here, or click to browse"}
+            ? "Drop files to upload"
+            : "Drag & drop files here, or click to browse"}
         </Typography>
         {isUploading && (
           <LinearProgress
@@ -176,8 +186,8 @@ export default function AssetUpload({
                     file.status === "error"
                       ? "#ef4444"
                       : file.status === "done"
-                        ? "#10b981"
-                        : "text.secondary",
+                      ? "#10b981"
+                      : "text.secondary",
                 }}
               />
             </ListItem>

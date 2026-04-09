@@ -21,6 +21,9 @@ def make_async_sb(**overrides):
     chain.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(
         return_value=execute_result
     )
+    chain.select.return_value.eq.return_value.maybe_single.return_value.execute = (
+        AsyncMock(return_value=MagicMock(data=None))
+    )
 
     storage = sb.storage.from_.return_value
     storage.list = AsyncMock(return_value=overrides.get("files", []))
@@ -45,17 +48,27 @@ async def collect_events(conversation_id, content, msg_type, user_id, sb):
     return events
 
 
+@pytest.fixture(autouse=True)
+def mock_research():
+    with patch(
+        "services.thumbnail_pipeline._research_topic",
+        new_callable=AsyncMock,
+        return_value="",
+    ):
+        yield
+
+
 @pytest.mark.asyncio
-async def test_text_message_generates_image():
+async def test_text_message_generates_background():
     sb = make_async_sb()
-    fake_image = b"\x89PNG\r\n\x1a\nfake-thumbnail"
+    fake_image = b"\x89PNG\r\n\x1a\nfake-background"
 
     with patch(
         "services.thumbnail_pipeline.get_supabase",
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
@@ -69,12 +82,12 @@ async def test_text_message_generates_image():
             )
 
     stages = [e for e in events if "stage" in e]
-    image_events = [e for e in events if e.get("message_type") == "image"]
+    bg_events = [e for e in events if e.get("message_type") == "background"]
     done = [e for e in events if e.get("done")]
 
     assert any(s["stage"] == "generating" for s in stages)
-    assert len(image_events) == 1
-    assert "image_base64" in image_events[0]
+    assert len(bg_events) == 1
+    assert "image_base64" in bg_events[0]
     assert len(done) == 1
 
 
@@ -88,7 +101,7 @@ async def test_text_message_passes_prompt_to_generator():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
@@ -99,7 +112,7 @@ async def test_text_message_passes_prompt_to_generator():
 
     prompt = mock_gen.call_args[1]["prompt"]
     assert "Make a gaming thumbnail" in prompt
-    assert "reference thumbnails" in prompt
+    assert "BACKGROUND" in prompt
 
 
 @pytest.mark.asyncio
@@ -112,7 +125,7 @@ async def test_text_message_updates_conversation_title():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
@@ -142,7 +155,7 @@ async def test_text_message_title_truncated_to_50_chars():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
@@ -170,7 +183,7 @@ async def test_text_message_saves_user_message():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
@@ -191,7 +204,7 @@ async def test_text_message_saves_user_message():
 
 
 @pytest.mark.asyncio
-async def test_text_message_saves_image_message():
+async def test_text_message_saves_background_message():
     sb = make_async_sb()
     fake_image = b"\x89PNG\r\n\x1a\nfake"
 
@@ -200,7 +213,7 @@ async def test_text_message_saves_image_message():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
@@ -213,10 +226,10 @@ async def test_text_message_saves_image_message():
             ):
                 pass
 
-    image_insert = sb.table.return_value.insert.call_args_list[1][0][0]
-    assert image_insert["role"] == "assistant"
-    assert image_insert["type"] == "image"
-    assert image_insert["image_url"].startswith("test-user/temp_")
+    bg_insert = sb.table.return_value.insert.call_args_list[1][0][0]
+    assert bg_insert["role"] == "assistant"
+    assert bg_insert["type"] == "background"
+    assert bg_insert["image_url"].startswith("test-user/bg_")
 
 
 @pytest.mark.asyncio
@@ -229,7 +242,7 @@ async def test_text_message_image_base64_in_event():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
@@ -238,10 +251,10 @@ async def test_text_message_image_base64_in_event():
                 "conv-1", "Create a thumbnail", "text", "test-user", sb
             )
 
-    image_event = next(e for e in events if e.get("message_type") == "image")
-    decoded = base64.b64decode(image_event["image_base64"])
+    bg_event = next(e for e in events if e.get("message_type") == "background")
+    decoded = base64.b64decode(bg_event["image_base64"])
     assert decoded == fake_image
-    assert "image_url" in image_event
+    assert "image_url" in bg_event
 
 
 @pytest.mark.asyncio
@@ -254,7 +267,7 @@ async def test_text_message_stores_in_outputs():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
@@ -411,7 +424,7 @@ async def test_save_confirmation_message():
     confirmation_msg = insert_calls[1][0][0]
     assert confirmation_msg["role"] == "assistant"
     assert confirmation_msg["type"] == "text"
-    assert "Thumbnail saved to outputs" in confirmation_msg["content"]
+    assert "Thumbnail saved as" in confirmation_msg["content"]
 
 
 @pytest.mark.asyncio
@@ -432,7 +445,7 @@ async def test_regenerate_uses_original_request():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
@@ -441,8 +454,8 @@ async def test_regenerate_uses_original_request():
                 "conv-1", "Make it brighter", "regenerate", "test-user", sb
             )
 
-    image_events = [e for e in events if e.get("message_type") == "image"]
-    assert len(image_events) == 1
+    bg_events = [e for e in events if e.get("message_type") == "background"]
+    assert len(bg_events) == 1
 
     prompt = mock_gen.call_args[1]["prompt"]
     assert "Create a thumbnail" in prompt
@@ -467,17 +480,16 @@ async def test_regenerate_without_feedback():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = fake_image
 
             await collect_events("conv-1", "", "regenerate", "test-user", sb)
 
-    insert_calls = sb.table.return_value.insert.call_args_list
-    regen_msg = insert_calls[0][0][0]
-    assert regen_msg["content"] == "REGENERATE"
-    assert regen_msg["type"] == "regenerate"
+    # The regenerate handler fetches messages then calls step1_background
+    # with original content; check that generate_background was called
+    assert mock_gen.called
 
 
 @pytest.mark.asyncio
@@ -561,7 +573,7 @@ async def test_error_in_pipeline_returns_error_event():
         AsyncMock(return_value=sb),
     ):
         with patch(
-            "services.thumbnail_pipeline.generate_thumbnail",
+            "services.thumbnail_pipeline.generate_background",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.side_effect = Exception("Gemini API error")

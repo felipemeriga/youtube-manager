@@ -22,9 +22,11 @@ import {
   deleteAsset,
   fetchAssetText,
   reindexPhotos,
+  analyzeReferenceStyle,
 } from "../lib/api";
 import { Button } from "@mui/material";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import StyleIcon from "@mui/icons-material/Style";
 
 const BUCKETS = [
   { key: "reference-thumbs", label: "Reference Thumbnails", accept: "image/*" },
@@ -32,6 +34,7 @@ const BUCKETS = [
   { key: "logos", label: "Logos", accept: "image/*" },
   { key: "outputs", label: "Generated Outputs", accept: "image/*" },
   { key: "scripts", label: "Scripts", accept: ".md" },
+  { key: "fonts", label: "Fonts", accept: ".ttf,.otf,.woff" },
 ];
 
 interface AssetFile {
@@ -51,6 +54,7 @@ export default function AssetsPage() {
     severity: "success" | "error";
   }>({ open: false, message: "", severity: "success" });
   const [reindexing, setReindexing] = useState(false);
+  const [analyzingStyle, setAnalyzingStyle] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerContent, setViewerContent] = useState("");
   const [viewerTitle, setViewerTitle] = useState("");
@@ -163,6 +167,26 @@ export default function AssetsPage() {
     }
   };
 
+  const handleAnalyzeStyle = async () => {
+    setAnalyzingStyle(true);
+    try {
+      await analyzeReferenceStyle();
+      setSnackbar({
+        open: true,
+        message: "Style analysis complete. Text style saved to your persona.",
+        severity: "success",
+      });
+    } catch {
+      setSnackbar({
+        open: true,
+        message: "Failed to analyze reference style",
+        severity: "error",
+      });
+    } finally {
+      setAnalyzingStyle(false);
+    }
+  };
+
   const handleViewScript = async (name: string) => {
     try {
       const content = await fetchAssetText(currentBucket.key, name);
@@ -229,6 +253,26 @@ export default function AssetsPage() {
               accept={currentBucket.accept}
               fileStatuses={fileStatuses}
             />
+            {currentBucket.key === "reference-thumbs" && (
+              <Button
+                variant="outlined"
+                startIcon={<StyleIcon />}
+                onClick={handleAnalyzeStyle}
+                disabled={analyzingStyle}
+                size="small"
+                sx={{
+                  borderColor: "rgba(124,58,237,0.3)",
+                  color: "#a78bfa",
+                  whiteSpace: "nowrap",
+                  "&:hover": {
+                    borderColor: "#7c3aed",
+                    backgroundColor: "rgba(124,58,237,0.08)",
+                  },
+                }}
+              >
+                {analyzingStyle ? "Analyzing..." : "Analyze Style"}
+              </Button>
+            )}
             {currentBucket.key === "personal-photos" && (
               <Button
                 variant="outlined"

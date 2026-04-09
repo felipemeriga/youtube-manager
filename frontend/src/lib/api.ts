@@ -160,6 +160,11 @@ export const reindexPhotos = () =>
     { method: "POST" }
   );
 
+export const analyzeReferenceStyle = () =>
+  apiFetch<Record<string, unknown>>("/api/assets/reference-thumbs/analyze", {
+    method: "POST",
+  });
+
 export async function fetchAssetText(
   bucket: string,
   name: string

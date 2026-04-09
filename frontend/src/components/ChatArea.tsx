@@ -28,6 +28,7 @@ interface ChatAreaProps {
   onApprove: () => void;
   onReject: () => void;
   onTopicSelect?: (index: number) => void;
+  onPhotoSelect?: (name: string) => void;
   conversationMode?: string;
   models?: ModelOption[];
   selectedModel?: string;
@@ -43,6 +44,7 @@ export default function ChatArea({
   onApprove,
   onReject,
   onTopicSelect,
+  onPhotoSelect,
   conversationMode,
   models,
   selectedModel,
@@ -119,6 +121,7 @@ export default function ChatArea({
             onApprove={onApprove}
             onReject={onReject}
             onTopicSelect={onTopicSelect}
+            onPhotoSelect={onPhotoSelect}
             conversationMode={conversationMode}
           />
         ))}
