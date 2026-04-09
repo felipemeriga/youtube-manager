@@ -154,6 +154,12 @@ export const deleteAsset = (bucket: string, name: string) =>
 export const uploadAsset = (bucket: string, file: File) =>
   apiUpload(`/api/assets/${bucket}/upload`, file);
 
+export const reindexPhotos = () =>
+  apiFetch<{ indexed: number; total: number; skipped: number }>(
+    "/api/assets/personal-photos/reindex",
+    { method: "POST" }
+  );
+
 export async function fetchAssetText(
   bucket: string,
   name: string

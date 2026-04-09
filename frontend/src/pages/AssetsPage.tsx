@@ -21,7 +21,10 @@ import {
   uploadAsset,
   deleteAsset,
   fetchAssetText,
+  reindexPhotos,
 } from "../lib/api";
+import { Button } from "@mui/material";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 
 const BUCKETS = [
   { key: "reference-thumbs", label: "Reference Thumbnails", accept: "image/*" },
@@ -47,6 +50,7 @@ export default function AssetsPage() {
     message: string;
     severity: "success" | "error";
   }>({ open: false, message: "", severity: "success" });
+  const [reindexing, setReindexing] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerContent, setViewerContent] = useState("");
   const [viewerTitle, setViewerTitle] = useState("");
@@ -139,6 +143,26 @@ export default function AssetsPage() {
     window.open(url, "_blank");
   };
 
+  const handleReindex = async () => {
+    setReindexing(true);
+    try {
+      const result = await reindexPhotos();
+      setSnackbar({
+        open: true,
+        message: `Indexed ${result.indexed} new photos (${result.skipped} already indexed, ${result.total} total)`,
+        severity: "success",
+      });
+    } catch {
+      setSnackbar({
+        open: true,
+        message: "Failed to reindex photos",
+        severity: "error",
+      });
+    } finally {
+      setReindexing(false);
+    }
+  };
+
   const handleViewScript = async (name: string) => {
     try {
       const content = await fetchAssetText(currentBucket.key, name);
@@ -199,11 +223,33 @@ export default function AssetsPage() {
 
       {currentBucket.key !== "outputs" && currentBucket.key !== "scripts" && (
         <Box sx={{ mb: 3 }}>
-          <AssetUpload
-            onUpload={handleUpload}
-            accept={currentBucket.accept}
-            fileStatuses={fileStatuses}
-          />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+            <AssetUpload
+              onUpload={handleUpload}
+              accept={currentBucket.accept}
+              fileStatuses={fileStatuses}
+            />
+            {currentBucket.key === "personal-photos" && (
+              <Button
+                variant="outlined"
+                startIcon={<AutoFixHighIcon />}
+                onClick={handleReindex}
+                disabled={reindexing}
+                size="small"
+                sx={{
+                  borderColor: "rgba(124,58,237,0.3)",
+                  color: "#a78bfa",
+                  whiteSpace: "nowrap",
+                  "&:hover": {
+                    borderColor: "#7c3aed",
+                    backgroundColor: "rgba(124,58,237,0.08)",
+                  },
+                }}
+              >
+                {reindexing ? "Indexing..." : "Index Photos"}
+              </Button>
+            )}
+          </Box>
         </Box>
       )}
 

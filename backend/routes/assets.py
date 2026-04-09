@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 import unicodedata
 
@@ -18,6 +19,8 @@ def sanitize_filename(name: str) -> str:
     name = re.sub(r"_+", "_", name).strip("_")
     return name or "file"
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -91,6 +94,56 @@ async def _index_uploaded_photo(
 
     sb = await create_async_client(settings.supabase_url, settings.supabase_service_key)
     await index_photo(sb, user_id, filename, image_bytes)
+
+
+@router.post("/api/assets/personal-photos/reindex")
+async def reindex_photos(user_id: str = Depends(get_current_user)):
+    """Index all existing personal photos with descriptions + embeddings."""
+    if not settings.anthropic_api_key or not settings.voyage_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Anthropic and Voyage API keys required for indexing",
+        )
+
+    sb_sync = get_supabase()
+    files = sb_sync.storage.from_("personal-photos").list(path=user_id)
+    photo_names = [f["name"] for f in files if f.get("name")]
+
+    if not photo_names:
+        return {"indexed": 0, "total": 0}
+
+    sb_async = await create_async_client(
+        settings.supabase_url, settings.supabase_service_key
+    )
+
+    # Check which are already indexed
+    existing = (
+        await sb_async.table("photo_embeddings")
+        .select("file_name")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    indexed_names = {row["file_name"] for row in (existing.data or [])}
+    to_index = [n for n in photo_names if n not in indexed_names]
+
+    from services.photo_indexer import index_photo
+
+    indexed = 0
+    for name in to_index:
+        try:
+            data = await sb_async.storage.from_("personal-photos").download(
+                f"{user_id}/{name}"
+            )
+            await index_photo(sb_async, user_id, name, data)
+            indexed += 1
+        except Exception:
+            logger.exception("failed to index %s", name)
+
+    return {
+        "indexed": indexed,
+        "total": len(photo_names),
+        "skipped": len(indexed_names),
+    }
 
 
 @router.delete("/api/assets/{bucket}/{filename}")
