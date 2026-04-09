@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
 import { Box, Typography } from "@mui/material";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import MessageBubble from "./MessageBubble";
+import AssistantLogo from "./AssistantLogo";
 import ChatInput from "./ChatInput";
 import ThinkingBar from "./ThinkingBar";
 
@@ -91,7 +91,7 @@ export default function ChatArea({
                 justifyContent: "center",
               }}
             >
-              <AutoAwesomeIcon sx={{ color: "#fff", fontSize: 28 }} />
+              <AssistantLogo size={28} />
             </Box>
             <Typography variant="h6" color="text.secondary">
               {conversationMode === "script"

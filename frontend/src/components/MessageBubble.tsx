@@ -1,9 +1,9 @@
 import { Box } from "@mui/material";
 import ReactMarkdown from "react-markdown";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import ApprovalButtons from "./ApprovalButtons";
 import ScriptTopicList from "./ScriptTopicList";
 import ScriptViewer from "./ScriptViewer";
+import AssistantLogo from "./AssistantLogo";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -170,7 +170,7 @@ export default function MessageBubble({
             flexShrink: 0,
           }}
         >
-          <AutoAwesomeIcon sx={{ fontSize: 15, color: "#fff" }} />
+          <AssistantLogo size={16} />
         </Box>
       )}
 
