@@ -16,6 +16,7 @@ interface AssetGridProps {
   bucket: string;
   onDelete: (name: string) => void;
   onDownload: (name: string) => void;
+  onView?: (name: string) => void;
 }
 
 function isImage(name: string) {
@@ -49,16 +50,20 @@ function formatScriptName(name: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+import VisibilityIcon from "@mui/icons-material/Visibility";
+
 function AssetList({
   files,
   onDelete,
   onDownload,
+  onView,
 }: Omit<AssetGridProps, "bucket">) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {files.map((file) => (
         <Box
           key={file.name}
+          onClick={() => onView?.(file.name)}
           sx={{
             display: "flex",
             alignItems: "center",
@@ -67,6 +72,7 @@ function AssetList({
             borderRadius: 2,
             border: "1px solid rgba(255,255,255,0.08)",
             backgroundColor: "rgba(255,255,255,0.03)",
+            cursor: onView ? "pointer" : "default",
             "&:hover": {
               backgroundColor: "rgba(255,255,255,0.06)",
               borderColor: "rgba(124,58,237,0.3)",
@@ -115,7 +121,22 @@ function AssetList({
             </Box>
           </Box>
 
-          <Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
+          <Box
+            sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {onView && (
+              <IconButton
+                size="small"
+                onClick={() => onView(file.name)}
+                sx={{
+                  color: "rgba(255,255,255,0.5)",
+                  "&:hover": { color: "#7c3aed" },
+                }}
+              >
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            )}
             <IconButton
               size="small"
               onClick={() => onDownload(file.name)}
@@ -148,6 +169,7 @@ export default function AssetGrid({
   bucket,
   onDelete,
   onDownload,
+  onView,
 }: AssetGridProps) {
   if (files.length === 0) {
     return (
@@ -159,7 +181,12 @@ export default function AssetGrid({
 
   if (bucket === "scripts") {
     return (
-      <AssetList files={files} onDelete={onDelete} onDownload={onDownload} />
+      <AssetList
+        files={files}
+        onDelete={onDelete}
+        onDownload={onDownload}
+        onView={onView}
+      />
     );
   }
 

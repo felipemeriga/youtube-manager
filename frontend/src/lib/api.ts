@@ -154,6 +154,18 @@ export const deleteAsset = (bucket: string, name: string) =>
 export const uploadAsset = (bucket: string, file: File) =>
   apiUpload(`/api/assets/${bucket}/upload`, file);
 
+export async function fetchAssetText(
+  bucket: string,
+  name: string
+): Promise<string> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`/api/assets/${bucket}/${name}`, {
+    headers: { Authorization: headers.Authorization },
+  });
+  if (!response.ok) throw new Error(`Asset fetch error: ${response.status}`);
+  return response.text();
+}
+
 export interface ScriptSection {
   name: string;
   description: string;

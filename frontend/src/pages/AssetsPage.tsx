@@ -1,9 +1,27 @@
 import { useState, useEffect, useCallback } from "react";
-import { Box, Typography, Tabs, Tab, Snackbar, Alert } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Tabs,
+  Tab,
+  Snackbar,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  IconButton,
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import AssetGrid from "../components/AssetGrid";
 import AssetUpload from "../components/AssetUpload";
+import ScriptViewer from "../components/ScriptViewer";
 import type { FileUploadItem } from "../components/AssetUpload";
-import { listAssets, uploadAsset, deleteAsset } from "../lib/api";
+import {
+  listAssets,
+  uploadAsset,
+  deleteAsset,
+  fetchAssetText,
+} from "../lib/api";
 
 const BUCKETS = [
   { key: "reference-thumbs", label: "Reference Thumbnails", accept: "image/*" },
@@ -29,6 +47,9 @@ export default function AssetsPage() {
     message: string;
     severity: "success" | "error";
   }>({ open: false, message: "", severity: "success" });
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerContent, setViewerContent] = useState("");
+  const [viewerTitle, setViewerTitle] = useState("");
 
   const currentBucket = BUCKETS[activeTab];
 
@@ -118,6 +139,27 @@ export default function AssetsPage() {
     window.open(url, "_blank");
   };
 
+  const handleViewScript = async (name: string) => {
+    try {
+      const content = await fetchAssetText(currentBucket.key, name);
+      setViewerTitle(
+        name
+          .replace(/\.md$/, "")
+          .replace(/-\d{8}-\d{6}$/, "")
+          .replace(/-/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+      );
+      setViewerContent(content);
+      setViewerOpen(true);
+    } catch {
+      setSnackbar({
+        open: true,
+        message: "Failed to load script",
+        severity: "error",
+      });
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -173,8 +215,49 @@ export default function AssetsPage() {
           bucket={currentBucket.key}
           onDelete={handleDelete}
           onDownload={handleDownload}
+          onView={
+            currentBucket.key === "scripts" ? handleViewScript : undefined
+          }
         />
       )}
+
+      <Dialog
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: "rgba(20,20,30,0.98)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 3,
+            maxHeight: "85vh",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            pb: 1,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            {viewerTitle}
+          </Typography>
+          <IconButton
+            onClick={() => setViewerOpen(false)}
+            sx={{ color: "rgba(255,255,255,0.5)" }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <ScriptViewer content={viewerContent} />
+        </DialogContent>
+      </Dialog>
 
       <Snackbar
         open={snackbar.open}
