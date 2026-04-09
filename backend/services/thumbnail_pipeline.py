@@ -141,39 +141,30 @@ async def handle_text_message(
         len(photo_names),
     )
 
-    # Build prompt with topic research context
-    research_section = ""
-    if topic_research:
-        research_section = (
-            f"\n\n## Topic Visual Research:\n{topic_research}\n\n"
-            "Use the visual elements above to make the background and theme "
-            "relevant to this topic. The style, typography, layout, and "
-            "composition must still match the reference thumbnails exactly.\n"
-        )
-
     prompt = (
-        f"Topic: {content}\n"
-        f"{research_section}\n"
-        "CRITICAL INSTRUCTIONS:\n"
-        "You MUST replicate the EXACT same visual style, layout, and branding "
-        "from the reference thumbnails. Study them carefully:\n"
-        "- The channel logo image is provided separately — place it in the "
-        "EXACT same position and size as it appears in the reference thumbnails "
-        "(typically top-left corner). Use the actual logo image, do NOT "
-        "recreate or write the logo text manually.\n"
-        "- Use the EXACT same font/typeface as the reference thumbnails for "
-        "all title text. Match the font family, weight, size, color, stroke, "
-        "shadow, and letter spacing precisely.\n"
-        "- Same composition structure (person placement, background style)\n"
-        "- Same color grading, lighting, and visual effects\n"
-        "- Same overall quality and professional polish\n\n"
-        "The ONLY things that should change from the references are:\n"
-        "1. The title text (use the topic above)\n"
-        "2. The background theme/elements (match the topic)\n"
-        "3. The person's photo (use one of the personal photos provided)\n\n"
-        "Everything else — logo, layout, text style, composition — "
-        "must be virtually identical to the references."
+        "ABSOLUTE PRIORITY — COPY THE REFERENCE THUMBNAILS:\n"
+        "Study the reference thumbnails provided and create a thumbnail that "
+        "looks like it was made by the SAME person using the SAME template.\n\n"
+        "MUST BE IDENTICAL to references:\n"
+        "- SAME font — exact same typeface, weight, size, color, stroke, shadow, spacing\n"
+        "- SAME layout — exact same positioning of text, person, logo, elements\n"
+        "- SAME logo — use the provided logo image in the SAME position and size\n"
+        "- SAME color grading — same tones, contrast, saturation, lighting\n"
+        "- SAME composition — same structure, same visual hierarchy\n"
+        "- SAME effects — same overlays, gradients, shadows, glows\n\n"
+        "DO NOT invent a new style. DO NOT change the font. DO NOT change the layout.\n"
+        "The thumbnail must look like part of the SAME series as the references.\n\n"
+        "ONLY CHANGE these 3 things:\n"
+        f"1. Title text → use this topic: {content}\n"
+        "2. Background theme/imagery → match the topic\n"
+        "3. Person photo → use one of the personal photos provided\n"
     )
+    if topic_research:
+        prompt += (
+            f"\nFor the background theme, use these visual ideas:\n{topic_research}\n"
+            "\nRemember: these are ONLY for background/theme. "
+            "Font, layout, logo, and style must match the references exactly."
+        )
 
     logger.info("calling generate_thumbnail")
     image_bytes = await generate_thumbnail(
