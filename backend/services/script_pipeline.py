@@ -158,7 +158,24 @@ def _build_system_prompt(persona: dict, memories: list[dict]) -> str:
     )
 
 
-def _messages_to_chat(messages: list[dict]) -> list[dict]:
+# Rough estimate: 1 token ≈ 4 chars. Conservative to avoid hitting limits.
+CHARS_PER_TOKEN = 4
+# Context budgets per model family (leaving room for system prompt + response)
+MAX_CONTEXT_TOKENS = {
+    "claude-haiku-4-5-20251001": 150_000,
+    "claude-sonnet-4-20250514": 150_000,
+    "claude-opus-4-20250514": 150_000,
+}
+DEFAULT_MAX_CONTEXT_TOKENS = 150_000
+
+
+def _estimate_tokens(text: str) -> int:
+    return len(text) // CHARS_PER_TOKEN
+
+
+def _messages_to_chat(
+    messages: list[dict], max_tokens: int = DEFAULT_MAX_CONTEXT_TOKENS
+) -> list[dict]:
     chat = []
     for msg in messages:
         role = msg["role"]
@@ -167,8 +184,66 @@ def _messages_to_chat(messages: list[dict]) -> list[dict]:
         content = msg["content"]
         if msg.get("type") == "topics" and role == "assistant":
             content = json.dumps({"action": "topics", "data": json.loads(content)})
-        chat.append({"role": role, "content": content})
-    return chat
+        chat.append(
+            {"role": role, "content": content, "_type": msg.get("type", "text")}
+        )
+
+    total_tokens = sum(_estimate_tokens(m["content"]) for m in chat)
+
+    if total_tokens > max_tokens:
+        chat = _shrink_context(chat, max_tokens)
+
+    # Strip internal metadata before returning
+    return [{"role": m["role"], "content": m["content"]} for m in chat]
+
+
+def _shrink_context(chat: list[dict], max_tokens: int) -> list[dict]:
+    """Compress old scripts and topics to fit within token budget."""
+    # Strategy: keep the last script/topics in full, summarize older ones
+    # Walk backwards to find the last script
+    last_script_idx = None
+    last_topics_idx = None
+    for i in range(len(chat) - 1, -1, -1):
+        if chat[i]["_type"] == "script" and last_script_idx is None:
+            last_script_idx = i
+        if chat[i]["_type"] == "topics" and last_topics_idx is None:
+            last_topics_idx = i
+
+    shrunk = []
+    for i, msg in enumerate(chat):
+        if msg["_type"] == "script" and i != last_script_idx:
+            # Summarize old scripts
+            preview = msg["content"][:100].replace("\n", " ")
+            shrunk.append(
+                {
+                    **msg,
+                    "content": f"[Previously generated script: {preview}...]",
+                }
+            )
+        elif msg["_type"] == "topics" and i != last_topics_idx:
+            # Summarize old topic lists
+            try:
+                topics = json.loads(msg["content"])
+                if isinstance(topics, dict):
+                    topics = topics.get("data", [])
+                titles = [t.get("title", "?") for t in topics[:5]]
+                shrunk.append(
+                    {
+                        **msg,
+                        "content": f"[Previously suggested topics: {', '.join(titles)}]",
+                    }
+                )
+            except (json.JSONDecodeError, TypeError):
+                shrunk.append({**msg, "content": "[Previous topic suggestions]"})
+        else:
+            shrunk.append(msg)
+
+    # If still over budget, drop oldest messages (keep last 20)
+    total = sum(_estimate_tokens(m["content"]) for m in shrunk)
+    if total > max_tokens and len(shrunk) > 20:
+        shrunk = shrunk[-20:]
+
+    return shrunk
 
 
 def _parse_action(response_text: str) -> dict:
@@ -232,7 +307,11 @@ async def handle_script_chat_message(
         yield sse_event({"stage": "thinking"})
 
         system = _build_system_prompt(persona, memories)
-        chat_messages = _messages_to_chat(existing_messages)
+        effective_model = model or settings.anthropic_model
+        token_budget = MAX_CONTEXT_TOKENS.get(
+            effective_model, DEFAULT_MAX_CONTEXT_TOKENS
+        )
+        chat_messages = _messages_to_chat(existing_messages, max_tokens=token_budget)
         chat_messages.append({"role": "user", "content": content})
 
         response_text = await ask_llm(system, chat_messages, model=model)
