@@ -213,7 +213,7 @@ export default function MessageBubble({
                 <ScriptTopicList
                   topics={topics}
                   onSelect={onTopicSelect || (() => {})}
-                  disabled={!isLatest || isStreaming}
+                  disabled={isStreaming}
                 />
               );
             } catch {
