@@ -8,6 +8,7 @@ from typing import AsyncGenerator
 from supabase._async.client import create_client as create_async_client
 
 from config import settings
+from services.llm import ask_llm
 from services.nano_banana import generate_thumbnail
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,53 @@ async def fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
 
 
 MAX_PERSONAL_PHOTOS = 5
+
+CREATIVE_BRIEF_MODEL = "claude-haiku-4-5-20251001"
+
+CREATIVE_BRIEF_SYSTEM = """You are a YouTube thumbnail design expert. Your job is to research current trends and write a detailed creative brief for an image generation AI.
+
+You have access to web search — use it to find:
+- Current YouTube thumbnail trends for this topic/niche
+- What top creators are doing with their thumbnails right now
+- Color psychology and visual elements that drive clicks
+- Any relevant current events or visual trends
+
+Output a detailed image generation prompt that includes:
+1. Specific visual composition (layout, focal point, rule of thirds)
+2. Color palette (specific hex codes or color descriptions based on trends)
+3. Typography style (font feel, size emphasis, text placement)
+4. Emotional tone and expression guidance
+5. Background elements and effects
+6. Any trending visual techniques you found
+
+Write the prompt as direct instructions to an image generator. Be specific and actionable, not vague."""
+
+
+async def _create_creative_brief(topic: str) -> str:
+    """Use Claude Haiku with web search to create an informed thumbnail brief."""
+    if not settings.anthropic_api_key:
+        return ""
+
+    try:
+        brief = await ask_llm(
+            system=CREATIVE_BRIEF_SYSTEM,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Create a detailed thumbnail generation prompt for this topic:\n\n"
+                        f"{topic}\n\n"
+                        f"Research current trends first, then write the creative brief."
+                    ),
+                }
+            ],
+            model=CREATIVE_BRIEF_MODEL,
+        )
+        logger.info("creative brief generated, length=%d", len(brief))
+        return brief
+    except Exception:
+        logger.exception("creative brief generation failed, using raw prompt")
+        return ""
 
 
 async def handle_text_message(
@@ -68,6 +116,11 @@ async def handle_text_message(
         .execute()
     )
 
+    yield sse_event({"stage": "analyzing"})
+
+    # Generate creative brief with Claude (web search enabled)
+    creative_brief = await _create_creative_brief(content)
+
     yield sse_event({"stage": "generating"})
 
     # Fetch assets
@@ -92,9 +145,18 @@ async def handle_text_message(
         len(photo_names),
     )
 
-    # Generate thumbnail directly
+    # Build prompt with creative brief context
+    brief_section = ""
+    if creative_brief:
+        brief_section = (
+            f"\n\n## Creative Brief (from trend research):\n{creative_brief}\n\n"
+            "Use the creative brief above to inform your design choices, "
+            "but ALWAYS prioritize matching the reference thumbnails' style.\n"
+        )
+
     prompt = (
-        f"Topic: {content}\n\n"
+        f"Topic: {content}\n"
+        f"{brief_section}\n"
         "CRITICAL INSTRUCTIONS:\n"
         "You MUST replicate the EXACT same visual style, layout, and branding "
         "from the reference thumbnails. Study them carefully:\n"
