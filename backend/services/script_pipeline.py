@@ -335,6 +335,21 @@ async def handle_script_chat_message(
                 {"done": True, "message_type": "script", "content": script_content}
             )
 
+            # If there was a previous script, this is a rewrite — extract memory from feedback
+            has_previous_script = any(
+                m.get("type") == "script" for m in existing_messages
+            )
+            if has_previous_script:
+                asyncio.create_task(
+                    extract_memory(
+                        sb=sb,
+                        user_id=user_id,
+                        action="rejected",
+                        topic=content[:80],
+                        feedback=content,
+                    )
+                )
+
         elif action_type == "save":
             all_messages = await _get_messages(sb, conversation_id)
             script_msg = next(
@@ -358,12 +373,21 @@ async def handle_script_chat_message(
 
             yield sse_event({"done": True, "saved": True, "path": path})
 
+            # Extract topic title from conversation for better memory context
+            topic_title = slug.replace("-", " ")
+            for m in reversed(all_messages):
+                if m.get("type") == "script":
+                    first_line = m["content"].split("\n")[0].strip("# ")
+                    if first_line:
+                        topic_title = first_line
+                    break
+
             asyncio.create_task(
                 extract_memory(
                     sb=sb,
                     user_id=user_id,
                     action="approved",
-                    topic=slug,
+                    topic=topic_title,
                     feedback="",
                 )
             )
