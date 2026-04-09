@@ -11,15 +11,17 @@ logger = logging.getLogger(__name__)
 TIMEOUT = 600.0
 
 
-async def ask_llm(system: str, messages: list[dict]) -> str:
+async def ask_llm(system: str, messages: list[dict], model: str | None = None) -> str:
     if settings.anthropic_api_key:
-        return await _ask_anthropic(system, messages)
+        return await _ask_anthropic(system, messages, model)
     return await _ask_guardian(system, messages)
 
 
-async def stream_llm(system: str, messages: list[dict]) -> AsyncGenerator[str, None]:
+async def stream_llm(
+    system: str, messages: list[dict], model: str | None = None
+) -> AsyncGenerator[str, None]:
     if settings.anthropic_api_key:
-        async for token in _stream_anthropic(system, messages):
+        async for token in _stream_anthropic(system, messages, model):
             yield token
     else:
         result = await _ask_guardian(system, messages)
@@ -33,10 +35,12 @@ WEB_SEARCH_TOOL = {
 }
 
 
-async def _ask_anthropic(system: str, messages: list[dict]) -> str:
+async def _ask_anthropic(
+    system: str, messages: list[dict], model: str | None = None
+) -> str:
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     response = await client.messages.create(
-        model=settings.anthropic_model,
+        model=model or settings.anthropic_model,
         max_tokens=16384,
         system=system,
         messages=messages,
@@ -48,11 +52,11 @@ async def _ask_anthropic(system: str, messages: list[dict]) -> str:
 
 
 async def _stream_anthropic(
-    system: str, messages: list[dict]
+    system: str, messages: list[dict], model: str | None = None
 ) -> AsyncGenerator[str, None]:
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     async with client.messages.stream(
-        model=settings.anthropic_model,
+        model=model or settings.anthropic_model,
         max_tokens=16384,
         system=system,
         messages=messages,

@@ -194,6 +194,7 @@ async def handle_script_chat_message(
     conversation_id: str,
     content: str,
     user_id: str,
+    model: str | None = None,
 ) -> AsyncGenerator[str, None]:
     logger.info(
         "script_chat conversation=%s user=%s",
@@ -232,7 +233,7 @@ async def handle_script_chat_message(
         chat_messages = _messages_to_chat(existing_messages)
         chat_messages.append({"role": "user", "content": content})
 
-        response_text = await ask_llm(system, chat_messages)
+        response_text = await ask_llm(system, chat_messages, model=model)
         action = _parse_action(response_text)
         action_type = action.get("action", "message")
 

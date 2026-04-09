@@ -275,6 +275,7 @@ def test_chat_dispatches_to_script_pipeline_for_script_mode():
         conversation_id="conv-1",
         content="Write a script",
         user_id="test-user",
+        model=None,
     )
     mock_thumbnail.assert_not_called()
 

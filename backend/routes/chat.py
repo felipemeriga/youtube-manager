@@ -26,19 +26,21 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     sb = get_supabase()
     conv = (
         sb.table("conversations")
-        .select("mode")
+        .select("mode, model")
         .eq("id", request.conversation_id)
         .eq("user_id", user_id)
         .single()
         .execute()
     )
     mode = conv.data.get("mode", "thumbnail") if conv.data else "thumbnail"
+    model = conv.data.get("model") if conv.data else None
 
     if mode == "script":
         stream = handle_script_chat_message(
             conversation_id=request.conversation_id,
             content=request.content,
             user_id=user_id,
+            model=model,
         )
     else:
         stream = handle_chat_message(
