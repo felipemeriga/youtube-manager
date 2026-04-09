@@ -1,8 +1,10 @@
+import asyncio
 import re
 import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from supabase import create_client
+from supabase._async.client import create_client as create_async_client
 
 from auth import get_current_user
 from config import settings
@@ -71,7 +73,24 @@ async def upload_asset(
     sb.storage.from_(bucket).upload(
         storage_path, content, {"content-type": file.content_type}
     )
+
+    if (
+        bucket == "personal-photos"
+        and settings.anthropic_api_key
+        and settings.voyage_api_key
+    ):
+        asyncio.create_task(_index_uploaded_photo(user_id, safe_name, content))
+
     return {"name": safe_name, "bucket": bucket, "path": storage_path}
+
+
+async def _index_uploaded_photo(
+    user_id: str, filename: str, image_bytes: bytes
+) -> None:
+    from services.photo_indexer import index_photo
+
+    sb = await create_async_client(settings.supabase_url, settings.supabase_service_key)
+    await index_photo(sb, user_id, filename, image_bytes)
 
 
 @router.delete("/api/assets/{bucket}/{filename}")

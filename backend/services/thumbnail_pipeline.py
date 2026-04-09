@@ -10,6 +10,7 @@ from supabase._async.client import create_client as create_async_client
 from config import settings
 from services.llm import ask_llm
 from services.nano_banana import generate_thumbnail
+from services.photo_search import find_best_photos
 
 logger = logging.getLogger(__name__)
 
@@ -124,21 +125,36 @@ async def handle_text_message(
     ref_thumbs = await fetch_all_assets(sb, user_id, "reference-thumbs")
     logos = await fetch_all_assets(sb, user_id, "logos")
 
-    all_photo_files = await sb.storage.from_("personal-photos").list(path=user_id)
-    photo_names = [f["name"] for f in all_photo_files if f.get("name")]
-    selected_names = random.sample(
-        photo_names, min(MAX_PERSONAL_PHOTOS, len(photo_names))
-    )
-    photos = []
-    for name in selected_names:
-        data = await sb.storage.from_("personal-photos").download(f"{user_id}/{name}")
-        photos.append(data)
+    # Try semantic search for best photos, fall back to random
+    best_filenames = await find_best_photos(sb, user_id, content)
+    if best_filenames:
+        photos = []
+        for name in best_filenames:
+            data = await sb.storage.from_("personal-photos").download(
+                f"{user_id}/{name}"
+            )
+            photos.append(data)
+        logger.info("semantic photo search: selected %d photos", len(photos))
+    else:
+        all_photo_files = await sb.storage.from_("personal-photos").list(path=user_id)
+        photo_names = [f["name"] for f in all_photo_files if f.get("name")]
+        selected_names = random.sample(
+            photo_names, min(MAX_PERSONAL_PHOTOS, len(photo_names))
+        )
+        photos = []
+        for name in selected_names:
+            data = await sb.storage.from_("personal-photos").download(
+                f"{user_id}/{name}"
+            )
+            photos.append(data)
+        logger.info(
+            "random photo selection: %d/%d photos", len(photos), len(photo_names)
+        )
     logger.info(
-        "downloaded: ref_thumbs=%d logos=%d photos=%d/%d",
+        "downloaded: ref_thumbs=%d logos=%d photos=%d",
         len(ref_thumbs),
         len(logos),
         len(photos),
-        len(photo_names),
     )
 
     prompt = (
