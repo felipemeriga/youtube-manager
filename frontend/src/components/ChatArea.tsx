@@ -14,6 +14,11 @@ interface Message {
   image_base64?: string;
 }
 
+interface ModelOption {
+  id: string;
+  label: string;
+}
+
 interface ChatAreaProps {
   messages: Message[];
   streamingContent: string;
@@ -24,6 +29,9 @@ interface ChatAreaProps {
   onReject: () => void;
   onTopicSelect?: (index: number) => void;
   conversationMode?: string;
+  models?: ModelOption[];
+  selectedModel?: string;
+  onModelChange?: (model: string) => void;
 }
 
 export default function ChatArea({
@@ -36,17 +44,30 @@ export default function ChatArea({
   onReject,
   onTopicSelect,
   conversationMode,
+  models,
+  selectedModel,
+  onModelChange,
 }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages, streamingContent]);
 
   const isEmpty = messages.length === 0 && !isStreaming;
 
   return (
-    <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <Box
+      sx={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
       <Box ref={scrollRef} sx={{ flex: 1, overflow: "auto", py: 2 }}>
         {isEmpty && (
           <Box
@@ -77,7 +98,11 @@ export default function ChatArea({
                 ? "Describe the video you want to create"
                 : "Describe the thumbnail you want"}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400, textAlign: "center" }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ maxWidth: 400, textAlign: "center" }}
+            >
               {conversationMode === "script"
                 ? "Tell me about the topic or ask for trending suggestions..."
                 : "Include the video title and any style preferences. The agent will analyze your references and create a plan."}
@@ -100,7 +125,11 @@ export default function ChatArea({
 
         {isStreaming && streamingContent && (
           <MessageBubble
-            message={{ role: "assistant", content: streamingContent, type: "text" }}
+            message={{
+              role: "assistant",
+              content: streamingContent,
+              type: "text",
+            }}
             isStreaming={true}
           />
         )}
@@ -108,7 +137,13 @@ export default function ChatArea({
 
       {currentStage && <ThinkingBar stage={currentStage} />}
 
-      <ChatInput onSend={onSend} disabled={isStreaming} />
+      <ChatInput
+        onSend={onSend}
+        disabled={isStreaming}
+        models={models}
+        selectedModel={selectedModel}
+        onModelChange={onModelChange}
+      />
     </Box>
   );
 }

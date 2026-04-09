@@ -7,9 +7,6 @@ import {
   Button,
   Stack,
   Typography,
-  Select,
-  MenuItem,
-  FormControl,
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
@@ -333,72 +330,28 @@ export default function ChatPage() {
         onCreate={handleCreateConversation}
         onDelete={handleDeleteConversation}
       />
-      <Box
-        sx={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        {conversationMode === "script" && selectedId && (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              px: 2,
-              py: 1,
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <Typography
-              variant="caption"
-              sx={{ color: "rgba(255,255,255,0.4)" }}
-            >
-              Model:
-            </Typography>
-            <FormControl size="small" sx={{ minWidth: 160 }}>
-              <Select
-                value={conversationModel}
-                displayEmpty
-                onChange={(e) => handleModelChange(e.target.value)}
-                sx={{
-                  fontSize: "0.75rem",
-                  color: "rgba(255,255,255,0.7)",
-                  "& .MuiOutlinedInput-notchedOutline": {
-                    borderColor: "rgba(255,255,255,0.1)",
-                  },
-                  "&:hover .MuiOutlinedInput-notchedOutline": {
-                    borderColor: "rgba(255,255,255,0.2)",
-                  },
-                  height: 32,
-                }}
-              >
-                <MenuItem value="">
-                  <em>Default</em>
-                </MenuItem>
-                {AVAILABLE_MODELS.map((m) => (
-                  <MenuItem key={m.id} value={m.id}>
-                    {m.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-        )}
-        <ChatArea
-          messages={messages}
-          streamingContent={streamingContent}
-          isStreaming={isStreaming}
-          currentStage={currentStage}
-          onSend={handleSend}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onTopicSelect={handleTopicSelect}
-          conversationMode={conversationMode}
-        />
-      </Box>
+      <ChatArea
+        messages={messages}
+        streamingContent={streamingContent}
+        isStreaming={isStreaming}
+        currentStage={currentStage}
+        onSend={handleSend}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onTopicSelect={handleTopicSelect}
+        conversationMode={conversationMode}
+        models={
+          conversationMode === "script" && selectedId
+            ? AVAILABLE_MODELS
+            : undefined
+        }
+        selectedModel={conversationModel}
+        onModelChange={
+          conversationMode === "script" && selectedId
+            ? handleModelChange
+            : undefined
+        }
+      />
       <Dialog
         open={showModeDialog}
         onClose={() => setShowModeDialog(false)}
