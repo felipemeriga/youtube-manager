@@ -21,7 +21,7 @@ CREATE TABLE messages (
     role            TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
     content         TEXT NOT NULL,
     type            TEXT NOT NULL DEFAULT 'text'
-                    CHECK (type IN ('text', 'plan', 'approval', 'image', 'save', 'regenerate')),
+                    CHECK (type IN ('text', 'plan', 'approval', 'image', 'save', 'regenerate', 'topics', 'script', 'saved', 'topic_selection')),
     image_url       TEXT,
     created_at      TIMESTAMPTZ DEFAULT now()
 );
