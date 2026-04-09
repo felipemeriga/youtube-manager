@@ -1,7 +1,7 @@
 import { Box, Typography } from "@mui/material";
 
 const STAGE_LABELS: Record<string, string> = {
-  analyzing: "Researching trends & creating creative brief...",
+  analyzing: "Researching topic visuals...",
   generating: "Generating thumbnail...",
   finding_trends: "Searching for recent trends...",
   writing_script: "Researching & writing full script...",

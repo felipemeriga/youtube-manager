@@ -38,49 +38,45 @@ MAX_PERSONAL_PHOTOS = 5
 
 CREATIVE_BRIEF_MODEL = "claude-haiku-4-5-20251001"
 
-CREATIVE_BRIEF_SYSTEM = """You are a YouTube thumbnail design expert. Your job is to research current trends and write a detailed creative brief for an image generation AI.
+TOPIC_RESEARCH_SYSTEM = """You research topics to help an image generation AI create better YouTube thumbnails.
 
-You have access to web search — use it to find:
-- Current YouTube thumbnail trends for this topic/niche
-- What top creators are doing with their thumbnails right now
-- Color psychology and visual elements that drive clicks
-- Any relevant current events or visual trends
+The thumbnail style, typography, layout, and composition are already defined by reference images — do NOT suggest any style changes.
 
-Output a detailed image generation prompt that includes:
-1. Specific visual composition (layout, focal point, rule of thirds)
-2. Color palette (specific hex codes or color descriptions based on trends)
-3. Typography style (font feel, size emphasis, text placement)
-4. Emotional tone and expression guidance
-5. Background elements and effects
-6. Any trending visual techniques you found
+Your ONLY job is to research the TOPIC and suggest specific visual elements that represent it. Use web search to find current, relevant information.
 
-Write the prompt as direct instructions to an image generator. Be specific and actionable, not vague."""
+Output a short list (5-8 bullet points) of specific visual elements related to this topic. For example:
+- Key imagery (objects, symbols, scenes associated with the topic)
+- Relevant logos, icons, or recognizable visuals
+- Color associations specific to this topic
+- Emotional tone the topic evokes
+- Any current events or trending visuals related to the topic
+
+Be specific and visual. Not "use technology imagery" but "show a glowing fiber optic cable transmitting data from Earth to the Moon with a lunar surface in the background"."""
 
 
-async def _create_creative_brief(topic: str) -> str:
-    """Use Claude Haiku with web search to create an informed thumbnail brief."""
+async def _research_topic(topic: str) -> str:
+    """Use Claude Haiku with web search to research topic-specific visuals."""
     if not settings.anthropic_api_key:
         return ""
 
     try:
-        brief = await ask_llm(
-            system=CREATIVE_BRIEF_SYSTEM,
+        research = await ask_llm(
+            system=TOPIC_RESEARCH_SYSTEM,
             messages=[
                 {
                     "role": "user",
                     "content": (
-                        f"Create a detailed thumbnail generation prompt for this topic:\n\n"
-                        f"{topic}\n\n"
-                        f"Research current trends first, then write the creative brief."
+                        f"Research this topic and suggest specific visual elements "
+                        f"for a YouTube thumbnail:\n\n{topic}"
                     ),
                 }
             ],
             model=CREATIVE_BRIEF_MODEL,
         )
-        logger.info("creative brief generated, length=%d", len(brief))
-        return brief
+        logger.info("topic research completed, length=%d", len(research))
+        return research
     except Exception:
-        logger.exception("creative brief generation failed, using raw prompt")
+        logger.exception("topic research failed, using raw prompt")
         return ""
 
 
@@ -118,8 +114,8 @@ async def handle_text_message(
 
     yield sse_event({"stage": "analyzing"})
 
-    # Generate creative brief with Claude (web search enabled)
-    creative_brief = await _create_creative_brief(content)
+    # Research topic-specific visuals with Claude
+    topic_research = await _research_topic(content)
 
     yield sse_event({"stage": "generating"})
 
@@ -145,18 +141,19 @@ async def handle_text_message(
         len(photo_names),
     )
 
-    # Build prompt with creative brief context
-    brief_section = ""
-    if creative_brief:
-        brief_section = (
-            f"\n\n## Creative Brief (from trend research):\n{creative_brief}\n\n"
-            "Use the creative brief above to inform your design choices, "
-            "but ALWAYS prioritize matching the reference thumbnails' style.\n"
+    # Build prompt with topic research context
+    research_section = ""
+    if topic_research:
+        research_section = (
+            f"\n\n## Topic Visual Research:\n{topic_research}\n\n"
+            "Use the visual elements above to make the background and theme "
+            "relevant to this topic. The style, typography, layout, and "
+            "composition must still match the reference thumbnails exactly.\n"
         )
 
     prompt = (
         f"Topic: {content}\n"
-        f"{brief_section}\n"
+        f"{research_section}\n"
         "CRITICAL INSTRUCTIONS:\n"
         "You MUST replicate the EXACT same visual style, layout, and branding "
         "from the reference thumbnails. Study them carefully:\n"
