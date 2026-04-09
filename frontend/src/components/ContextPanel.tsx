@@ -40,8 +40,9 @@ export default function ContextPanel({
     <Box
       sx={{
         width: 220,
-        borderRight: "1px solid rgba(255,255,255,0.08)",
-        backgroundColor: "rgba(0,0,0,0.2)",
+        borderRight: "1px solid rgba(255,255,255,0.06)",
+        backgroundColor: "rgba(18, 18, 25, 0.95)",
+        backdropFilter: "blur(16px)",
         display: "flex",
         flexDirection: "column",
       }}
@@ -52,21 +53,36 @@ export default function ContextPanel({
           alignItems: "center",
           justifyContent: "space-between",
           p: 1.5,
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
         }}
       >
-        <Typography variant="subtitle2" color="text.secondary">
+        <Typography
+          variant="subtitle2"
+          sx={{
+            color: "rgba(255,255,255,0.5)",
+            fontWeight: 600,
+            letterSpacing: "0.02em",
+          }}
+        >
           Conversations
         </Typography>
         <IconButton
           size="small"
           onClick={onCreate}
-          sx={{ color: "rgba(255,255,255,0.5)" }}
+          sx={{
+            color: "rgba(255,255,255,0.4)",
+            "&:hover": {
+              color: "#a78bfa",
+              backgroundColor: "rgba(124,58,237,0.08)",
+            },
+            transition: "all 0.2s ease",
+          }}
         >
           <AddIcon fontSize="small" />
         </IconButton>
       </Box>
 
-      <List sx={{ flex: 1, overflow: "auto", px: 0.5 }}>
+      <List sx={{ flex: 1, overflow: "auto", px: 0.75, py: 0.75 }}>
         {conversations.map((conv) => (
           <ListItemButton
             key={conv.id}
@@ -75,12 +91,15 @@ export default function ContextPanel({
             onMouseEnter={() => setHoveredId(conv.id)}
             onMouseLeave={() => setHoveredId(null)}
             sx={{
-              borderRadius: 1,
+              borderRadius: 1.5,
               mb: 0.5,
               py: 0.75,
+              transition: "all 0.2s ease",
               "&.Mui-selected": {
-                backgroundColor: "rgba(124, 58, 237, 0.15)",
+                backgroundColor: "rgba(124, 58, 237, 0.12)",
+                "&:hover": { backgroundColor: "rgba(124, 58, 237, 0.18)" },
               },
+              "&:hover": { backgroundColor: "rgba(255,255,255,0.04)" },
             }}
           >
             <Box
@@ -97,7 +116,11 @@ export default function ContextPanel({
                 primaryTypographyProps={{
                   noWrap: true,
                   fontSize: 13,
-                  color: "text.primary",
+                  fontWeight: conv.id === selectedId ? 500 : 400,
+                  color:
+                    conv.id === selectedId
+                      ? "rgba(255,255,255,0.95)"
+                      : "rgba(255,255,255,0.7)",
                 }}
                 sx={{ m: 0 }}
               />
@@ -111,12 +134,12 @@ export default function ContextPanel({
                   borderRadius: 0.75,
                   backgroundColor:
                     conv.mode === "script"
-                      ? "rgba(59,130,246,0.15)"
-                      : "rgba(124,58,237,0.15)",
+                      ? "rgba(59,130,246,0.1)"
+                      : "rgba(124,58,237,0.1)",
                   border: `1px solid ${
                     conv.mode === "script"
-                      ? "rgba(59,130,246,0.3)"
-                      : "rgba(124,58,237,0.3)"
+                      ? "rgba(59,130,246,0.2)"
+                      : "rgba(124,58,237,0.2)"
                   }`,
                   width: "fit-content",
                 }}
@@ -149,6 +172,7 @@ export default function ContextPanel({
                 sx={{
                   color: "rgba(255,255,255,0.3)",
                   "&:hover": { color: "#ef4444" },
+                  transition: "all 0.2s ease",
                 }}
               >
                 <DeleteOutlineIcon fontSize="small" />

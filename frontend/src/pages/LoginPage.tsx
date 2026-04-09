@@ -46,7 +46,8 @@ export default function LoginPage() {
         alignItems: "center",
         justifyContent: "center",
         height: "100vh",
-        background: "linear-gradient(135deg, #0a0a0f 0%, #1a1025 100%)",
+        background:
+          "radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 50%, rgba(59,130,246,0.06) 0%, transparent 50%), linear-gradient(180deg, #0f0f14 0%, #13141f 100%)",
       }}
     >
       <Paper

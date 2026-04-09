@@ -158,8 +158,8 @@ export default function MessageBubble({
       {!isUser && (
         <Box
           sx={{
-            width: 28,
-            height: 28,
+            width: 30,
+            height: 30,
             borderRadius: "50%",
             background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
             display: "flex",
@@ -170,7 +170,7 @@ export default function MessageBubble({
             flexShrink: 0,
           }}
         >
-          <AutoAwesomeIcon sx={{ fontSize: 14, color: "#fff" }} />
+          <AutoAwesomeIcon sx={{ fontSize: 15, color: "#fff" }} />
         </Box>
       )}
 
@@ -178,12 +178,15 @@ export default function MessageBubble({
         sx={{
           maxWidth: "70%",
           p: 2,
-          borderRadius: 2,
+          borderRadius: 2.5,
           backgroundColor: isUser
-            ? "rgba(124, 58, 237, 0.15)"
-            : "rgba(255, 255, 255, 0.05)",
-          backdropFilter: "blur(10px)",
-          border: "1px solid rgba(255,255,255,0.08)",
+            ? "rgba(124, 58, 237, 0.12)"
+            : "rgba(23, 23, 32, 0.68)",
+          backdropFilter: "blur(20px)",
+          border: `1px solid ${
+            isUser ? "rgba(124,58,237,0.2)" : "rgba(255,255,255,0.06)"
+          }`,
+          transition: "all 0.2s ease",
         }}
       >
         {(message.image_base64 || message.image_url) && (

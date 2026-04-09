@@ -49,8 +49,9 @@ export default function ChatInput({
     <Box
       sx={{
         p: 2,
-        borderTop: "1px solid rgba(255,255,255,0.08)",
-        backgroundColor: "rgba(0,0,0,0.2)",
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+        backgroundColor: "rgba(12, 12, 18, 0.8)",
+        backdropFilter: "blur(16px)",
       }}
     >
       {models && onModelChange && (
@@ -62,14 +63,16 @@ export default function ChatInput({
               onChange={(e) => onModelChange(e.target.value)}
               sx={{
                 fontSize: "0.75rem",
-                color: "rgba(255,255,255,0.7)",
+                color: "rgba(255,255,255,0.6)",
+                borderRadius: 2,
                 "& .MuiOutlinedInput-notchedOutline": {
-                  borderColor: "rgba(255,255,255,0.1)",
+                  borderColor: "rgba(255,255,255,0.08)",
                 },
                 "&:hover .MuiOutlinedInput-notchedOutline": {
-                  borderColor: "rgba(255,255,255,0.2)",
+                  borderColor: "rgba(255,255,255,0.15)",
                 },
                 height: 28,
+                transition: "all 0.2s ease",
               }}
             >
               <MenuItem value="">
@@ -89,15 +92,19 @@ export default function ChatInput({
           fullWidth
           multiline
           maxRows={4}
-          placeholder="Describe the thumbnail you want..."
+          placeholder="Type a message..."
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
           sx={{
             "& .MuiOutlinedInput-root": {
-              borderRadius: 2,
-              backgroundColor: "rgba(255,255,255,0.05)",
+              borderRadius: 2.5,
+              backgroundColor: "rgba(255,255,255,0.04)",
+              backdropFilter: "blur(10px)",
+              transition: "all 0.2s ease",
+              "&:hover": { backgroundColor: "rgba(255,255,255,0.06)" },
+              "&.Mui-focused": { backgroundColor: "rgba(255,255,255,0.06)" },
             },
           }}
         />
@@ -105,11 +112,25 @@ export default function ChatInput({
           onClick={handleSend}
           disabled={!value.trim() || disabled}
           sx={{
-            color: "#7c3aed",
-            "&:disabled": { color: "rgba(255,255,255,0.2)" },
+            width: 40,
+            height: 40,
+            borderRadius: 2.5,
+            background:
+              value.trim() && !disabled
+                ? "linear-gradient(135deg, #7c3aed, #3b82f6)"
+                : "rgba(255,255,255,0.05)",
+            color: value.trim() && !disabled ? "#fff" : "rgba(255,255,255,0.2)",
+            transition: "all 0.2s ease",
+            "&:hover": {
+              background: "linear-gradient(135deg, #6d28d9, #2563eb)",
+            },
+            "&:disabled": {
+              background: "rgba(255,255,255,0.05)",
+              color: "rgba(255,255,255,0.2)",
+            },
           }}
         >
-          <SendIcon />
+          <SendIcon fontSize="small" />
         </IconButton>
       </Box>
     </Box>
