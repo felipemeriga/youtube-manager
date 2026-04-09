@@ -7,6 +7,9 @@ import {
   Button,
   Stack,
   Typography,
+  Select,
+  MenuItem,
+  FormControl,
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
@@ -18,6 +21,8 @@ import {
   getConversation,
   deleteConversation,
   streamChat,
+  updateConversation,
+  AVAILABLE_MODELS,
 } from "../lib/api";
 
 interface Message {
@@ -43,6 +48,7 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStage, setCurrentStage] = useState<string | null>(null);
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
+  const [conversationModel, setConversationModel] = useState<string>("");
   const [showModeDialog, setShowModeDialog] = useState(false);
   const pendingMessageRef = useRef<{ content: string; type: string } | null>(
     null
@@ -134,11 +140,17 @@ export default function ChatPage() {
     setIsStreaming(false);
 
     const data = await getConversation(id);
-    const convData = data as { messages: Message[]; mode?: string };
+    const convData = data as {
+      messages: Message[];
+      mode?: string;
+      model?: string;
+    };
     const msgs = convData.messages || [];
     const mode = convData.mode || "thumbnail";
+    const model = convData.model || "";
     setMessages(msgs);
     setConversationMode(mode);
+    setConversationModel(model);
 
     const pendingStage = detectPendingStage(msgs, mode);
     if (pendingStage) {
@@ -306,6 +318,12 @@ export default function ChatPage() {
     }
   };
 
+  const handleModelChange = async (newModel: string) => {
+    if (!selectedId) return;
+    setConversationModel(newModel);
+    await updateConversation(selectedId, { model: newModel || undefined });
+  };
+
   return (
     <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
       <ContextPanel
@@ -315,17 +333,72 @@ export default function ChatPage() {
         onCreate={handleCreateConversation}
         onDelete={handleDeleteConversation}
       />
-      <ChatArea
-        messages={messages}
-        streamingContent={streamingContent}
-        isStreaming={isStreaming}
-        currentStage={currentStage}
-        onSend={handleSend}
-        onApprove={handleApprove}
-        onReject={handleReject}
-        onTopicSelect={handleTopicSelect}
-        conversationMode={conversationMode}
-      />
+      <Box
+        sx={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        {conversationMode === "script" && selectedId && (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              px: 2,
+              py: 1,
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{ color: "rgba(255,255,255,0.4)" }}
+            >
+              Model:
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <Select
+                value={conversationModel}
+                displayEmpty
+                onChange={(e) => handleModelChange(e.target.value)}
+                sx={{
+                  fontSize: "0.75rem",
+                  color: "rgba(255,255,255,0.7)",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "rgba(255,255,255,0.1)",
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "rgba(255,255,255,0.2)",
+                  },
+                  height: 32,
+                }}
+              >
+                <MenuItem value="">
+                  <em>Default</em>
+                </MenuItem>
+                {AVAILABLE_MODELS.map((m) => (
+                  <MenuItem key={m.id} value={m.id}>
+                    {m.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        )}
+        <ChatArea
+          messages={messages}
+          streamingContent={streamingContent}
+          isStreaming={isStreaming}
+          currentStage={currentStage}
+          onSend={handleSend}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onTopicSelect={handleTopicSelect}
+          conversationMode={conversationMode}
+        />
+      </Box>
       <Dialog
         open={showModeDialog}
         onClose={() => setShowModeDialog(false)}

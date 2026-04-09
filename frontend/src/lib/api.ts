@@ -124,6 +124,12 @@ export async function streamChat(
   }
 }
 
+export const AVAILABLE_MODELS = [
+  { id: "claude-haiku-4-5-20251001", label: "Haiku (fast)" },
+  { id: "claude-sonnet-4-20250514", label: "Sonnet" },
+  { id: "claude-opus-4-20250514", label: "Opus (best)" },
+];
+
 export const listConversations = () =>
   apiFetch<Array<Record<string, unknown>>>("/api/conversations");
 export const createConversation = (mode: string = "thumbnail") =>
@@ -135,6 +141,11 @@ export const getConversation = (id: string) =>
   apiFetch<Record<string, unknown>>(`/api/conversations/${id}`);
 export const deleteConversation = (id: string) =>
   apiFetch<void>(`/api/conversations/${id}`, { method: "DELETE" });
+export const updateConversation = (id: string, data: { model?: string }) =>
+  apiFetch<Record<string, unknown>>(`/api/conversations/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 
 export const listAssets = (bucket: string) =>
   apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`);
