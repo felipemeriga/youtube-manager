@@ -41,11 +41,12 @@ You MUST respond with ONLY a valid JSON object (no markdown fences, no extra tex
 4. Conversational reply — when you need to ask for clarification, acknowledge something, or chat:
 {{"action": "message", "content": "your reply"}}
 
+{script_structure}
+
 Guidelines:
 - ALWAYS search the web for current information before suggesting topics or writing scripts
 - When suggesting topics, research current news and trends from the last 1-2 weeks
 - When writing scripts, include real statistics with verifiable source URLs
-{script_structure}
 - Write all script content in {language}
 - When the user gives feedback on a script (e.g. "too long", "more humor"), rewrite incorporating feedback — do NOT restart from topic suggestions
 - When the user says "save", "looks good", "approved", "perfect" about a script, use the "save" action
@@ -136,12 +137,13 @@ def _build_system_prompt(persona: dict, memories: list[dict]) -> str:
     )
     if enabled:
         lines = [
-            "- When writing scripts, structure them with these sections in this order:\n"
+            "## REQUIRED Script Structure\n",
+            "When writing or rewriting a script, you MUST use these sections in this exact order:\n",
         ]
         for i, s in enumerate(enabled, 1):
-            lines.append(f"  {i}. **{s['name']}** — {s['description']}")
+            lines.append(f"{i}. **{s['name']}** — {s['description']}")
         lines.append(
-            "\n  Only include the sections listed above. Follow this structure exactly."
+            "\nDo NOT add extra sections. Do NOT skip any of these sections. Follow this structure exactly."
         )
         script_structure = "\n".join(lines)
     else:
