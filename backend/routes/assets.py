@@ -24,13 +24,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-VALID_BUCKETS = {"reference-thumbs", "personal-photos", "logos", "outputs", "scripts"}
+VALID_BUCKETS = {"reference-thumbs", "personal-photos", "logos", "outputs", "scripts", "fonts"}
 MAX_FILE_SIZES = {
     "reference-thumbs": 10 * 1024 * 1024,
     "personal-photos": 10 * 1024 * 1024,
     "logos": 5 * 1024 * 1024,
     "outputs": 10 * 1024 * 1024,
     "scripts": 5 * 1024 * 1024,
+    "fonts": 5 * 1024 * 1024,
 }
 
 

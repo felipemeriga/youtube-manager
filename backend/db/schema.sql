@@ -107,6 +107,9 @@ CREATE POLICY user_memories_delete ON user_memories
 -- Migration: add script_template to channel_personas
 -- ALTER TABLE channel_personas ADD COLUMN script_template JSONB DEFAULT NULL;
 
+-- Migration: add text_style to channel_personas
+-- ALTER TABLE channel_personas ADD COLUMN text_style JSONB DEFAULT NULL;
+
 -- Migration: add model to conversations
 -- ALTER TABLE conversations ADD COLUMN model TEXT DEFAULT NULL;
 
