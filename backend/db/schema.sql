@@ -109,3 +109,45 @@ CREATE POLICY user_memories_delete ON user_memories
 
 -- Migration: add model to conversations
 -- ALTER TABLE conversations ADD COLUMN model TEXT DEFAULT NULL;
+
+-- Enable pgvector
+CREATE EXTENSION IF NOT EXISTS vector SCHEMA extensions;
+
+-- photo_embeddings
+CREATE TABLE photo_embeddings (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    file_name   TEXT NOT NULL,
+    description TEXT NOT NULL,
+    embedding   vector(1024),
+    created_at  TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(user_id, file_name)
+);
+
+CREATE INDEX idx_photo_embeddings_user_id ON photo_embeddings(user_id);
+
+-- RPC function for photo similarity search
+CREATE OR REPLACE FUNCTION match_photos(
+    query_embedding vector(1024),
+    match_user_id UUID,
+    match_count INT DEFAULT 3
+)
+RETURNS TABLE (
+    file_name TEXT,
+    description TEXT,
+    similarity FLOAT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        pe.file_name,
+        pe.description,
+        1 - (pe.embedding <=> query_embedding) AS similarity
+    FROM photo_embeddings pe
+    WHERE pe.user_id = match_user_id
+    ORDER BY pe.embedding <=> query_embedding
+    LIMIT match_count;
+END;
+$$;
