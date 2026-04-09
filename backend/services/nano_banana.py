@@ -37,7 +37,10 @@ async def generate_thumbnail(
     # Add personal photos
     if personal_photos:
         contents.append(
-            "Here are my personal photos. Pick the best one for this thumbnail:"
+            "Here are my personal photos. Pick the best one and place it in "
+            "the thumbnail EXACTLY as it appears — do NOT modify, redraw, "
+            "regenerate, or alter my face or body in any way. Use the ORIGINAL "
+            "photo as-is, only adjusting size and position to fit the layout."
         )
         for img_bytes in personal_photos:
             contents.append(

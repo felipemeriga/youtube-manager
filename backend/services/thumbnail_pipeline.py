@@ -157,7 +157,9 @@ async def handle_text_message(
         "ONLY CHANGE these 3 things:\n"
         f"1. Title text → use this topic: {content}\n"
         "2. Background theme/imagery → match the topic\n"
-        "3. Person photo → use one of the personal photos provided\n"
+        "3. Person photo → use one of the personal photos provided AS-IS. "
+        "Do NOT redraw, regenerate, or modify the person's face or body. "
+        "Place the ORIGINAL unaltered photo into the thumbnail.\n"
     )
     if topic_research:
         prompt += (
