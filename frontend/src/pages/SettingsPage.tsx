@@ -252,7 +252,7 @@ export default function SettingsPage() {
                       <DeleteIcon />
                     </IconButton>
                   }
-                  sx={{ px: 0 }}
+                  sx={{ px: 0, pr: 6 }}
                 >
                   <ListItemText
                     primary={memory.content}

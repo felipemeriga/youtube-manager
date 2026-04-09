@@ -56,7 +56,7 @@ async def extract_memory(
         )
         response = response.strip()
 
-        if response == "SKIP":
+        if response.upper().startswith("SKIP"):
             logger.info("memory extraction: SKIP for user=%s", user_id)
             return
 
