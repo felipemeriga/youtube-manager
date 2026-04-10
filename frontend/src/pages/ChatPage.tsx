@@ -62,63 +62,6 @@ export default function ChatPage() {
     }
   }, []);
 
-  const detectPendingStage = (msgs: Message[], mode: string): string | null => {
-    if (msgs.length === 0) return null;
-    const lastMsg = msgs[msgs.length - 1];
-    if (lastMsg.role !== "user") return null;
-
-    if (mode === "script") {
-      if (lastMsg.type === "text") return "thinking";
-    } else {
-      if (lastMsg.type === "text") return "generating";
-      if (lastMsg.type === "save") return "generating";
-      if (lastMsg.type === "regenerate") return "generating";
-      if (lastMsg.type === "approval") return "generating";
-      if (lastMsg.type === "photo_selected") return "generating";
-    }
-    return null;
-  };
-
-  const startPolling = useCallback(
-    (convId: string, initialCount: number) => {
-      stopPolling();
-      let attempts = 0;
-      const maxAttempts = 60; // ~5 minutes at 5s intervals
-
-      pollRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts > maxAttempts) {
-          stopPolling();
-          setCurrentStage(null);
-          setIsStreaming(false);
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: "Request timed out. Please try again.",
-              type: "text",
-            },
-          ]);
-          return;
-        }
-        try {
-          const data = await getConversation(convId);
-          const convData = data as { messages: Message[]; mode?: string };
-          const newMsgs = convData.messages || [];
-          if (newMsgs.length > initialCount) {
-            setMessages(newMsgs);
-            stopPolling();
-            setCurrentStage(null);
-            setIsStreaming(false);
-          }
-        } catch {
-          // ignore poll errors
-        }
-      }, 5000);
-    },
-    [stopPolling]
-  );
-
   useEffect(() => {
     return () => stopPolling();
   }, [stopPolling]);
@@ -137,29 +80,33 @@ export default function ChatPage() {
     setSelectedId(id);
     setCurrentStage(null);
     setIsStreaming(false);
+    setStreamingContent("");
 
-    const data = await getConversation(id);
-    const convData = data as {
-      messages: Message[];
-      mode?: string;
-      model?: string;
-    };
-    const msgs = convData.messages || [];
-    const mode = convData.mode || "thumbnail";
-    const model = convData.model || "";
-    setMessages(msgs);
-    setConversationMode(mode);
-    setConversationModel(model);
-
-    const pendingStage = detectPendingStage(msgs, mode);
-    if (pendingStage) {
-      setCurrentStage(pendingStage);
-      setIsStreaming(true);
-      startPolling(id, msgs.length);
+    try {
+      const data = await getConversation(id);
+      const convData = data as {
+        messages: Message[];
+        mode?: string;
+        model?: string;
+      };
+      const msgs = convData.messages || [];
+      const mode = convData.mode || "thumbnail";
+      const model = convData.model || "";
+      setMessages(msgs);
+      setConversationMode(mode);
+      setConversationModel(model);
+    } catch {
+      setMessages([]);
+      setCurrentStage(null);
+      setIsStreaming(false);
     }
   };
 
   const handleCreateConversation = () => {
+    stopPolling();
+    setCurrentStage(null);
+    setIsStreaming(false);
+    setStreamingContent("");
     setShowModeDialog(true);
   };
 
@@ -209,9 +156,10 @@ export default function ChatPage() {
 
     setIsStreaming(true);
     setStreamingContent("");
-    setCurrentStage(null);
     streamingRef.current = "";
     imageRef.current = null;
+
+    setCurrentStage("generating");
 
     try {
       await streamChat(conversationId, content, type, {
@@ -297,36 +245,37 @@ export default function ChatPage() {
     }
   };
 
-  const handlePhotoSelect = (photoName: string) => {
+  const handlePhotoSelect = (photoName: string, instructions?: string) => {
     if (!selectedId) return;
-    doStream(selectedId, photoName, "select_photo");
+    const payload = JSON.stringify({
+      action: "select_photo",
+      photo_name: photoName,
+      feedback: instructions || null,
+    });
+    doStream(selectedId, payload, "text");
+  };
+
+  const handleSubmitText = (text: string) => {
+    if (!selectedId) return;
+    doStream(
+      selectedId,
+      JSON.stringify({ action: "provide_text", text }),
+      "text"
+    );
   };
 
   const handleApprove = () => {
     if (!selectedId) return;
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.type === "background") {
-      doStream(selectedId, "approved_background", "approve_background");
-    } else if (lastMsg?.type === "composite") {
-      doStream(selectedId, "approved_composite", "approve_composite");
-    } else if (lastMsg?.type === "image") {
-      sendMessage("SAVE_OUTPUT", "save");
-    } else if (lastMsg?.type === "script") {
-      sendMessage("Save this script");
-    }
+    doStream(selectedId, JSON.stringify({ action: "approve" }), "text");
   };
 
   const handleReject = () => {
     if (!selectedId) return;
     const lastMsg = messages[messages.length - 1];
-    if (
-      lastMsg?.type === "background" ||
-      lastMsg?.type === "composite" ||
-      lastMsg?.type === "image"
-    ) {
-      sendMessage("REGENERATE", "regenerate");
-    } else if (lastMsg?.type === "script") {
+    if (lastMsg?.type === "script") {
       sendMessage("Please rewrite this script with improvements");
+    } else {
+      doStream(selectedId, JSON.stringify({ action: "feedback" }), "text");
     }
   };
 
@@ -355,6 +304,7 @@ export default function ChatPage() {
         onReject={handleReject}
         onTopicSelect={handleTopicSelect}
         onPhotoSelect={handlePhotoSelect}
+        onSubmitText={handleSubmitText}
         conversationMode={conversationMode}
         models={
           conversationMode === "script" && selectedId
