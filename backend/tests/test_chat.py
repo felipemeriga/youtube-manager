@@ -20,7 +20,7 @@ def create_app(user_id: str) -> TestClient:
 
 def mock_supabase_with_mode(mode: str = "thumbnail"):
     mock_sb = MagicMock()
-    mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value.data = {
+    mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
         "mode": mode
     }
     return mock_sb
@@ -30,17 +30,14 @@ def test_chat_endpoint_returns_sse_stream():
     client = create_app("test-user")
 
     async def fake_stream(*args, **kwargs):
-        yield f"data: {json.dumps({'stage': 'analyzing'})}\n\n"
-        yield f"data: {json.dumps({'token': 'Hello '})}\n\n"
+        yield f"data: {json.dumps({'stage': 'generating'})}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 
     mock_sb = mock_supabase_with_mode("thumbnail")
 
     with (
         patch("routes.chat.get_supabase", return_value=mock_sb),
-        patch(
-            "routes.chat.handle_chat_message", side_effect=fake_stream
-        ) as mock_handle,
+        patch("routes.chat.thumbnail_stream", side_effect=fake_stream),
     ):
         response = client.post(
             "/api/chat",
@@ -53,12 +50,6 @@ def test_chat_endpoint_returns_sse_stream():
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
-    mock_handle.assert_called_once_with(
-        conversation_id="conv-1",
-        content="Create a thumbnail",
-        msg_type="text",
-        user_id="test-user",
-    )
 
 
 def test_chat_endpoint_default_type_is_text():
@@ -71,9 +62,7 @@ def test_chat_endpoint_default_type_is_text():
 
     with (
         patch("routes.chat.get_supabase", return_value=mock_sb),
-        patch(
-            "routes.chat.handle_chat_message", side_effect=fake_stream
-        ) as mock_handle,
+        patch("routes.chat.thumbnail_stream", side_effect=fake_stream) as mock_thumb,
     ):
         response = client.post(
             "/api/chat",
@@ -84,43 +73,9 @@ def test_chat_endpoint_default_type_is_text():
         )
 
     assert response.status_code == 200
-    mock_handle.assert_called_once_with(
+    mock_thumb.assert_called_once_with(
         conversation_id="conv-1",
         content="Hello",
-        msg_type="text",
-        user_id="test-user",
-    )
-
-
-def test_chat_endpoint_approval_type():
-    client = create_app("test-user")
-
-    async def fake_stream(*args, **kwargs):
-        yield f"data: {json.dumps({'stage': 'generating'})}\n\n"
-        yield f"data: {json.dumps({'done': True})}\n\n"
-
-    mock_sb = mock_supabase_with_mode("thumbnail")
-
-    with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
-        patch(
-            "routes.chat.handle_chat_message", side_effect=fake_stream
-        ) as mock_handle,
-    ):
-        response = client.post(
-            "/api/chat",
-            json={
-                "conversation_id": "conv-1",
-                "content": "APPROVED",
-                "type": "approval",
-            },
-        )
-
-    assert response.status_code == 200
-    mock_handle.assert_called_once_with(
-        conversation_id="conv-1",
-        content="APPROVED",
-        msg_type="approval",
         user_id="test-user",
     )
 
@@ -143,41 +98,13 @@ def test_chat_endpoint_missing_content_returns_422():
     assert response.status_code == 422
 
 
-def test_chat_endpoint_save_type():
-    """Save message type should be passed through correctly."""
+def test_chat_endpoint_empty_body_returns_422():
     client = create_app("test-user")
-
-    async def fake_stream(*args, **kwargs):
-        yield f"data: {json.dumps({'done': True, 'saved': True})}\n\n"
-
-    mock_sb = mock_supabase_with_mode("thumbnail")
-
-    with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
-        patch(
-            "routes.chat.handle_chat_message", side_effect=fake_stream
-        ) as mock_handle,
-    ):
-        response = client.post(
-            "/api/chat",
-            json={
-                "conversation_id": "conv-1",
-                "content": "SAVE_OUTPUT",
-                "type": "save",
-            },
-        )
-
-    assert response.status_code == 200
-    mock_handle.assert_called_once_with(
-        conversation_id="conv-1",
-        content="SAVE_OUTPUT",
-        msg_type="save",
-        user_id="test-user",
-    )
+    response = client.post("/api/chat", json={})
+    assert response.status_code == 422
 
 
-def test_chat_endpoint_regenerate_type():
-    """Regenerate message type should be passed through correctly."""
+def test_chat_endpoint_stream_body_content():
     client = create_app("test-user")
 
     async def fake_stream(*args, **kwargs):
@@ -188,48 +115,7 @@ def test_chat_endpoint_regenerate_type():
 
     with (
         patch("routes.chat.get_supabase", return_value=mock_sb),
-        patch(
-            "routes.chat.handle_chat_message", side_effect=fake_stream
-        ) as mock_handle,
-    ):
-        response = client.post(
-            "/api/chat",
-            json={
-                "conversation_id": "conv-1",
-                "content": "Make it brighter",
-                "type": "regenerate",
-            },
-        )
-
-    assert response.status_code == 200
-    mock_handle.assert_called_once_with(
-        conversation_id="conv-1",
-        content="Make it brighter",
-        msg_type="regenerate",
-        user_id="test-user",
-    )
-
-
-def test_chat_endpoint_empty_body_returns_422():
-    """Empty JSON body should return 422."""
-    client = create_app("test-user")
-    response = client.post("/api/chat", json={})
-    assert response.status_code == 422
-
-
-def test_chat_endpoint_stream_body_content():
-    """Verify the actual SSE data in the response body."""
-    client = create_app("test-user")
-
-    async def fake_stream(*args, **kwargs):
-        yield f"data: {json.dumps({'stage': 'analyzing'})}\n\n"
-        yield f"data: {json.dumps({'done': True})}\n\n"
-
-    mock_sb = mock_supabase_with_mode("thumbnail")
-
-    with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
-        patch("routes.chat.handle_chat_message", side_effect=fake_stream),
+        patch("routes.chat.thumbnail_stream", side_effect=fake_stream),
     ):
         response = client.post(
             "/api/chat",
@@ -241,12 +127,11 @@ def test_chat_endpoint_stream_body_content():
         )
 
     body = response.text
-    assert 'data: {"stage": "analyzing"}' in body
+    assert 'data: {"stage": "generating"}' in body
     assert 'data: {"done": true}' in body
 
 
 def test_chat_dispatches_to_script_pipeline_for_script_mode():
-    """When conversation mode is 'script', handle_script_chat_message is called."""
     client = create_app("test-user")
 
     async def fake_stream(*args, **kwargs):
@@ -259,7 +144,7 @@ def test_chat_dispatches_to_script_pipeline_for_script_mode():
         patch(
             "routes.chat.handle_script_chat_message", side_effect=fake_stream
         ) as mock_script,
-        patch("routes.chat.handle_chat_message") as mock_thumbnail,
+        patch("routes.chat.thumbnail_stream") as mock_thumbnail,
     ):
         response = client.post(
             "/api/chat",
@@ -280,8 +165,7 @@ def test_chat_dispatches_to_script_pipeline_for_script_mode():
     mock_thumbnail.assert_not_called()
 
 
-def test_chat_dispatches_to_thumbnail_pipeline_for_thumbnail_mode():
-    """When conversation mode is 'thumbnail', handle_chat_message is called."""
+def test_chat_dispatches_to_thumbnail_stream_for_thumbnail_mode():
     client = create_app("test-user")
 
     async def fake_stream(*args, **kwargs):
@@ -292,7 +176,7 @@ def test_chat_dispatches_to_thumbnail_pipeline_for_thumbnail_mode():
     with (
         patch("routes.chat.get_supabase", return_value=mock_sb),
         patch(
-            "routes.chat.handle_chat_message", side_effect=fake_stream
+            "routes.chat.thumbnail_stream", side_effect=fake_stream
         ) as mock_thumbnail,
         patch("routes.chat.handle_script_chat_message") as mock_script,
     ):
@@ -309,7 +193,6 @@ def test_chat_dispatches_to_thumbnail_pipeline_for_thumbnail_mode():
     mock_thumbnail.assert_called_once_with(
         conversation_id="conv-1",
         content="Create a thumbnail",
-        msg_type="text",
         user_id="test-user",
     )
     mock_script.assert_not_called()

@@ -72,7 +72,7 @@ def test_get_conversation_with_messages():
 
     mock_sb = mock_supabase()
     conv_query = MagicMock()
-    conv_query.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value.data = {
+    conv_query.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
         "id": "conv-1",
         "title": "Test",
         "user_id": user_id,
@@ -145,7 +145,7 @@ def test_get_nonexistent_conversation_returns_404():
 
     mock_sb = mock_supabase()
     conv_query = MagicMock()
-    conv_query.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value.data = None
+    conv_query.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
     mock_sb.table.return_value = conv_query
 
     with patch("routes.conversations.get_supabase", return_value=mock_sb):
@@ -190,7 +190,7 @@ def test_get_conversation_response_structure():
 
     mock_sb = mock_supabase()
     conv_query = MagicMock()
-    conv_query.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value.data = {
+    conv_query.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
         "id": "conv-1",
         "title": "Test",
         "user_id": user_id,
@@ -261,7 +261,7 @@ def test_get_conversation_with_multiple_messages():
 
     mock_sb = mock_supabase()
     conv_query = MagicMock()
-    conv_query.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value.data = {
+    conv_query.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
         "id": "conv-1",
         "title": "Test",
         "user_id": user_id,
