@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import logging
@@ -157,7 +158,22 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
             if msg_type in ("background", "composite", "image"):
                 image_url = interrupt_value.get("image_url", "")
                 if image_url:
-                    image_data = await sb.storage.from_("outputs").download(image_url)
+                    # Retry download — large files may not be ready immediately
+                    image_data = None
+                    for attempt in range(3):
+                        try:
+                            image_data = await sb.storage.from_("outputs").download(
+                                image_url
+                            )
+                            break
+                        except Exception:
+                            if attempt < 2:
+                                await asyncio.sleep(1)
+                    if not image_data:
+                        yield sse_event(
+                            {"error": "Failed to download image", "done": True}
+                        )
+                        return
                     image_b64 = base64.b64encode(image_data).decode()
 
                     # Save assistant message
