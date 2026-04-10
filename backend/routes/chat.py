@@ -41,7 +41,7 @@ async def _get_async_supabase():
 
 async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
     """Run the thumbnail graph and stream SSE events."""
-    graph = get_thumbnail_graph()
+    graph = await get_thumbnail_graph()
     config = {"configurable": {"thread_id": conversation_id}}
 
     # Check if there's a pending interrupt (resume) or fresh start

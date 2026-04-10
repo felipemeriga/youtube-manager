@@ -217,15 +217,15 @@ _graph_instance = None
 _checkpointer_cm = None
 
 
-def get_thumbnail_graph():
-    """Get or create the compiled graph with PostgresSaver."""
+async def get_thumbnail_graph():
+    """Get or create the compiled graph with AsyncPostgresSaver."""
     global _graph_instance, _checkpointer_cm
     if _graph_instance is None:
-        from langgraph.checkpoint.postgres import PostgresSaver
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
         from config import settings
 
-        _checkpointer_cm = PostgresSaver.from_conn_string(settings.database_url)
-        checkpointer = _checkpointer_cm.__enter__()
-        checkpointer.setup()
+        _checkpointer_cm = AsyncPostgresSaver.from_conn_string(settings.database_url)
+        checkpointer = await _checkpointer_cm.__aenter__()
+        await checkpointer.setup()
         _graph_instance = build_thumbnail_graph().compile(checkpointer=checkpointer)
     return _graph_instance

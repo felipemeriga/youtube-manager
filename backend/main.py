@@ -24,7 +24,7 @@ async def lifespan(app):
     if settings.database_url:
         from services.thumbnail_graph import get_thumbnail_graph
 
-        get_thumbnail_graph()
+        await get_thumbnail_graph()
         logger.info("LangGraph thumbnail graph initialized with PostgresSaver")
     else:
         logger.warning("DATABASE_URL not set — thumbnail graph will use fallback")
