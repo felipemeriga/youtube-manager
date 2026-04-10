@@ -39,10 +39,50 @@ async def _get_async_supabase():
     )
 
 
+async def _save_message(sb, conversation_id, role, content, msg_type, image_url=None):
+    """Save a message to the messages table for chat history."""
+    payload = {
+        "conversation_id": conversation_id,
+        "role": role,
+        "content": content,
+        "type": msg_type,
+    }
+    if image_url:
+        payload["image_url"] = image_url
+    await sb.table("messages").insert(payload).execute()
+
+
+def _user_label(content: str) -> str:
+    """Generate a readable label for the user's action."""
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, dict) and "action" in parsed:
+            action = parsed["action"]
+            if action == "approve":
+                return "Approved ✓"
+            if action == "feedback":
+                return parsed.get("feedback") or "Regenerate"
+            if action == "select_photo":
+                name = parsed.get("photo_name", "")
+                feedback = parsed.get("feedback")
+                if feedback:
+                    return f'Selected: {name} — "{feedback}"'
+                return f"Selected: {name}"
+            if action == "provide_text":
+                return f'Text: "{parsed.get("text", "")}"'
+            if action == "save":
+                return "Save"
+            return action
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return content
+
+
 async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
     """Run the thumbnail graph and stream SSE events."""
     graph = await get_thumbnail_graph()
     config = {"configurable": {"thread_id": conversation_id}}
+    sb = await _get_async_supabase()
 
     # Check if there's a pending interrupt (resume) or fresh start
     has_interrupt = False
@@ -60,7 +100,11 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
 
     try:
         if has_interrupt:
-            # Resume from interrupt — try parsing content as JSON action
+            # Save user message
+            label = _user_label(content)
+            await _save_message(sb, conversation_id, "user", label, "text")
+
+            # Resume from interrupt
             try:
                 resume_value = json.loads(content)
                 if not isinstance(resume_value, dict) or "action" not in resume_value:
@@ -70,7 +114,15 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
 
             result = await graph.ainvoke(Command(resume=resume_value), config)
         else:
-            # Fresh start — provide full initial state
+            # Fresh start — save user message and set title
+            await _save_message(sb, conversation_id, "user", content, "text")
+            await (
+                sb.table("conversations")
+                .update({"title": content[:50]})
+                .eq("id", conversation_id)
+                .execute()
+            )
+
             result = await graph.ainvoke(
                 {
                     "conversation_id": conversation_id,
@@ -105,9 +157,24 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
             if msg_type in ("background", "composite", "image"):
                 image_url = interrupt_value.get("image_url", "")
                 if image_url:
-                    sb = await _get_async_supabase()
                     image_data = await sb.storage.from_("outputs").download(image_url)
                     image_b64 = base64.b64encode(image_data).decode()
+
+                    # Save assistant message
+                    labels = {
+                        "background": "Here's the background.",
+                        "composite": "Here's the composite.",
+                        "image": "Here's your final thumbnail!",
+                    }
+                    await _save_message(
+                        sb,
+                        conversation_id,
+                        "assistant",
+                        labels.get(msg_type, ""),
+                        msg_type,
+                        image_url=image_url,
+                    )
+
                     yield sse_event(
                         {
                             "message_type": msg_type,
@@ -116,13 +183,28 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
                         }
                     )
             elif msg_type == "photo_grid":
+                photos_json = json.dumps(interrupt_value.get("photos", []))
+                await _save_message(
+                    sb,
+                    conversation_id,
+                    "assistant",
+                    photos_json,
+                    "photo_grid",
+                )
                 yield sse_event(
                     {
                         "message_type": "photo_grid",
-                        "content": json.dumps(interrupt_value.get("photos", [])),
+                        "content": photos_json,
                     }
                 )
             elif msg_type == "text_prompt":
+                await _save_message(
+                    sb,
+                    conversation_id,
+                    "assistant",
+                    "What text do you want on the thumbnail?",
+                    "text_prompt",
+                )
                 yield sse_event(
                     {
                         "message_type": "text_prompt",
@@ -133,6 +215,13 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
         else:
             # Graph completed (saved)
             final_url = result.get("final_url", "")
+            await _save_message(
+                sb,
+                conversation_id,
+                "assistant",
+                "Thumbnail saved!",
+                "text",
+            )
             yield sse_event(
                 {
                     "done": True,
