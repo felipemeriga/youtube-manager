@@ -57,6 +57,7 @@ async def generate_thumbnail(
             response_modalities=["IMAGE", "TEXT"],
             image_config=types.ImageConfig(
                 aspect_ratio="16:9",
+                image_size="4K",
             ),
         ),
     )
@@ -81,9 +82,12 @@ async def generate_background(
 
     if reference_images:
         contents.append(
-            "Here are reference thumbnails. Match the SAME visual style, "
-            "color grading, and effects — but generate ONLY the background "
-            "and logo. Do NOT include any person or any text."
+            "Here are reference thumbnails. Use them ONLY to understand the "
+            "general layout, logo placement, and composition style (where elements go). "
+            "Do NOT copy their colors, visual effects, or subject matter. "
+            "The background you generate must be about the TOPIC described below — "
+            "use visuals, colors, and imagery that represent THAT topic specifically. "
+            "Generate ONLY the background and logo. Do NOT include any person or any text."
         )
         for img_bytes in reference_images:
             contents.append(
@@ -109,6 +113,7 @@ async def generate_background(
             response_modalities=["IMAGE", "TEXT"],
             image_config=types.ImageConfig(
                 aspect_ratio="16:9",
+                image_size="4K",
             ),
         ),
     )
@@ -119,3 +124,137 @@ async def generate_background(
             return image.image_bytes
 
     raise Exception("No background image generated")
+
+
+async def composite_with_effects(
+    background_bytes: bytes,
+    person_bytes: bytes,
+    reference_images: list[bytes],
+    extra_instructions: str | None = None,
+) -> bytes:
+    """Use Gemini to composite person onto background with effects matching references."""
+    client = genai.Client(api_key=settings.gemini_api_key)
+
+    contents = []
+
+    # Show references so Gemini sees the person effects/glow/editing style
+    if reference_images:
+        contents.append(
+            "Here are reference YouTube thumbnails. Study how the PERSON is composited "
+            "into the background — the position, size, glow, lighting effects, color grading, "
+            "edge blending, and any visual effects. You must replicate the SAME style."
+        )
+        for img_bytes in reference_images:
+            contents.append(
+                types.Part.from_bytes(data=img_bytes, mime_type="image/png")
+            )
+
+    # Provide the background
+    contents.append(
+        "This is the FINAL background image. It already contains the logo and all "
+        "visual elements. You MUST use this EXACT image as the base layer — do NOT "
+        "regenerate, redraw, or modify the background, logo, or any element in it. "
+        "The ONLY change you make is placing the person on top:"
+    )
+    contents.append(types.Part.from_bytes(data=background_bytes, mime_type="image/png"))
+
+    # Provide the person photo
+    contents.append(
+        "This is the person photo. Remove its original background and place "
+        "the person onto the background image above:"
+    )
+    contents.append(types.Part.from_bytes(data=person_bytes, mime_type="image/png"))
+
+    instructions = (
+        "Instructions:\n"
+        "1. PRESERVE the person's face and body EXACTLY — do NOT redraw, alter, or distort them\n"
+        "2. Remove the person's original background completely\n"
+        "3. Apply the SAME visual effects as the reference thumbnails — glow, lighting, "
+        "color grading, edge effects, rim lighting, etc. to the person ONLY\n"
+        "4. Position and size the person the SAME way as in the reference thumbnails\n"
+        "5. Do NOT add any text\n"
+        "6. CRITICAL: The background, logo, and all existing elements must remain "
+        "PIXEL-PERFECT identical. Only the person is added on top."
+    )
+    if extra_instructions:
+        instructions += f"\n7. Additional request from user: {extra_instructions}"
+    contents.append(instructions)
+
+    response = client.models.generate_content(
+        model="gemini-3-pro-image-preview",
+        contents=contents,
+        config=types.GenerateContentConfig(
+            response_modalities=["IMAGE", "TEXT"],
+            image_config=types.ImageConfig(
+                aspect_ratio="16:9",
+                image_size="4K",
+            ),
+        ),
+    )
+
+    for part in response.parts:
+        if part.inline_data is not None:
+            image = part.as_image()
+            return image.image_bytes
+
+    raise Exception("No composite image generated")
+
+
+async def add_text_with_style(
+    composite_bytes: bytes,
+    text: str,
+    reference_images: list[bytes],
+) -> bytes:
+    """Use Gemini to add styled text to the composite, matching reference typography."""
+    client = genai.Client(api_key=settings.gemini_api_key)
+
+    contents = []
+
+    if reference_images:
+        contents.append(
+            "Here are reference YouTube thumbnails. Study the TYPOGRAPHY carefully — "
+            "the font style, font weight, text color, text size, text position, "
+            "text effects (shadow, stroke, glow, gradient), and how the text is "
+            "laid out relative to the person and background. You must replicate "
+            "the SAME text style on the image below."
+        )
+        for img_bytes in reference_images:
+            contents.append(
+                types.Part.from_bytes(data=img_bytes, mime_type="image/png")
+            )
+
+    contents.append(
+        "This is the current thumbnail (background + person already composited). "
+        "Add text to it WITHOUT changing anything else — keep the background, "
+        "person, logo, and all effects EXACTLY as they are:"
+    )
+    contents.append(types.Part.from_bytes(data=composite_bytes, mime_type="image/png"))
+
+    contents.append(
+        f'Add the following text to the thumbnail: "{text}"\n\n'
+        f"Requirements:\n"
+        f"1. Use the SAME font style, size, color, and effects as the reference thumbnails\n"
+        f"2. Place the text in the same position/area as in the references\n"
+        f"3. Make the text clearly readable and impactful\n"
+        f"4. Do NOT change the background, person, logo, or any other element\n"
+        f"5. The text should look like it belongs in this thumbnail series"
+    )
+
+    response = client.models.generate_content(
+        model="gemini-3-pro-image-preview",
+        contents=contents,
+        config=types.GenerateContentConfig(
+            response_modalities=["IMAGE", "TEXT"],
+            image_config=types.ImageConfig(
+                aspect_ratio="16:9",
+                image_size="4K",
+            ),
+        ),
+    )
+
+    for part in response.parts:
+        if part.inline_data is not None:
+            image = part.as_image()
+            return image.image_bytes
+
+    raise Exception("No text overlay image generated")
