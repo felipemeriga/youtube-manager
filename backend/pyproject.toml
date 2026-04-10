@@ -15,6 +15,9 @@ dependencies = [
     "anthropic>=0.92.0",
     "voyageai>=0.3.7",
     "pillow>=12.2.0",
+    "langgraph>=0.4.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
+    "psycopg[binary]>=3.2.0",
 ]
 
 [dependency-groups]

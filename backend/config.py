@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-haiku-4-5-20251001"
     voyage_api_key: str = ""
     cors_origins: str = "http://localhost:5173"
+    database_url: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
