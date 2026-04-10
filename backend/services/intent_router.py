@@ -52,10 +52,15 @@ async def classify_intent(user_input: str, current_step: str) -> UserIntent:
             model=ROUTER_MODEL,
         )
 
-        # Extract JSON from response
+        # Extract JSON from response — find first { ... } block
         text = response.strip()
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
+
+        # Find the first JSON object in the response
+        match = re.search(r"\{[^}]+\}", text)
+        if match:
+            text = match.group(0)
 
         data = json.loads(text)
         return UserIntent(
