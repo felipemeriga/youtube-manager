@@ -135,15 +135,18 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
             final_url = result.get("final_url", "")
             yield sse_event(
                 {
+                    "done": True,
                     "saved": True,
                     "content": "Thumbnail saved!",
                     "path": final_url,
                 }
             )
+            return
 
     except Exception as e:
         logger.exception("thumbnail graph error")
-        yield sse_event({"error": str(e)})
+        yield sse_event({"error": str(e), "done": True})
+        return
 
     yield sse_event({"done": True})
 
