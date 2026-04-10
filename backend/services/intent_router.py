@@ -18,7 +18,7 @@ Classify the user's message into ONE of these actions:
 - select_photo: user picked a photo (extract the filename into photo_name)
 - provide_text: user provided text for the thumbnail (extract into text)
 - save: user wants to save the final result (e.g. "save", "download", "done")
-- restart: user wants to start completely over (e.g. "start over", "new topic")
+- restart: user wants to start completely over or go back to the beginning (e.g. "start over", "new topic", "começar de novo", "do começo", "from the beginning", "recomeçar")
 
 Return ONLY a JSON object with these fields:
 {{"action": "...", "feedback": "..." or null, "photo_name": "..." or null, "text": "..." or null}}"""

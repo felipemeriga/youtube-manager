@@ -54,7 +54,7 @@ async def review_background(
 
 async def review_photo(
     state: ThumbnailState,
-) -> Command[Literal["composite", "show_photos"]]:
+) -> Command[Literal["composite", "show_photos", "generate_background"]]:
     """Interrupt to show photo grid. Resume routes based on selection."""
     user_response = interrupt(
         {
@@ -70,6 +70,11 @@ async def review_photo(
 
     action = intent.get("action", "select_photo")
 
+    if action == "restart":
+        return Command(
+            update={"user_intent": intent},
+            goto="generate_background",
+        )
     if action == "select_photo" and intent.get("photo_name"):
         return Command(
             update={
