@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 
@@ -51,12 +52,13 @@ async def _research_topic(topic: str) -> str:
 
 async def _fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
     files = await sb.storage.from_(bucket).list(path=user_id)
-    result = []
-    for f in files:
-        if f.get("name"):
-            data = await sb.storage.from_(bucket).download(f"{user_id}/{f['name']}")
-            result.append(data)
-    return result
+    names = [f["name"] for f in files if f.get("name")]
+
+    async def _download(name: str) -> bytes:
+        return await sb.storage.from_(bucket).download(f"{user_id}/{name}")
+
+    results = await asyncio.gather(*[_download(n) for n in names])
+    return list(results)
 
 
 async def generate_background_node(state: ThumbnailState) -> dict:
