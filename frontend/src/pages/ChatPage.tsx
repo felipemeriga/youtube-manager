@@ -149,9 +149,28 @@ export default function ChatPage() {
     content: string,
     type: string
   ) => {
-    // Add user message to UI immediately
+    // Add user message to UI immediately with readable label
     if (type === "text") {
-      setMessages((prev) => [...prev, { role: "user", content, type: "text" }]);
+      let displayContent = content;
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed?.action === "approve") displayContent = "Approved ✓";
+        else if (parsed?.action === "feedback")
+          displayContent = parsed.feedback || "Regenerate";
+        else if (parsed?.action === "select_photo") {
+          displayContent = parsed.feedback
+            ? `Selected: ${parsed.photo_name} — "${parsed.feedback}"`
+            : `Selected: ${parsed.photo_name}`;
+        } else if (parsed?.action === "provide_text")
+          displayContent = `Text: "${parsed.text}"`;
+        else if (parsed?.action === "save") displayContent = "Save";
+      } catch {
+        // Not JSON — use content as-is
+      }
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: displayContent, type: "text" },
+      ]);
     }
 
     setIsStreaming(true);

@@ -177,11 +177,13 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
 
                     yield sse_event(
                         {
+                            "done": True,
                             "message_type": msg_type,
                             "image_base64": image_b64,
                             "image_url": image_url,
                         }
                     )
+                    return
             elif msg_type == "photo_grid":
                 photos_json = json.dumps(interrupt_value.get("photos", []))
                 await _save_message(
@@ -193,10 +195,12 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
                 )
                 yield sse_event(
                     {
+                        "done": True,
                         "message_type": "photo_grid",
                         "content": photos_json,
                     }
                 )
+                return
             elif msg_type == "text_prompt":
                 await _save_message(
                     sb,
@@ -207,11 +211,13 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
                 )
                 yield sse_event(
                     {
+                        "done": True,
                         "message_type": "text_prompt",
                         "content": "What text do you want on the thumbnail?",
                         "suggestion": interrupt_value.get("suggestion", ""),
                     }
                 )
+                return
         else:
             # Graph completed (saved)
             final_url = result.get("final_url", "")
