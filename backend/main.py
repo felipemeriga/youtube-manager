@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +16,22 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 
-app = FastAPI(title="YouTube Manager API")
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app):
+    if settings.database_url:
+        from services.thumbnail_graph import get_thumbnail_graph
+
+        get_thumbnail_graph()
+        logger.info("LangGraph thumbnail graph initialized with PostgresSaver")
+    else:
+        logger.warning("DATABASE_URL not set — thumbnail graph will use fallback")
+    yield
+
+
+app = FastAPI(title="YouTube Manager API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
