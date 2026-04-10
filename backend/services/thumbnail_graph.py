@@ -214,16 +214,18 @@ def build_thumbnail_graph(use_memory_checkpointer: bool = False):
 
 
 _graph_instance = None
+_checkpointer_cm = None
 
 
 def get_thumbnail_graph():
     """Get or create the compiled graph with PostgresSaver."""
-    global _graph_instance
+    global _graph_instance, _checkpointer_cm
     if _graph_instance is None:
         from langgraph.checkpoint.postgres import PostgresSaver
         from config import settings
 
-        checkpointer = PostgresSaver.from_conn_string(settings.database_url)
+        _checkpointer_cm = PostgresSaver.from_conn_string(settings.database_url)
+        checkpointer = _checkpointer_cm.__enter__()
         checkpointer.setup()
         _graph_instance = build_thumbnail_graph().compile(checkpointer=checkpointer)
     return _graph_instance
