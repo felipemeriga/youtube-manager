@@ -47,7 +47,7 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
     # Check if there's a pending interrupt (resume) or fresh start
     has_interrupt = False
     try:
-        state = graph.get_state(config)
+        state = await graph.aget_state(config)
         if state and state.tasks:
             for task in state.tasks:
                 if hasattr(task, "interrupts") and task.interrupts:
@@ -68,10 +68,10 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
             except (json.JSONDecodeError, TypeError):
                 resume_value = content
 
-            result = graph.invoke(Command(resume=resume_value), config)
+            result = await graph.ainvoke(Command(resume=resume_value), config)
         else:
             # Fresh start — provide full initial state
-            result = graph.invoke(
+            result = await graph.ainvoke(
                 {
                     "conversation_id": conversation_id,
                     "user_id": user_id,
@@ -91,7 +91,7 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
             )
 
         # Check if graph interrupted (needs user input)
-        state = graph.get_state(config)
+        state = await graph.aget_state(config)
         pending_interrupts = []
         if state and state.tasks:
             for task in state.tasks:
