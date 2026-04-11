@@ -19,6 +19,44 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Entry router (flexible start based on uploaded image)
+# ---------------------------------------------------------------------------
+
+
+async def entry_router(
+    state: ThumbnailState,
+) -> Command[
+    Literal["generate_background", "show_photos", "review_composite", "ask_text"]
+]:
+    """Route to the right starting node based on user input and uploaded image."""
+    uploaded = state.get("uploaded_image_url")
+
+    if uploaded:
+        # User provided an image — classify what to do with it
+        intent = await classify_intent(
+            state.get("user_input", ""),
+            "entry_with_image",
+        )
+        action = intent.get("action", "use_as_background")
+
+        if action in ("use_as_composite", "skip_to_text"):
+            # Image is a composite, skip to text
+            return Command(
+                update={"composite_url": uploaded},
+                goto="ask_text",
+            )
+        else:
+            # Default: use as background
+            return Command(
+                update={"background_url": uploaded},
+                goto="show_photos",
+            )
+
+    # No image — normal flow, generate background
+    return Command(goto="generate_background")
+
+
+# ---------------------------------------------------------------------------
 # Review nodes (human-in-the-loop with interrupt)
 # ---------------------------------------------------------------------------
 
@@ -195,6 +233,9 @@ def build_thumbnail_graph(use_memory_checkpointer: bool = False):
     builder.add_node("add_text", add_text_node)
     builder.add_node("save", save_node)
 
+    # Entry router (flexible start)
+    builder.add_node("entry_router", entry_router)
+
     # Review nodes (human-in-the-loop)
     builder.add_node("review_background", review_background)
     builder.add_node("review_photo", review_photo)
@@ -203,7 +244,7 @@ def build_thumbnail_graph(use_memory_checkpointer: bool = False):
     builder.add_node("review_final", review_final)
 
     # Static edges: generation -> review (one-way)
-    builder.add_edge(START, "generate_background")
+    builder.add_edge(START, "entry_router")
     builder.add_edge("generate_background", "review_background")
     builder.add_edge("show_photos", "review_photo")
     builder.add_edge("composite", "review_composite")
