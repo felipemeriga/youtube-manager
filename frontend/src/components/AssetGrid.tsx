@@ -174,7 +174,7 @@ export default function AssetGrid({
   if (files.length === 0) {
     return (
       <Box sx={{ textAlign: "center", py: 4 }}>
-        <Typography color="text.secondary">No files yet</Typography>
+        <Typography color="text.secondary">Nenhum arquivo</Typography>
       </Box>
     );
   }

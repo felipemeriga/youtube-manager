@@ -28,7 +28,8 @@ interface ChatAreaProps {
   onApprove: () => void;
   onReject: () => void;
   onTopicSelect?: (index: number) => void;
-  onPhotoSelect?: (name: string) => void;
+  onPhotoSelect?: (name: string, instructions?: string) => void;
+  onSubmitText?: (text: string) => void;
   conversationMode?: string;
   models?: ModelOption[];
   selectedModel?: string;
@@ -45,6 +46,7 @@ export default function ChatArea({
   onReject,
   onTopicSelect,
   onPhotoSelect,
+  onSubmitText,
   conversationMode,
   models,
   selectedModel,
@@ -60,6 +62,7 @@ export default function ChatArea({
   }, [messages, streamingContent]);
 
   const isEmpty = messages.length === 0 && !isStreaming;
+
 
   return (
     <Box
@@ -97,8 +100,8 @@ export default function ChatArea({
             </Box>
             <Typography variant="h6" color="text.secondary">
               {conversationMode === "script"
-                ? "Describe the video you want to create"
-                : "Describe the thumbnail you want"}
+                ? "Descreva o vídeo que você quer criar"
+                : "Descreva a thumbnail que você quer"}
             </Typography>
             <Typography
               variant="body2"
@@ -106,8 +109,8 @@ export default function ChatArea({
               sx={{ maxWidth: 400, textAlign: "center" }}
             >
               {conversationMode === "script"
-                ? "Tell me about the topic or ask for trending suggestions..."
-                : "Include the video title and any style preferences. The agent will analyze your references and create a plan."}
+                ? "Conte sobre o tema ou peça sugestões de tendências..."
+                : "Inclua o título do vídeo e preferências de estilo. O agente vai analisar suas referências e criar um plano."}
             </Typography>
           </Box>
         )}
@@ -122,6 +125,7 @@ export default function ChatArea({
             onReject={onReject}
             onTopicSelect={onTopicSelect}
             onPhotoSelect={onPhotoSelect}
+            onSubmitText={onSubmitText}
             conversationMode={conversationMode}
           />
         ))}

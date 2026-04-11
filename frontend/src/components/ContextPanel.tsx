@@ -64,7 +64,7 @@ export default function ContextPanel({
             letterSpacing: "0.02em",
           }}
         >
-          Conversations
+          Conversas
         </Typography>
         <IconButton
           size="small"
@@ -112,7 +112,7 @@ export default function ContextPanel({
               }}
             >
               <ListItemText
-                primary={conv.title || "New conversation"}
+                primary={conv.title || "Nova conversa"}
                 primaryTypographyProps={{
                   noWrap: true,
                   fontSize: 13,
@@ -158,7 +158,7 @@ export default function ContextPanel({
                     letterSpacing: 0.5,
                   }}
                 >
-                  {conv.mode === "script" ? "Script" : "Thumb"}
+                  {conv.mode === "script" ? "Roteiro" : "Thumb"}
                 </Typography>
               </Box>
             </Box>

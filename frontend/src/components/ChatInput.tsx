@@ -76,7 +76,7 @@ export default function ChatInput({
               }}
             >
               <MenuItem value="">
-                <em>Default model</em>
+                <em>Modelo padrão</em>
               </MenuItem>
               {models.map((m) => (
                 <MenuItem key={m.id} value={m.id}>
@@ -92,7 +92,7 @@ export default function ChatInput({
           fullWidth
           multiline
           maxRows={4}
-          placeholder="Type a message..."
+          placeholder="Digite uma mensagem..."
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}

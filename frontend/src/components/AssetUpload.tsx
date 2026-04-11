@@ -128,10 +128,10 @@ export default function AssetUpload({
         />
         <Typography variant="body2" color="text.secondary">
           {isUploading
-            ? `Uploading ${completedCount}/${totalCount}...`
+            ? `Enviando ${completedCount}/${totalCount}...`
             : dragOver
-            ? "Drop files to upload"
-            : "Drag & drop files here, or click to browse"}
+            ? "Solte os arquivos aqui"
+            : "Arraste arquivos aqui ou clique para procurar"}
         </Typography>
         {isUploading && (
           <LinearProgress

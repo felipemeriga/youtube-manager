@@ -8,7 +8,7 @@ interface ApprovalButtonsProps {
   onApprove: () => void;
   onReject: () => void;
   disabled?: boolean;
-  variant?: "thumbnail" | "script";
+  variant?: "thumbnail" | "script" | "step";
 }
 
 export default function ApprovalButtons({
@@ -27,7 +27,7 @@ export default function ApprovalButtons({
           disabled={disabled}
           sx={{ background: "linear-gradient(135deg, #059669, #10b981)" }}
         >
-          Approve
+          Aprovar
         </Button>
         <Button
           variant="outlined"
@@ -36,7 +36,32 @@ export default function ApprovalButtons({
           disabled={disabled}
           sx={{ borderColor: "rgba(239,68,68,0.5)", color: "#ef4444" }}
         >
-          Reject
+          Rejeitar
+        </Button>
+      </Box>
+    );
+  }
+
+  if (variant === "step") {
+    return (
+      <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+        <Button
+          variant="contained"
+          startIcon={<CheckIcon />}
+          onClick={onApprove}
+          disabled={disabled}
+          sx={{ background: "linear-gradient(135deg, #059669, #10b981)" }}
+        >
+          Aprovar
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={onReject}
+          disabled={disabled}
+          sx={{ borderColor: "rgba(124,58,237,0.5)", color: "#7c3aed" }}
+        >
+          Refazer
         </Button>
       </Box>
     );
@@ -51,7 +76,7 @@ export default function ApprovalButtons({
         disabled={disabled}
         sx={{ background: "linear-gradient(135deg, #059669, #10b981)" }}
       >
-        Save to Outputs
+        Salvar
       </Button>
       <Button
         variant="outlined"
@@ -60,7 +85,7 @@ export default function ApprovalButtons({
         disabled={disabled}
         sx={{ borderColor: "rgba(124,58,237,0.5)", color: "#7c3aed" }}
       >
-        Regenerate
+        Refazer
       </Button>
     </Box>
   );

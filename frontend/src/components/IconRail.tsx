@@ -54,7 +54,7 @@ export default function IconRail() {
         </IconButton>
       </Tooltip>
 
-      <Tooltip title="Assets" placement="right">
+      <Tooltip title="Arquivos" placement="right">
         <IconButton
           onClick={() => navigate("/assets")}
           sx={{
@@ -73,7 +73,7 @@ export default function IconRail() {
         </IconButton>
       </Tooltip>
 
-      <Tooltip title="Settings" placement="right">
+      <Tooltip title="Configurações" placement="right">
         <IconButton
           onClick={() => navigate("/settings")}
           sx={{
@@ -94,7 +94,7 @@ export default function IconRail() {
 
       <Box sx={{ flex: 1 }} />
 
-      <Tooltip title="Sign out" placement="right">
+      <Tooltip title="Sair" placement="right">
         <IconButton
           onClick={signOut}
           sx={{

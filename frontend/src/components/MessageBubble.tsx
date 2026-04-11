@@ -1,4 +1,6 @@
-import { Box } from "@mui/material";
+import { useState } from "react";
+import { Box, TextField, Button } from "@mui/material";
+import SendIcon from "@mui/icons-material/Send";
 import ReactMarkdown from "react-markdown";
 import ApprovalButtons from "./ApprovalButtons";
 import PhotoGrid from "./PhotoGrid";
@@ -22,7 +24,8 @@ interface MessageBubbleProps {
   onApprove?: () => void;
   onReject?: () => void;
   onTopicSelect?: (index: number) => void;
-  onPhotoSelect?: (name: string) => void;
+  onPhotoSelect?: (name: string, instructions?: string) => void;
+  onSubmitText?: (text: string) => void;
   isLatest?: boolean;
   isStreaming?: boolean;
   conversationMode?: string;
@@ -141,6 +144,7 @@ export default function MessageBubble({
   onReject,
   onTopicSelect,
   onPhotoSelect,
+  onSubmitText,
   isLatest,
   isStreaming,
   conversationMode,
@@ -236,6 +240,16 @@ export default function MessageBubble({
             }
           })()}
 
+        {message.type === "text_prompt" && (
+          isLatest && !isStreaming && onSubmitText ? (
+            <TextPromptInput onSubmit={onSubmitText} />
+          ) : (
+            <Box sx={{ fontSize: 14, color: "rgba(255,255,255,0.5)" }}>
+              {message.content}
+            </Box>
+          )
+        )}
+
         {message.type === "topics" &&
           (() => {
             try {
@@ -264,6 +278,7 @@ export default function MessageBubble({
 
         {message.type !== "topics" &&
           message.type !== "photo_grid" &&
+          message.type !== "text_prompt" &&
           message.type !== "outline" &&
           message.type !== "script" &&
           message.type !== "research" && (
@@ -273,7 +288,15 @@ export default function MessageBubble({
           )}
 
         {showImageButtons && (
-          <ApprovalButtons onApprove={onApprove!} onReject={onReject!} />
+          <ApprovalButtons
+            onApprove={onApprove!}
+            onReject={onReject!}
+            variant={
+              message.type === "background" || message.type === "composite"
+                ? "step"
+                : "thumbnail"
+            }
+          />
         )}
 
         {showButtons && message.type === "script" && (
@@ -283,6 +306,84 @@ export default function MessageBubble({
             variant="script"
           />
         )}
+      </Box>
+    </Box>
+  );
+}
+
+function TextPromptInput({ onSubmit }: { onSubmit: (text: string) => void }) {
+  const [text, setText] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setSubmitted(true);
+    onSubmit(trimmed);
+  };
+
+  return (
+    <Box sx={{ mt: 1.5 }}>
+      <Box
+        sx={{
+          fontSize: 14,
+          lineHeight: 1.6,
+          color: "rgba(255,255,255,0.8)",
+          mb: 1.5,
+        }}
+      >
+        Qual texto você quer na thumbnail?
+      </Box>
+      <Box sx={{ display: "flex", gap: 1, alignItems: "flex-end" }}>
+        <TextField
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder='ex: "Guerra do Irã e IA"'
+          disabled={submitted}
+          size="small"
+          fullWidth
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              color: "#e2e8f0",
+              backgroundColor: "rgba(0,0,0,0.2)",
+              borderRadius: 2,
+              "& fieldset": {
+                borderColor: "rgba(124,58,237,0.3)",
+              },
+              "&:hover fieldset": {
+                borderColor: "rgba(124,58,237,0.5)",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "#7c3aed",
+              },
+            },
+            "& .MuiInputBase-input::placeholder": {
+              color: "rgba(255,255,255,0.3)",
+            },
+          }}
+        />
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={submitted || !text.trim()}
+          sx={{
+            backgroundColor: "#7c3aed",
+            minWidth: 44,
+            height: 40,
+            "&:hover": { backgroundColor: "#6d28d9" },
+            "&.Mui-disabled": {
+              backgroundColor: "rgba(124,58,237,0.3)",
+            },
+          }}
+        >
+          <SendIcon sx={{ fontSize: 18 }} />
+        </Button>
       </Box>
     </Box>
   );

@@ -1,12 +1,15 @@
 import { Box, Typography } from "@mui/material";
 
 const STAGE_LABELS: Record<string, string> = {
-  analyzing: "Researching topic visuals...",
-  generating: "Generating thumbnail...",
-  finding_trends: "Searching for recent trends...",
-  writing_script: "Researching & writing full script...",
-  saving: "Saving script...",
-  thinking: "Thinking...",
+  analyzing: "Pesquisando tema...",
+  generating: "Gerando...",
+  generating_background: "Gerando...",
+  compositing: "Gerando...",
+  adding_text: "Gerando...",
+  finding_trends: "Buscando tendências recentes...",
+  writing_script: "Pesquisando e escrevendo roteiro...",
+  saving: "Salvando...",
+  thinking: "Pensando...",
 };
 
 export default function ThinkingBar({ stage }: { stage: string }) {

@@ -16,12 +16,12 @@ import AddIcon from "@mui/icons-material/Add";
 import type { ScriptSection } from "../lib/api";
 
 const DEFAULT_SECTION_NAMES = new Set([
-  "Hook / Opening",
-  "Timing Table",
-  "Stats & Data",
-  "Talking Points",
-  "Full Script",
-  "Verified Sources",
+  "Gancho / Abertura",
+  "Tabela de Tempos",
+  "Dados e Estatísticas",
+  "Pontos de Discussão",
+  "Roteiro Completo",
+  "Fontes Verificadas",
 ]);
 
 interface Props {
@@ -95,11 +95,10 @@ export default function ScriptTemplateBuilder({ sections, onChange }: Props) {
       }}
     >
       <Typography variant="h5" sx={{ fontWeight: 600 }}>
-        Script Template
+        Modelo do Roteiro
       </Typography>
       <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.5)" }}>
-        Customize the sections included in your generated scripts. Toggle,
-        reorder, or add custom sections.
+        Personalize as seções incluídas nos roteiros gerados. Ative, reordene ou adicione seções personalizadas.
       </Typography>
 
       <Box>
@@ -174,14 +173,14 @@ export default function ScriptTemplateBuilder({ sections, onChange }: Props) {
       {adding ? (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
           <TextField
-            label="Section Name"
+            label="Nome da Seção"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             size="small"
             fullWidth
           />
           <TextField
-            label="Description"
+            label="Descrição"
             value={newDesc}
             onChange={(e) => setNewDesc(e.target.value)}
             size="small"
@@ -196,7 +195,7 @@ export default function ScriptTemplateBuilder({ sections, onChange }: Props) {
               onClick={addSection}
               disabled={!newName.trim() || !newDesc.trim()}
             >
-              Add
+              Adicionar
             </Button>
             <Button
               size="small"
@@ -206,7 +205,7 @@ export default function ScriptTemplateBuilder({ sections, onChange }: Props) {
                 setNewDesc("");
               }}
             >
-              Cancel
+              Cancelar
             </Button>
           </Box>
         </Box>
@@ -220,7 +219,7 @@ export default function ScriptTemplateBuilder({ sections, onChange }: Props) {
             "&:hover": { color: "#7c3aed" },
           }}
         >
-          Add Section
+          Adicionar Seção
         </Button>
       )}
     </Paper>
