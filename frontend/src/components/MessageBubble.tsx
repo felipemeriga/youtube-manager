@@ -325,13 +325,17 @@ function AuthOutputImage({
         ? storagePath.split("/").pop()!
         : storagePath;
 
-      const res = await fetch(`/api/assets/outputs/${filename}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        revoke = URL.createObjectURL(blob);
-        setSrc(revoke);
+      try {
+        const res = await fetch(`/api/assets/outputs/${filename}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          revoke = URL.createObjectURL(blob);
+          setSrc(revoke);
+        }
+      } catch {
+        // Network error — image unavailable
       }
       setLoading(false);
     };

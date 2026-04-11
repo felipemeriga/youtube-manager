@@ -199,6 +199,7 @@ async def save_node(state: ThumbnailState) -> dict:
         final_path, image_data, {"content-type": "image/png"}
     )
 
-    await sb.storage.from_("outputs").remove([state["final_url"]])
+    # Keep temp file — it's referenced by the chat message history.
+    # Old temp files can be cleaned up periodically.
 
     return {"final_url": final_path}
