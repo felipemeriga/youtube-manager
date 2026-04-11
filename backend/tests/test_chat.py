@@ -77,6 +77,7 @@ def test_chat_endpoint_default_type_is_text():
         conversation_id="conv-1",
         content="Hello",
         user_id="test-user",
+        image_url=None,
     )
 
 
@@ -194,5 +195,6 @@ def test_chat_dispatches_to_thumbnail_stream_for_thumbnail_mode():
         conversation_id="conv-1",
         content="Create a thumbnail",
         user_id="test-user",
+        image_url=None,
     )
     mock_script.assert_not_called()

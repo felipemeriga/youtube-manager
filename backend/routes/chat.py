@@ -28,6 +28,7 @@ class ChatRequest(BaseModel):
     conversation_id: str
     content: str
     type: str = "text"
+    image_url: str | None = None  # Storage path of uploaded image
 
 
 def sse_event(data: dict) -> str:
@@ -79,7 +80,12 @@ def _user_label(content: str) -> str:
     return content
 
 
-async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
+async def thumbnail_stream(
+    conversation_id: str,
+    content: str,
+    user_id: str,
+    image_url: str | None = None,
+):
     """Run the thumbnail graph and stream SSE events."""
     graph = await get_thumbnail_graph()
     config = {"configurable": {"thread_id": conversation_id}}
@@ -113,6 +119,16 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
             except (json.JSONDecodeError, TypeError):
                 resume_value = content
 
+            # Include uploaded image in resume value if provided
+            if image_url and isinstance(resume_value, dict):
+                resume_value["image_url"] = image_url
+            elif image_url and isinstance(resume_value, str):
+                resume_value = {
+                    "action": "use_as_background",
+                    "image_url": image_url,
+                    "feedback": resume_value if resume_value else None,
+                }
+
             result = await graph.ainvoke(Command(resume=resume_value), config)
         else:
             # Fresh start — save user message and set title
@@ -139,6 +155,7 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
                     "user_intent": None,
                     "extra_instructions": None,
                     "photo_list": [],
+                    "uploaded_image_url": image_url,
                 },
                 config,
             )
@@ -288,6 +305,7 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
             conversation_id=request.conversation_id,
             content=request.content,
             user_id=user_id,
+            image_url=request.image_url,
         )
 
     return StreamingResponse(stream, media_type="text/event-stream")
