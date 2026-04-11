@@ -24,7 +24,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-VALID_BUCKETS = {"reference-thumbs", "personal-photos", "logos", "outputs", "scripts", "fonts"}
+VALID_BUCKETS = {
+    "reference-thumbs",
+    "personal-photos",
+    "logos",
+    "outputs",
+    "scripts",
+    "fonts",
+}
 MAX_FILE_SIZES = {
     "reference-thumbs": 10 * 1024 * 1024,
     "personal-photos": 10 * 1024 * 1024,
@@ -71,9 +78,17 @@ async def upload_asset(
             status_code=400, detail=f"File too large. Max {max_size // (1024 * 1024)}MB"
         )
 
+    import uuid
+
     sb = get_supabase()
     safe_name = sanitize_filename(file.filename or "file")
-    storage_path = f"{user_id}/{safe_name}"
+    # Add unique prefix to avoid 409 Duplicate on re-uploads
+    name_parts = safe_name.rsplit(".", 1)
+    if len(name_parts) == 2:
+        unique_name = f"{name_parts[0]}_{uuid.uuid4().hex[:6]}.{name_parts[1]}"
+    else:
+        unique_name = f"{safe_name}_{uuid.uuid4().hex[:6]}"
+    storage_path = f"{user_id}/{unique_name}"
     sb.storage.from_(bucket).upload(
         storage_path, content, {"content-type": file.content_type}
     )
@@ -83,9 +98,9 @@ async def upload_asset(
         and settings.anthropic_api_key
         and settings.voyage_api_key
     ):
-        asyncio.create_task(_index_uploaded_photo(user_id, safe_name, content))
+        asyncio.create_task(_index_uploaded_photo(user_id, unique_name, content))
 
-    return {"name": safe_name, "bucket": bucket, "path": storage_path}
+    return {"name": unique_name, "bucket": bucket, "path": storage_path}
 
 
 async def _index_uploaded_photo(
@@ -145,38 +160,6 @@ async def reindex_photos(user_id: str = Depends(get_current_user)):
         "total": len(photo_names),
         "skipped": len(indexed_names),
     }
-
-
-@router.post("/api/assets/reference-thumbs/analyze")
-async def analyze_reference_thumbs(user_id: str = Depends(get_current_user)):
-    """Analyze reference thumbnails and store text style info."""
-    if not settings.anthropic_api_key:
-        raise HTTPException(status_code=400, detail="Anthropic API key required")
-
-    sb_async = await create_async_client(settings.supabase_url, settings.supabase_service_key)
-
-    # Fetch reference images
-    files = await sb_async.storage.from_("reference-thumbs").list(path=user_id)
-    images = []
-    for f in files:
-        if f.get("name"):
-            data = await sb_async.storage.from_("reference-thumbs").download(f"{user_id}/{f['name']}")
-            images.append(data)
-
-    if not images:
-        raise HTTPException(status_code=400, detail="No reference thumbnails found")
-
-    from services.reference_analyzer import analyze_references
-    style = await analyze_references(images)
-
-    if not style:
-        raise HTTPException(status_code=500, detail="Analysis failed")
-
-    # Store in channel_personas
-    sb_sync = get_supabase()
-    sb_sync.table("channel_personas").update({"text_style": style}).eq("user_id", user_id).execute()
-
-    return style
 
 
 @router.delete("/api/assets/{bucket}/{filename}")
