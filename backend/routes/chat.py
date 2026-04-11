@@ -60,19 +60,19 @@ def _user_label(content: str) -> str:
         if isinstance(parsed, dict) and "action" in parsed:
             action = parsed["action"]
             if action == "approve":
-                return "Approved ✓"
+                return "Aprovado ✓"
             if action == "feedback":
-                return parsed.get("feedback") or "Regenerate"
+                return parsed.get("feedback") or "Refazer"
             if action == "select_photo":
                 name = parsed.get("photo_name", "")
                 feedback = parsed.get("feedback")
                 if feedback:
-                    return f'Selected: {name} — "{feedback}"'
-                return f"Selected: {name}"
+                    return f'Selecionado: {name} — "{feedback}"'
+                return f"Selecionado: {name}"
             if action == "provide_text":
-                return f'Text: "{parsed.get("text", "")}"'
+                return f'Texto: "{parsed.get("text", "")}"'
             if action == "save":
-                return "Save"
+                return "Salvar"
             return action
     except (json.JSONDecodeError, TypeError):
         pass
@@ -171,16 +171,16 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
                                 await asyncio.sleep(1)
                     if not image_data:
                         yield sse_event(
-                            {"error": "Failed to download image", "done": True}
+                            {"error": "Falha ao baixar imagem", "done": True}
                         )
                         return
                     image_b64 = base64.b64encode(image_data).decode()
 
                     # Save assistant message
                     labels = {
-                        "background": "Here's the background.",
-                        "composite": "Here's the composite.",
-                        "image": "Here's your final thumbnail!",
+                        "background": "Aqui está o fundo.",
+                        "composite": "Aqui está a composição.",
+                        "image": "Aqui está sua thumbnail final!",
                     }
                     await _save_message(
                         sb,
@@ -222,14 +222,14 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
                     sb,
                     conversation_id,
                     "assistant",
-                    "What text do you want on the thumbnail?",
+                    "Qual texto você quer na thumbnail?",
                     "text_prompt",
                 )
                 yield sse_event(
                     {
                         "done": True,
                         "message_type": "text_prompt",
-                        "content": "What text do you want on the thumbnail?",
+                        "content": "Qual texto você quer na thumbnail?",
                         "suggestion": interrupt_value.get("suggestion", ""),
                     }
                 )
@@ -241,14 +241,14 @@ async def thumbnail_stream(conversation_id: str, content: str, user_id: str):
                 sb,
                 conversation_id,
                 "assistant",
-                "Thumbnail saved!",
+                "Thumbnail salva!",
                 "text",
             )
             yield sse_event(
                 {
                     "done": True,
                     "saved": True,
-                    "content": "Thumbnail saved!",
+                    "content": "Thumbnail salva!",
                     "path": final_url,
                 }
             )
