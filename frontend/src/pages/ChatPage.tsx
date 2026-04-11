@@ -47,9 +47,11 @@ export default function ChatPage() {
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
   const [conversationModel, setConversationModel] = useState<string>("");
   const [showModeDialog, setShowModeDialog] = useState(false);
-  const pendingMessageRef = useRef<{ content: string; type: string } | null>(
-    null
-  );
+  const pendingMessageRef = useRef<{
+    content: string;
+    type: string;
+    imageUrl?: string;
+  } | null>(null);
   const streamingRef = useRef("");
   const imageRef = useRef<{ base64: string; url: string } | null>(null);
 
@@ -120,9 +122,9 @@ export default function ChatPage() {
     setConversationMode(mode);
 
     if (pendingMessageRef.current) {
-      const { content, type } = pendingMessageRef.current;
+      const { content, type, imageUrl } = pendingMessageRef.current;
       pendingMessageRef.current = null;
-      await doStream(newConv.id, content, type);
+      await doStream(newConv.id, content, type, imageUrl);
     }
   };
 
@@ -135,19 +137,24 @@ export default function ChatPage() {
     }
   };
 
-  const sendMessage = async (content: string, type: string = "text") => {
+  const sendMessage = async (
+    content: string,
+    type: string = "text",
+    imageUrl?: string,
+  ) => {
     if (!selectedId) {
-      pendingMessageRef.current = { content, type };
+      pendingMessageRef.current = { content, type, imageUrl };
       setShowModeDialog(true);
       return;
     }
-    await doStream(selectedId, content, type);
+    await doStream(selectedId, content, type, imageUrl);
   };
 
   const doStream = async (
     conversationId: string,
     content: string,
-    type: string
+    type: string,
+    imageUrl?: string,
   ) => {
     // Add user message to UI immediately with readable label
     if (type === "text") {
@@ -229,7 +236,7 @@ export default function ChatPage() {
           setCurrentStage(null);
           loadConversations();
         },
-      });
+      }, imageUrl);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -245,7 +252,8 @@ export default function ChatPage() {
     }
   };
 
-  const handleSend = (content: string) => sendMessage(content, "text");
+  const handleSend = (content: string, imageUrl?: string) =>
+    sendMessage(content, "text", imageUrl);
 
   const handleTopicSelect = (index: number) => {
     if (!selectedId) return;

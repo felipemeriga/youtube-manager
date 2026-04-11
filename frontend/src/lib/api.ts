@@ -61,14 +61,22 @@ export async function streamChat(
   conversationId: string,
   content: string,
   type: string,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  imageUrl?: string,
 ): Promise<void> {
   const headers = await getAuthHeaders();
+
+  const body: Record<string, unknown> = {
+    conversation_id: conversationId,
+    content,
+    type,
+  };
+  if (imageUrl) body.image_url = imageUrl;
 
   const response = await fetch("/api/chat", {
     method: "POST",
     headers,
-    body: JSON.stringify({ conversation_id: conversationId, content, type }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok || !response.body) {
