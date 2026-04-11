@@ -84,8 +84,11 @@ async def review_background(
         return Command(goto="show_photos")
     else:
         # feedback or restart — regenerate background
+        updates: dict = {"user_intent": intent}
+        if action == "restart" and intent.get("feedback"):
+            updates["topic"] = intent["feedback"]
         return Command(
-            update={"user_intent": intent},
+            update=updates,
             goto="generate_background",
         )
 
@@ -109,8 +112,12 @@ async def review_photo(
     action = intent.get("action", "select_photo")
 
     if action == "restart":
+        updates: dict = {"user_intent": intent}
+        # If restart includes a new description, update the topic
+        if intent.get("feedback"):
+            updates["topic"] = intent["feedback"]
         return Command(
-            update={"user_intent": intent},
+            update=updates,
             goto="generate_background",
         )
     if action == "select_photo" and intent.get("photo_name"):
@@ -154,7 +161,10 @@ async def review_composite(
             goto="composite",
         )
     elif action == "restart":
-        return Command(goto="generate_background")
+        updates_rc: dict = {"user_intent": intent}
+        if intent.get("feedback"):
+            updates_rc["topic"] = intent["feedback"]
+        return Command(update=updates_rc, goto="generate_background")
     else:
         return Command(goto="show_photos")
 
@@ -207,7 +217,10 @@ async def review_final(
             return Command(update={"thumb_text": text}, goto="add_text")
         return Command(goto="ask_text")
     elif action == "restart":
-        return Command(goto="generate_background")
+        updates_rf: dict = {"user_intent": intent}
+        if intent.get("feedback"):
+            updates_rf["topic"] = intent["feedback"]
+        return Command(update=updates_rf, goto="generate_background")
     else:
         return Command(goto="save")
 
