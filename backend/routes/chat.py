@@ -80,6 +80,36 @@ def _user_label(content: str) -> str:
     return content
 
 
+async def _resolve_image_url(sb, user_id: str, image_url: str | None) -> str | None:
+    """Resolve an image URL to an outputs storage path.
+
+    Handles:
+    - None → None
+    - Already in outputs (user_id/filename) → pass through
+    - From another bucket (bucket/filename) → copy to outputs
+    """
+    if not image_url:
+        return None
+
+    import uuid as _uuid
+
+    known_buckets = ["personal-photos", "reference-thumbs", "logos"]
+    for bucket in known_buckets:
+        if image_url.startswith(f"{bucket}/"):
+            filename = image_url[len(bucket) + 1 :]
+            src_path = f"{user_id}/{filename}"
+            data = await sb.storage.from_(bucket).download(src_path)
+            dest_name = f"uploaded_{_uuid.uuid4().hex[:6]}.png"
+            dest_path = f"{user_id}/{dest_name}"
+            await sb.storage.from_("outputs").upload(
+                dest_path, data, {"content-type": "image/png"}
+            )
+            return dest_path
+
+    # Already an outputs path
+    return image_url
+
+
 async def thumbnail_stream(
     conversation_id: str,
     content: str,
@@ -90,6 +120,9 @@ async def thumbnail_stream(
     graph = await get_thumbnail_graph()
     config = {"configurable": {"thread_id": conversation_id}}
     sb = await _get_async_supabase()
+
+    # Resolve image from other buckets to outputs
+    image_url = await _resolve_image_url(sb, user_id, image_url)
 
     # Check if there's a pending interrupt (resume) or fresh start
     has_interrupt = False
