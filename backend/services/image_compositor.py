@@ -14,7 +14,7 @@ def composite_person(
     person_bytes: bytes,
     style: dict,
 ) -> bytes:
-    """Composite a person photo onto a background image."""
+    """Composite a person photo onto a background image (simple paste, no effects)."""
     bg = Image.open(io.BytesIO(background_bytes)).convert("RGBA")
     bg = bg.resize((THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT), Image.Resampling.LANCZOS)
 
@@ -45,7 +45,7 @@ def composite_person(
     else:  # center
         y = (THUMBNAIL_HEIGHT - target_height) // 2
 
-    bg.paste(person, (x, y), person if person.mode == "RGBA" else None)
+    bg.paste(person, (x, y), person)
 
     output = io.BytesIO()
     bg.convert("RGB").save(output, format="PNG", quality=95)
@@ -127,8 +127,12 @@ def overlay_text(
 
         if has_stroke and stroke_width > 0:
             draw.text(
-                (x, y), line, font=font, fill=text_color,
-                stroke_width=stroke_width, stroke_fill=stroke_color,
+                (x, y),
+                line,
+                font=font,
+                fill=text_color,
+                stroke_width=stroke_width,
+                stroke_fill=stroke_color,
             )
         else:
             draw.text((x, y), line, font=font, fill=text_color)
