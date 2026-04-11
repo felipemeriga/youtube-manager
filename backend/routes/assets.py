@@ -173,6 +173,37 @@ async def delete_asset(
     return {"status": "deleted", "name": filename}
 
 
+@router.get("/api/assets/{bucket}/signed/{filename}")
+async def get_signed_url(
+    bucket: str, filename: str, user_id: str = Depends(get_current_user)
+):
+    """Get a temporary signed URL for an asset (valid 1 hour)."""
+    validate_bucket(bucket)
+    sb = get_supabase()
+    storage_path = f"{user_id}/{filename}"
+    result = sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
+    if result and result.get("signedURL"):
+        return {"signed_url": result["signedURL"]}
+    raise HTTPException(status_code=404, detail="File not found")
+
+
+@router.post("/api/assets/batch-signed-urls")
+async def get_batch_signed_urls(
+    request: dict, user_id: str = Depends(get_current_user)
+):
+    """Get signed URLs for multiple files at once.
+
+    Body: {"bucket": "outputs", "filenames": ["file1.png", "file2.png"]}
+    """
+    bucket = request.get("bucket", "")
+    filenames = request.get("filenames", [])
+    validate_bucket(bucket)
+    sb = get_supabase()
+    paths = [f"{user_id}/{f}" for f in filenames]
+    result = sb.storage.from_(bucket).create_signed_urls(paths, 3600)
+    return result
+
+
 @router.get("/api/assets/{bucket}/{filename}")
 async def download_asset(
     bucket: str, filename: str, user_id: str = Depends(get_current_user)
