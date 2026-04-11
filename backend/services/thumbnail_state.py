@@ -31,3 +31,6 @@ class ThumbnailState(TypedDict):
 
     # Photo list for selection
     photo_list: list[dict]
+
+    # User-uploaded image storage path
+    uploaded_image_url: str | None
