@@ -154,16 +154,16 @@ export default function ChatPage() {
       let displayContent = content;
       try {
         const parsed = JSON.parse(content);
-        if (parsed?.action === "approve") displayContent = "Approved ✓";
+        if (parsed?.action === "approve") displayContent = "Aprovado ✓";
         else if (parsed?.action === "feedback")
-          displayContent = parsed.feedback || "Regenerate";
+          displayContent = parsed.feedback || "Refazer";
         else if (parsed?.action === "select_photo") {
           displayContent = parsed.feedback
-            ? `Selected: ${parsed.photo_name} — "${parsed.feedback}"`
-            : `Selected: ${parsed.photo_name}`;
+            ? `Selecionado: ${parsed.photo_name} — "${parsed.feedback}"`
+            : `Selecionado: ${parsed.photo_name}`;
         } else if (parsed?.action === "provide_text")
-          displayContent = `Text: "${parsed.text}"`;
-        else if (parsed?.action === "save") displayContent = "Save";
+          displayContent = `Texto: "${parsed.text}"`;
+        else if (parsed?.action === "save") displayContent = "Salvar";
       } catch {
         // Not JSON — use content as-is
       }
@@ -194,7 +194,7 @@ export default function ChatPage() {
         },
         onError: (error) => {
           const content = error.toLowerCase().includes("persona")
-            ? `${error} [Go to Settings](/settings)`
+            ? `${error} [Ir para Configurações](/settings)`
             : `Error: ${error}`;
           setMessages((prev) => [
             ...prev,
@@ -235,7 +235,7 @@ export default function ChatPage() {
         ...prev,
         {
           role: "assistant",
-          content: "Something went wrong. Please try again.",
+          content: "Algo deu errado. Tente novamente.",
           type: "text",
         },
       ]);
@@ -292,7 +292,7 @@ export default function ChatPage() {
     if (!selectedId) return;
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.type === "script") {
-      sendMessage("Please rewrite this script with improvements");
+      sendMessage("Reescreva o roteiro com melhorias");
     } else {
       doStream(selectedId, JSON.stringify({ action: "feedback" }), "text");
     }
@@ -349,10 +349,10 @@ export default function ChatPage() {
           },
         }}
       >
-        <DialogTitle>New Conversation</DialogTitle>
+        <DialogTitle>Nova Conversa</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            What would you like to create?
+            O que você quer criar?
           </Typography>
           <Stack spacing={1.5}>
             <Button
@@ -387,7 +387,7 @@ export default function ChatPage() {
                 },
               }}
             >
-              Video Script
+              Roteiro de Vídeo
             </Button>
           </Stack>
         </DialogContent>

@@ -90,7 +90,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
           <TextField
             fullWidth
-            label="Email"
+            label="E-mail"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -98,7 +98,7 @@ export default function LoginPage() {
           />
           <TextField
             fullWidth
-            label="Password"
+            label="Senha"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -114,7 +114,7 @@ export default function LoginPage() {
               py: 1.5,
             }}
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Entrando..." : "Entrar"}
           </Button>
         </form>
       </Paper>

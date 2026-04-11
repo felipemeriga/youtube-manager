@@ -22,19 +22,17 @@ import {
   deleteAsset,
   fetchAssetText,
   reindexPhotos,
-  analyzeReferenceStyle,
 } from "../lib/api";
 import { Button } from "@mui/material";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
-import StyleIcon from "@mui/icons-material/Style";
 
 const BUCKETS = [
-  { key: "reference-thumbs", label: "Reference Thumbnails", accept: "image/*" },
-  { key: "personal-photos", label: "Personal Photos", accept: "image/*" },
+  { key: "reference-thumbs", label: "Thumbnails de Referência", accept: "image/*" },
+  { key: "personal-photos", label: "Fotos Pessoais", accept: "image/*" },
   { key: "logos", label: "Logos", accept: "image/*" },
-  { key: "outputs", label: "Generated Outputs", accept: "image/*" },
-  { key: "scripts", label: "Scripts", accept: ".md" },
-  { key: "fonts", label: "Fonts", accept: ".ttf,.otf,.woff" },
+  { key: "outputs", label: "Resultados Gerados", accept: "image/*" },
+  { key: "scripts", label: "Roteiros", accept: ".md" },
+  { key: "fonts", label: "Fontes", accept: ".ttf,.otf,.woff" },
 ];
 
 interface AssetFile {
@@ -54,7 +52,6 @@ export default function AssetsPage() {
     severity: "success" | "error";
   }>({ open: false, message: "", severity: "success" });
   const [reindexing, setReindexing] = useState(false);
-  const [analyzingStyle, setAnalyzingStyle] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerContent, setViewerContent] = useState("");
   const [viewerTitle, setViewerTitle] = useState("");
@@ -112,17 +109,13 @@ export default function AssetsPage() {
     if (failed > 0) {
       setSnackbar({
         open: true,
-        message: `Uploaded ${succeeded} file${
-          succeeded !== 1 ? "s" : ""
-        }. ${failed} failed.`,
+        message: `Enviado(s) ${succeeded} arquivo(s). ${failed} falharam.`,
         severity: "error",
       });
     } else {
       setSnackbar({
         open: true,
-        message: `${succeeded} file${
-          succeeded !== 1 ? "s" : ""
-        } uploaded successfully`,
+        message: `${succeeded} arquivo(s) enviado(s) com sucesso`,
         severity: "success",
       });
     }
@@ -136,7 +129,7 @@ export default function AssetsPage() {
     loadFiles();
     setSnackbar({
       open: true,
-      message: `${name} deleted`,
+      message: `${name} excluído`,
       severity: "success",
     });
   };
@@ -153,13 +146,13 @@ export default function AssetsPage() {
       const result = await reindexPhotos();
       setSnackbar({
         open: true,
-        message: `Indexed ${result.indexed} new photos (${result.skipped} already indexed, ${result.total} total)`,
+        message: `Indexou ${result.indexed} novas fotos (${result.skipped} já indexadas, ${result.total} total)`,
         severity: "success",
       });
     } catch {
       setSnackbar({
         open: true,
-        message: "Failed to reindex photos",
+        message: "Falha ao indexar fotos",
         severity: "error",
       });
     } finally {
@@ -167,25 +160,7 @@ export default function AssetsPage() {
     }
   };
 
-  const handleAnalyzeStyle = async () => {
-    setAnalyzingStyle(true);
-    try {
-      await analyzeReferenceStyle();
-      setSnackbar({
-        open: true,
-        message: "Style analysis complete. Text style saved to your persona.",
-        severity: "success",
-      });
-    } catch {
-      setSnackbar({
-        open: true,
-        message: "Failed to analyze reference style",
-        severity: "error",
-      });
-    } finally {
-      setAnalyzingStyle(false);
-    }
-  };
+
 
   const handleViewScript = async (name: string) => {
     try {
@@ -202,7 +177,7 @@ export default function AssetsPage() {
     } catch {
       setSnackbar({
         open: true,
-        message: "Failed to load script",
+        message: "Falha ao carregar roteiro",
         severity: "error",
       });
     }
@@ -227,7 +202,7 @@ export default function AssetsPage() {
           WebkitTextFillColor: "transparent",
         }}
       >
-        Assets
+        Arquivos
       </Typography>
 
       <Tabs
@@ -247,33 +222,13 @@ export default function AssetsPage() {
 
       {currentBucket.key !== "outputs" && currentBucket.key !== "scripts" && (
         <Box sx={{ mb: 3 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-            <AssetUpload
-              onUpload={handleUpload}
-              accept={currentBucket.accept}
-              fileStatuses={fileStatuses}
-            />
-            {currentBucket.key === "reference-thumbs" && (
-              <Button
-                variant="outlined"
-                startIcon={<StyleIcon />}
-                onClick={handleAnalyzeStyle}
-                disabled={analyzingStyle}
-                size="small"
-                sx={{
-                  borderColor: "rgba(124,58,237,0.3)",
-                  color: "#a78bfa",
-                  whiteSpace: "nowrap",
-                  "&:hover": {
-                    borderColor: "#7c3aed",
-                    backgroundColor: "rgba(124,58,237,0.08)",
-                  },
-                }}
-              >
-                {analyzingStyle ? "Analyzing..." : "Analyze Style"}
-              </Button>
-            )}
-            {currentBucket.key === "personal-photos" && (
+          <AssetUpload
+            onUpload={handleUpload}
+            accept={currentBucket.accept}
+            fileStatuses={fileStatuses}
+          />
+          {currentBucket.key === "personal-photos" && (
+            <Box sx={{ mt: 1.5 }}>
               <Button
                 variant="outlined"
                 startIcon={<AutoFixHighIcon />}
@@ -290,15 +245,15 @@ export default function AssetsPage() {
                   },
                 }}
               >
-                {reindexing ? "Indexing..." : "Index Photos"}
+                {reindexing ? "Indexando..." : "Indexar Fotos"}
               </Button>
-            )}
-          </Box>
+            </Box>
+          )}
         </Box>
       )}
 
       {loading ? (
-        <Typography color="text.secondary">Loading...</Typography>
+        <Typography color="text.secondary">Carregando...</Typography>
       ) : (
         <AssetGrid
           files={files}

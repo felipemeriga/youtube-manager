@@ -55,7 +55,7 @@ export default function SettingsPage() {
       .catch(() => {
         setSnackbar({
           open: true,
-          message: "Failed to load settings",
+          message: "Falha ao carregar configurações",
           severity: "error",
         });
       })
@@ -66,7 +66,7 @@ export default function SettingsPage() {
     if (!channelName.trim() || !language.trim() || !personaText.trim()) {
       setSnackbar({
         open: true,
-        message: "All fields are required",
+        message: "Todos os campos são obrigatórios",
         severity: "error",
       });
       return;
@@ -82,13 +82,13 @@ export default function SettingsPage() {
       });
       setSnackbar({
         open: true,
-        message: "Persona saved successfully",
+        message: "Persona salva com sucesso",
         severity: "success",
       });
     } catch {
       setSnackbar({
         open: true,
-        message: "Failed to save persona",
+        message: "Falha ao salvar persona",
         severity: "error",
       });
     } finally {
@@ -103,7 +103,7 @@ export default function SettingsPage() {
     } catch {
       setSnackbar({
         open: true,
-        message: "Failed to delete memory",
+        message: "Falha ao excluir memória",
         severity: "error",
       });
     }
@@ -146,15 +146,14 @@ export default function SettingsPage() {
         }}
       >
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          Channel Persona
+          Persona do Canal
         </Typography>
         <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.5)" }}>
-          Configure your channel identity. This persona is used by the script
-          generator to match your style.
+          Configure a identidade do seu canal. Esta persona é usada pelo gerador de roteiros para combinar com seu estilo.
         </Typography>
 
         <TextField
-          label="Channel Name"
+          label="Nome do Canal"
           value={channelName}
           onChange={(e) => setChannelName(e.target.value)}
           fullWidth
@@ -162,12 +161,12 @@ export default function SettingsPage() {
         />
 
         <TextField
-          label="Language"
+          label="Idioma"
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
           fullWidth
           required
-          placeholder="e.g. Brazilian Portuguese, English, Spanish"
+          placeholder="ex: Português Brasileiro, Inglês, Espanhol"
         />
 
         <TextField
@@ -180,13 +179,12 @@ export default function SettingsPage() {
           minRows={6}
           maxRows={16}
           placeholder={
-            "Describe your channel's personality, tone, style, humor, what to avoid...\n\n" +
-            "Example:\n" +
-            "Tone: conversational, informal, provocative\n" +
-            "Humor: uses humor naturally, not forced\n" +
-            "Approach: takes a position, never neutral\n" +
-            "Style: direct, uses real examples, challenges conventional wisdom\n" +
-            "Avoid: sounding like a guru, generic advice, corporate tone"
+            "Exemplo:\n" +
+            "- Tom: Descontraído e informativo\n" +
+            "- Humor: Piadas de programação e referências de tech\n" +
+            "- Abordagem: Começa com ganchos provocativos\n" +
+            "- Estilo: Linguagem acessível\n" +
+            "- Evita: Jargão excessivo"
           }
         />
 
@@ -196,7 +194,7 @@ export default function SettingsPage() {
           disabled={saving}
           sx={{ alignSelf: "flex-end", minWidth: 120 }}
         >
-          {saving ? <CircularProgress size={20} /> : "Save"}
+          {saving ? <CircularProgress size={20} /> : "Salvar"}
         </Button>
       </Paper>
 
@@ -217,11 +215,10 @@ export default function SettingsPage() {
         }}
       >
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          Learned Preferences
+          Preferências Aprendidas
         </Typography>
         <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.5)" }}>
-          Automatically extracted from your script feedback. These help the AI
-          match your style over time.
+          Extraídas automaticamente do feedback dos seus roteiros. Ajudam a IA a combinar com seu estilo ao longo do tempo.
         </Typography>
 
         {memories.length === 0 ? (
@@ -229,8 +226,7 @@ export default function SettingsPage() {
             variant="body2"
             sx={{ color: "rgba(255,255,255,0.3)", py: 2 }}
           >
-            No preferences learned yet. They'll appear here as you approve and
-            reject scripts.
+            Nenhuma preferência aprendida ainda. Elas aparecerão aqui conforme você aprova e rejeita roteiros.
           </Typography>
         ) : (
           <List disablePadding>
