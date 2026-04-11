@@ -24,7 +24,7 @@ interface ChatAreaProps {
   streamingContent: string;
   isStreaming: boolean;
   currentStage: string | null;
-  onSend: (content: string) => void;
+  onSend: (content: string, imageUrl?: string) => void;
   onApprove: () => void;
   onReject: () => void;
   onTopicSelect?: (index: number) => void;

@@ -1,4 +1,4 @@
-import { useState, KeyboardEvent } from "react";
+import { useState, useRef, KeyboardEvent } from "react";
 import {
   Box,
   TextField,
@@ -6,8 +6,14 @@ import {
   Select,
   MenuItem,
   FormControl,
+  Tooltip,
+  Typography,
+  CircularProgress,
 } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
+import CloseIcon from "@mui/icons-material/Close";
+import { uploadAsset } from "../lib/api";
 
 interface ModelOption {
   id: string;
@@ -15,7 +21,7 @@ interface ModelOption {
 }
 
 interface ChatInputProps {
-  onSend: (content: string) => void;
+  onSend: (content: string, imageUrl?: string) => void;
   disabled?: boolean;
   models?: ModelOption[];
   selectedModel?: string;
@@ -30,12 +36,20 @@ export default function ChatInput({
   onModelChange,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
+  const [attachedImage, setAttachedImage] = useState<{
+    file: File;
+    preview: string;
+    storagePath: string | null;
+  } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = () => {
     const trimmed = value.trim();
-    if (!trimmed || disabled) return;
-    onSend(trimmed);
+    if ((!trimmed && !attachedImage) || disabled) return;
+    onSend(trimmed, attachedImage?.storagePath ?? undefined);
     setValue("");
+    setAttachedImage(null);
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -44,6 +58,36 @@ export default function ChatInput({
       handleSend();
     }
   };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const preview = URL.createObjectURL(file);
+    setAttachedImage({ file, preview, storagePath: null });
+    setUploading(true);
+
+    try {
+      const result = await uploadAsset("outputs", file);
+      setAttachedImage((prev) =>
+        prev ? { ...prev, storagePath: result.path } : null,
+      );
+    } catch {
+      setAttachedImage(null);
+    } finally {
+      setUploading(false);
+      // Reset file input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveImage = () => {
+    if (attachedImage?.preview) URL.revokeObjectURL(attachedImage.preview);
+    setAttachedImage(null);
+  };
+
+  const canSend =
+    (value.trim() || attachedImage?.storagePath) && !disabled && !uploading;
 
   return (
     <Box
@@ -76,7 +120,7 @@ export default function ChatInput({
               }}
             >
               <MenuItem value="">
-                <em>Modelo padrão</em>
+                <em>Modelo padr&atilde;o</em>
               </MenuItem>
               {models.map((m) => (
                 <MenuItem key={m.id} value={m.id}>
@@ -87,7 +131,96 @@ export default function ChatInput({
           </FormControl>
         </Box>
       )}
+
+      {/* Attached image preview */}
+      {attachedImage && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            mb: 1,
+            p: 1,
+            borderRadius: 2,
+            backgroundColor: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <Box
+            component="img"
+            src={attachedImage.preview}
+            alt="Imagem anexada"
+            sx={{
+              width: 48,
+              height: 48,
+              objectFit: "cover",
+              borderRadius: 1,
+            }}
+          />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              variant="caption"
+              sx={{ color: "rgba(255,255,255,0.7)" }}
+            >
+              Imagem anexada
+            </Typography>
+            {uploading && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <CircularProgress size={12} />
+                <Typography
+                  variant="caption"
+                  sx={{ color: "rgba(255,255,255,0.4)" }}
+                >
+                  Enviando...
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          <Tooltip title="Remover">
+            <IconButton
+              size="small"
+              onClick={handleRemoveImage}
+              sx={{ color: "rgba(255,255,255,0.4)" }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
+
       <Box sx={{ display: "flex", gap: 1, alignItems: "flex-end" }}>
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleFileSelect}
+        />
+
+        {/* Attach button */}
+        <Tooltip title="Anexar imagem">
+          <IconButton
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled || uploading}
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 2.5,
+              color: attachedImage
+                ? "#7c3aed"
+                : "rgba(255,255,255,0.4)",
+              transition: "all 0.2s ease",
+              "&:hover": {
+                color: "#7c3aed",
+                backgroundColor: "rgba(124,58,237,0.08)",
+              },
+            }}
+          >
+            <AttachFileIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+
         <TextField
           fullWidth
           multiline
@@ -110,16 +243,15 @@ export default function ChatInput({
         />
         <IconButton
           onClick={handleSend}
-          disabled={!value.trim() || disabled}
+          disabled={!canSend}
           sx={{
             width: 40,
             height: 40,
             borderRadius: 2.5,
-            background:
-              value.trim() && !disabled
-                ? "linear-gradient(135deg, #7c3aed, #3b82f6)"
-                : "rgba(255,255,255,0.05)",
-            color: value.trim() && !disabled ? "#fff" : "rgba(255,255,255,0.2)",
+            background: canSend
+              ? "linear-gradient(135deg, #7c3aed, #3b82f6)"
+              : "rgba(255,255,255,0.05)",
+            color: canSend ? "#fff" : "rgba(255,255,255,0.2)",
             transition: "all 0.2s ease",
             "&:hover": {
               background: "linear-gradient(135deg, #6d28d9, #2563eb)",
