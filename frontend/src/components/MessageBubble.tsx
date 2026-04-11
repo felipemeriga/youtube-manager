@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Box, TextField, Button } from "@mui/material";
+import { useState, useEffect } from "react";
+import { Box, TextField, Button, CircularProgress } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import ReactMarkdown from "react-markdown";
 import ApprovalButtons from "./ApprovalButtons";
@@ -7,8 +7,7 @@ import PhotoGrid from "./PhotoGrid";
 import ScriptTopicList from "./ScriptTopicList";
 import ScriptViewer from "./ScriptViewer";
 import AssistantLogo from "./AssistantLogo";
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+import { supabase } from "../lib/supabase";
 
 interface Message {
   id?: string;
@@ -202,21 +201,9 @@ export default function MessageBubble({
         }}
       >
         {(message.image_base64 || message.image_url) && (
-          <Box
-            component="img"
-            src={
-              message.image_base64
-                ? `data:image/png;base64,${message.image_base64}`
-                : `${SUPABASE_URL}/storage/v1/object/public/outputs/${message.image_url}`
-            }
-            alt="Generated thumbnail"
-            sx={{
-              width: "100%",
-              maxWidth: 512,
-              borderRadius: 1,
-              mb: 1,
-              display: "block",
-            }}
+          <AuthOutputImage
+            base64={message.image_base64}
+            storagePath={message.image_url || ""}
           />
         )}
 
@@ -308,6 +295,88 @@ export default function MessageBubble({
         )}
       </Box>
     </Box>
+  );
+}
+
+function AuthOutputImage({
+  base64,
+  storagePath,
+}: {
+  base64?: string;
+  storagePath: string;
+}) {
+  const [src, setSrc] = useState<string | null>(
+    base64 ? `data:image/png;base64,${base64}` : null
+  );
+  const [loading, setLoading] = useState(!base64);
+
+  useEffect(() => {
+    if (base64 || !storagePath) return;
+
+    let revoke: string | null = null;
+    const fetchImage = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Extract filename from storage path (user-id/filename.png → filename.png)
+      const filename = storagePath.includes("/")
+        ? storagePath.split("/").pop()!
+        : storagePath;
+
+      const res = await fetch(`/api/assets/outputs/${filename}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        revoke = URL.createObjectURL(blob);
+        setSrc(revoke);
+      }
+      setLoading(false);
+    };
+    fetchImage();
+
+    return () => {
+      if (revoke) URL.revokeObjectURL(revoke);
+    };
+  }, [base64, storagePath]);
+
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          width: "100%",
+          maxWidth: 512,
+          height: 200,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 1,
+          mb: 1,
+          backgroundColor: "rgba(255,255,255,0.03)",
+        }}
+      >
+        <CircularProgress size={24} sx={{ color: "#7c3aed" }} />
+      </Box>
+    );
+  }
+
+  if (!src) return null;
+
+  return (
+    <Box
+      component="img"
+      src={src}
+      alt="Thumbnail"
+      sx={{
+        width: "100%",
+        maxWidth: 512,
+        borderRadius: 1,
+        mb: 1,
+        display: "block",
+      }}
+    />
   );
 }
 
