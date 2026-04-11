@@ -19,6 +19,9 @@ Classify the user's message into ONE of these actions:
 - provide_text: user provided text for the thumbnail (extract into text)
 - save: user wants to save the final result (e.g. "save", "download", "done")
 - restart: user wants to start completely over or go back to the beginning (e.g. "start over", "new topic", "começar de novo", "do começo", "from the beginning", "recomeçar")
+- use_as_background: user uploaded/provided an image to use as the background
+- use_as_composite: user uploaded/provided an image that already has the person composited, just needs text
+- skip_to_text: user wants to go directly to adding text on an image
 
 Return ONLY a JSON object with these fields:
 {{"action": "...", "feedback": "..." or null, "photo_name": "..." or null, "text": "..." or null}}"""
