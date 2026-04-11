@@ -19,7 +19,7 @@ import SendIcon from "@mui/icons-material/Send";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import CloseIcon from "@mui/icons-material/Close";
-import { uploadAsset, listAssets } from "../lib/api";
+import { uploadAsset, listAssets, getBatchSignedUrls } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
 interface ModelOption {
@@ -98,10 +98,13 @@ export default function ChatInput({
     }
   };
 
-  const handleBrowserSelect = (bucket: string, file: StorageFile) => {
+  const handleBrowserSelect = (
+    bucket: string,
+    file: StorageFile & { signedUrl?: string },
+  ) => {
     const fullPath = `${bucket}/${file.name}`;
-    // Use public_url for preview if available, otherwise proxy
-    const preview = file.public_url || `/api/assets/${bucket}/${file.name}`;
+    const preview =
+      file.signedUrl || file.public_url || `/api/assets/${bucket}/${file.name}`;
     setAttachedImage({ preview, storagePath: fullPath, fromBrowser: true });
     setBrowserOpen(false);
   };
@@ -383,7 +386,9 @@ function StorageBrowserDialog({
   onSelect: (bucket: string, file: StorageFile) => void;
 }) {
   const [tab, setTab] = useState(0);
-  const [files, setFiles] = useState<StorageFile[]>([]);
+  const [files, setFiles] = useState<(StorageFile & { signedUrl?: string })[]>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
 
   const currentBucket = BROWSABLE_BUCKETS[tab];
@@ -391,16 +396,47 @@ function StorageBrowserDialog({
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    listAssets(currentBucket.key)
-      .then((data) => {
-        setFiles(
-          (data as unknown as StorageFile[]).filter(
-            (f) => f.name && /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name),
-          ),
+
+    const loadFiles = async () => {
+      try {
+        const data = (await listAssets(
+          currentBucket.key,
+        )) as unknown as StorageFile[];
+        const imageFiles = data.filter(
+          (f) => f.name && /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name),
         );
-      })
-      .catch(() => setFiles([]))
-      .finally(() => setLoading(false));
+
+        // Get signed URLs in one batch request
+        if (imageFiles.length > 0) {
+          const filenames = imageFiles.map((f) => f.name);
+          const signed = await getBatchSignedUrls(
+            currentBucket.key,
+            filenames,
+          );
+          const urlMap = new Map<string, string>();
+          for (const s of signed) {
+            if (s.signedURL && s.path) {
+              const name = s.path.split("/").pop() || "";
+              urlMap.set(name, s.signedURL);
+            }
+          }
+          setFiles(
+            imageFiles.map((f) => ({
+              ...f,
+              signedUrl: urlMap.get(f.name),
+            })),
+          );
+        } else {
+          setFiles([]);
+        }
+      } catch {
+        setFiles([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadFiles();
   }, [open, currentBucket.key]);
 
   return (
@@ -481,12 +517,66 @@ function StorageBrowserDialog({
               }}
             >
               {files.map((file) => (
-                <StorageThumbnail
+                <Box
                   key={file.name}
-                  file={file}
-                  bucket={currentBucket.key}
                   onClick={() => onSelect(currentBucket.key, file)}
-                />
+                  sx={{
+                    borderRadius: 2,
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    border: "2px solid transparent",
+                    transition: "all 0.2s",
+                    "&:hover": {
+                      borderColor: "#7c3aed",
+                      transform: "scale(1.03)",
+                    },
+                  }}
+                >
+                  {file.signedUrl ? (
+                    <Box
+                      component="img"
+                      src={file.signedUrl}
+                      alt={file.name}
+                      sx={{
+                        width: "100%",
+                        height: 100,
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        width: "100%",
+                        height: 100,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: "rgba(255,255,255,0.03)",
+                      }}
+                    >
+                      <CircularProgress
+                        size={16}
+                        sx={{ color: "#7c3aed" }}
+                      />
+                    </Box>
+                  )}
+                  <Box sx={{ px: 0.5, py: 0.25 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "rgba(255,255,255,0.5)",
+                        fontSize: 10,
+                        display: "block",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {file.name}
+                    </Typography>
+                  </Box>
+                </Box>
               ))}
             </Box>
           )}
@@ -496,100 +586,3 @@ function StorageBrowserDialog({
   );
 }
 
-/** Thumbnail card in the storage browser */
-function StorageThumbnail({
-  file,
-  bucket,
-  onClick,
-}: {
-  file: StorageFile;
-  bucket: string;
-  onClick: () => void;
-}) {
-  const [src, setSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    let revoke: string | null = null;
-    const load = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-      try {
-        const res = await fetch(`/api/assets/${bucket}/${file.name}`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (res.ok) {
-          const blob = await res.blob();
-          revoke = URL.createObjectURL(blob);
-          setSrc(revoke);
-        }
-      } catch {
-        // ignore
-      }
-    };
-    load();
-    return () => {
-      if (revoke) URL.revokeObjectURL(revoke);
-    };
-  }, [bucket, file.name]);
-
-  return (
-    <Box
-      onClick={onClick}
-      sx={{
-        borderRadius: 2,
-        overflow: "hidden",
-        cursor: "pointer",
-        border: "2px solid transparent",
-        transition: "all 0.2s",
-        "&:hover": {
-          borderColor: "#7c3aed",
-          transform: "scale(1.03)",
-        },
-      }}
-    >
-      {src ? (
-        <Box
-          component="img"
-          src={src}
-          alt={file.name}
-          sx={{
-            width: "100%",
-            height: 100,
-            objectFit: "cover",
-            display: "block",
-          }}
-        />
-      ) : (
-        <Box
-          sx={{
-            width: "100%",
-            height: 100,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgba(255,255,255,0.03)",
-          }}
-        >
-          <CircularProgress size={16} sx={{ color: "#7c3aed" }} />
-        </Box>
-      )}
-      <Box sx={{ px: 0.5, py: 0.25 }}>
-        <Typography
-          variant="caption"
-          sx={{
-            color: "rgba(255,255,255,0.5)",
-            fontSize: 10,
-            display: "block",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {file.name}
-        </Typography>
-      </Box>
-    </Box>
-  );
-}

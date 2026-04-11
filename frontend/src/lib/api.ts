@@ -157,6 +157,15 @@ export const updateConversation = (id: string, data: { model?: string }) =>
 
 export const listAssets = (bucket: string) =>
   apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`);
+
+export const getBatchSignedUrls = (bucket: string, filenames: string[]) =>
+  apiFetch<Array<{ signedURL: string; path: string; error: string | null }>>(
+    "/api/assets/batch-signed-urls",
+    {
+      method: "POST",
+      body: JSON.stringify({ bucket, filenames }),
+    },
+  );
 export const deleteAsset = (bucket: string, name: string) =>
   apiFetch<void>(`/api/assets/${bucket}/${name}`, { method: "DELETE" });
 export const uploadAsset = (bucket: string, file: File) =>
