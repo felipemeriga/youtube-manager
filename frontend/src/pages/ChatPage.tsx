@@ -174,10 +174,15 @@ export default function ChatPage() {
       } catch {
         // Not JSON — use content as-is
       }
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", content: displayContent, type: "text" },
-      ]);
+      const userMsg: Message = {
+        role: "user",
+        content: displayContent,
+        type: "text",
+      };
+      if (imageUrl) {
+        userMsg.image_url = imageUrl;
+      }
+      setMessages((prev) => [...prev, userMsg]);
     }
 
     setIsStreaming(true);
