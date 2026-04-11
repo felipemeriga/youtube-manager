@@ -40,24 +40,41 @@ async def analyze_references(reference_images: list[bytes]) -> dict:
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     content = []
-    content.append({
-        "type": "text",
-        "text": "Analyze these YouTube thumbnail references and extract the consistent layout pattern:",
-    })
+    content.append(
+        {
+            "type": "text",
+            "text": "Analyze these YouTube thumbnail references and extract the consistent layout pattern:",
+        }
+    )
     for img_bytes in reference_images[:6]:  # Max 6 references
         b64 = base64.standard_b64encode(img_bytes).decode()
-        content.append({
-            "type": "image",
-            "source": {"type": "base64", "media_type": "image/png", "data": b64},
-        })
+        # Detect mime type from magic bytes
+        if img_bytes[:3] == b"\xff\xd8\xff":
+            mime = "image/jpeg"
+        elif img_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+            mime = "image/png"
+        elif img_bytes[:4] == b"RIFF" and img_bytes[8:12] == b"WEBP":
+            mime = "image/webp"
+        else:
+            mime = "image/jpeg"
+        content.append(
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": mime, "data": b64},
+            }
+        )
     content.append({"type": "text", "text": "Return the JSON analysis."})
 
-    response = await client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=500,
-        system=ANALYSIS_SYSTEM,
-        messages=[{"role": "user", "content": content}],
-    )
+    try:
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500,
+            system=ANALYSIS_SYSTEM,
+            messages=[{"role": "user", "content": content}],
+        )
+    except Exception:
+        logger.exception("Anthropic API error during reference analysis")
+        return {}
 
     text = response.content[0].text.strip()
     # Extract JSON from response
