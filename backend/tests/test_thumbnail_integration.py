@@ -3,6 +3,7 @@
 These tests run the actual graph with mocked external services
 (Supabase, Gemini, Anthropic) using InMemorySaver for checkpointing.
 """
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from langgraph.types import Command
@@ -121,11 +122,16 @@ async def test_full_flow_photos_to_composite(mock_supabase):
                         # Generate background
                         await graph.ainvoke(make_initial_state(), config)
                         # Approve background
-                        await graph.ainvoke(Command(resume={"action": "approve"}), config)
+                        await graph.ainvoke(
+                            Command(resume={"action": "approve"}), config
+                        )
                         # Select photo
                         result = await graph.ainvoke(
                             Command(
-                                resume={"action": "select_photo", "photo_name": "photo1.jpg"}
+                                resume={
+                                    "action": "select_photo",
+                                    "photo_name": "photo1.jpg",
+                                }
                             ),
                             config,
                         )
@@ -209,7 +215,9 @@ async def test_full_flow_to_text_prompt(mock_supabase):
                         config = {"configurable": {"thread_id": "integration-4"}}
 
                         await graph.ainvoke(make_initial_state(), config)
-                        await graph.ainvoke(Command(resume={"action": "approve"}), config)
+                        await graph.ainvoke(
+                            Command(resume={"action": "approve"}), config
+                        )
                         await graph.ainvoke(
                             Command(
                                 resume={"action": "select_photo", "photo_name": "p.jpg"}

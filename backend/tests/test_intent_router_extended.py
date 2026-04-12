@@ -1,4 +1,5 @@
 """Extended coverage for services/intent_router.py."""
+
 import json
 import pytest
 from unittest.mock import AsyncMock, patch
@@ -18,7 +19,9 @@ from services.intent_router import classify_intent
 )
 async def test_approve_variations(text: str):
     """Common approval phrases should classify as approve."""
-    mock_response = json.dumps({"action": "approve", "feedback": None, "photo_name": None, "text": None})
+    mock_response = json.dumps(
+        {"action": "approve", "feedback": None, "photo_name": None, "text": None}
+    )
     with patch("services.intent_router.ask_llm", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = mock_response
         result = await classify_intent(text, "review_background")
@@ -36,7 +39,12 @@ async def test_approve_variations(text: str):
 async def test_feedback_with_detail():
     """Free text feedback should return action=feedback with the text preserved."""
     mock_response = json.dumps(
-        {"action": "feedback", "feedback": "muito escuro, clareia", "photo_name": None, "text": None}
+        {
+            "action": "feedback",
+            "feedback": "muito escuro, clareia",
+            "photo_name": None,
+            "text": None,
+        }
     )
     with patch("services.intent_router.ask_llm", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = mock_response
@@ -74,7 +82,12 @@ async def test_restart_portuguese(text: str):
 async def test_select_photo_with_name():
     """LLM returns select_photo action with photo_name."""
     mock_response = json.dumps(
-        {"action": "select_photo", "photo_name": "sem_titulo-71.jpg", "feedback": None, "text": None}
+        {
+            "action": "select_photo",
+            "photo_name": "sem_titulo-71.jpg",
+            "feedback": None,
+            "text": None,
+        }
     )
     with patch("services.intent_router.ask_llm", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = mock_response
@@ -93,7 +106,12 @@ async def test_select_photo_with_name():
 async def test_provide_text():
     """LLM returns provide_text action with extracted text."""
     mock_response = json.dumps(
-        {"action": "provide_text", "text": "Guerra do Irã e IA", "feedback": None, "photo_name": None}
+        {
+            "action": "provide_text",
+            "text": "Guerra do Irã e IA",
+            "feedback": None,
+            "photo_name": None,
+        }
     )
     with patch("services.intent_router.ask_llm", new_callable=AsyncMock) as mock_llm:
         mock_llm.return_value = mock_response
