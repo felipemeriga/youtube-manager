@@ -12,6 +12,7 @@ from services.nano_banana import (
     add_text_with_style,
 )
 from services.photo_search import find_best_photos
+from services.thumbnail_memory import get_relevant_memories, extract_and_store_memory
 from services.thumbnail_state import PLATFORM_CONFIGS, DEFAULT_PLATFORMS, ThumbnailState
 
 logger = logging.getLogger(__name__)
@@ -83,9 +84,15 @@ async def generate_background_node(state: ThumbnailState) -> dict:
     topic = state["topic"]
     platforms = _get_platforms(state)
 
-    topic_research = await _research_topic(topic)
-    ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
-    logos = await _fetch_all_assets(sb, user_id, "logos")
+    # Fetch in parallel: topic research, assets, and past style memories
+    topic_research_task = _research_topic(topic)
+    ref_thumbs_task = _fetch_all_assets(sb, user_id, "reference-thumbs")
+    logos_task = _fetch_all_assets(sb, user_id, "logos")
+    memories_task = get_relevant_memories(sb, user_id, topic)
+
+    topic_research, ref_thumbs, logos, style_memories = await asyncio.gather(
+        topic_research_task, ref_thumbs_task, logos_task, memories_task
+    )
 
     feedback = ""
     if state.get("user_intent") and state["user_intent"]["action"] == "feedback":
@@ -101,6 +108,10 @@ async def generate_background_node(state: ThumbnailState) -> dict:
         "The background MUST visually represent this topic. "
         "Use imagery, colors, and elements directly related to it.\n"
     )
+    if style_memories:
+        prompt += "\nUser's style preferences from past thumbnails:\n"
+        for mem in style_memories:
+            prompt += f"- {mem}\n"
     if topic_research:
         prompt += f"\nVisual elements to include in the background:\n{topic_research}\n"
     prompt += (
@@ -237,5 +248,8 @@ async def save_node(state: ThumbnailState) -> dict:
             final_path, image_data, {"content-type": "image/png"}
         )
         saved_urls[platform] = final_path
+
+    # Extract style memory in background (don't block the save)
+    asyncio.create_task(extract_and_store_memory(sb, user_id, state["conversation_id"]))
 
     return {"final_urls": saved_urls}
