@@ -12,6 +12,7 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
+  images?: Record<string, { base64?: string; url?: string }>;
 }
 
 interface ModelOption {

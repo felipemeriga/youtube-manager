@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Box, TextField, Button, CircularProgress } from "@mui/material";
+import { Box, TextField, Button, CircularProgress, Typography } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import ReactMarkdown from "react-markdown";
 import ApprovalButtons from "./ApprovalButtons";
@@ -16,7 +16,14 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
+  images?: Record<string, { base64?: string; url?: string }>;
 }
+
+const platformLabels: Record<string, string> = {
+  youtube: "YouTube",
+  instagram_post: "Instagram Post",
+  instagram_story: "Instagram Story",
+};
 
 interface MessageBubbleProps {
   message: Message;
@@ -200,11 +207,30 @@ export default function MessageBubble({
           transition: "all 0.2s ease",
         }}
       >
-        {(message.image_base64 || message.image_url) && (
-          <AuthOutputImage
-            base64={message.image_base64}
-            storagePath={message.image_url || ""}
-          />
+        {message.images && Object.keys(message.images).length > 1 ? (
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+            {Object.entries(message.images).map(([platform, img]) => (
+              <Box key={platform} sx={{ flex: "1 1 0", minWidth: 150 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "#a78bfa", mb: 0.5, display: "block" }}
+                >
+                  {platformLabels[platform] || platform}
+                </Typography>
+                <AuthOutputImage
+                  base64={img.base64}
+                  storagePath={img.url || ""}
+                />
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          (message.image_base64 || message.image_url) && (
+            <AuthOutputImage
+              base64={message.image_base64}
+              storagePath={message.image_url || ""}
+            />
+          )
         )}
 
         {message.type === "photo_grid" &&
