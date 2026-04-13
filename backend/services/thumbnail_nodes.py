@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import uuid
 
 from supabase._async.client import create_client as create_async_client
@@ -16,6 +17,10 @@ from services.thumbnail_memory import get_relevant_memories, extract_and_store_m
 from services.thumbnail_state import PLATFORM_CONFIGS, DEFAULT_PLATFORMS, ThumbnailState
 
 logger = logging.getLogger(__name__)
+
+# In-process asset cache: (user_id, bucket) -> (timestamp, data)
+_asset_cache: dict[tuple[str, str], tuple[float, list[bytes]]] = {}
+_CACHE_TTL = 600  # 10 minutes
 
 CREATIVE_BRIEF_MODEL = "claude-haiku-4-5-20251001"
 
@@ -52,6 +57,17 @@ async def _research_topic(topic: str) -> str:
 
 
 async def _fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
+    """Fetch all assets from a bucket with in-process caching."""
+    cache_key = (user_id, bucket)
+    cached = _asset_cache.get(cache_key)
+    if cached:
+        ts, data = cached
+        if time.time() - ts < _CACHE_TTL:
+            logger.debug(
+                "asset cache hit for %s/%s (%d items)", user_id, bucket, len(data)
+            )
+            return data
+
     files = await sb.storage.from_(bucket).list(path=user_id)
     names = [f["name"] for f in files if f.get("name")]
 
@@ -59,7 +75,13 @@ async def _fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
         return await sb.storage.from_(bucket).download(f"{user_id}/{name}")
 
     results = await asyncio.gather(*[_download(n) for n in names])
-    return list(results)
+    data = list(results)
+
+    _asset_cache[cache_key] = (time.time(), data)
+    logger.info(
+        "asset cache miss for %s/%s — downloaded %d items", user_id, bucket, len(data)
+    )
+    return data
 
 
 def _get_platforms(state: ThumbnailState) -> list[str]:
