@@ -12,7 +12,7 @@ from services.nano_banana import (
     add_text_with_style,
 )
 from services.photo_search import find_best_photos
-from services.thumbnail_state import ThumbnailState
+from services.thumbnail_state import PLATFORM_CONFIGS, DEFAULT_PLATFORMS, ThumbnailState
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +61,27 @@ async def _fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
     return list(results)
 
 
+def _get_platforms(state: ThumbnailState) -> list[str]:
+    """Get platforms from state, falling back to default."""
+    return state.get("platforms") or DEFAULT_PLATFORMS
+
+
+async def _upload_image(sb, user_id: str, prefix: str, image_bytes: bytes) -> str:
+    """Upload image to outputs bucket and return storage path."""
+    temp_name = f"{prefix}_{uuid.uuid4().hex[:8]}.png"
+    storage_path = f"{user_id}/{temp_name}"
+    await sb.storage.from_("outputs").upload(
+        storage_path, image_bytes, {"content-type": "image/png"}
+    )
+    return storage_path
+
+
 async def generate_background_node(state: ThumbnailState) -> dict:
-    """Generate background image from topic + references + logos."""
+    """Generate background images for all platforms."""
     sb = await _get_supabase()
     user_id = state["user_id"]
     topic = state["topic"]
+    platforms = _get_platforms(state)
 
     topic_research = await _research_topic(topic)
     ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
@@ -93,20 +109,24 @@ async def generate_background_node(state: ThumbnailState) -> dict:
         "Place the logo in the same position as the references."
     )
 
-    background_bytes = await generate_background(
-        prompt=prompt,
-        reference_images=ref_thumbs,
-        logos=logos,
-    )
+    # Generate for all platforms concurrently
+    async def _gen_bg(platform: str) -> tuple[str, str]:
+        cfg = PLATFORM_CONFIGS[platform]
+        bg_bytes = await generate_background(
+            prompt=prompt,
+            reference_images=ref_thumbs,
+            logos=logos,
+            aspect_ratio=cfg["aspect_ratio"],
+            image_size=cfg["image_size"],
+        )
+        path = await _upload_image(sb, user_id, f"bg_{platform}", bg_bytes)
+        return platform, path
 
-    temp_name = f"bg_{uuid.uuid4().hex[:8]}.png"
-    storage_path = f"{user_id}/{temp_name}"
-    await sb.storage.from_("outputs").upload(
-        storage_path, background_bytes, {"content-type": "image/png"}
-    )
+    results = await asyncio.gather(*[_gen_bg(p) for p in platforms])
+    background_urls = dict(results)
 
     return {
-        "background_url": storage_path,
+        "background_urls": background_urls,
         "topic_research": topic_research,
     }
 
@@ -136,70 +156,86 @@ async def show_photos_node(state: ThumbnailState) -> dict:
 
 
 async def composite_node(state: ThumbnailState) -> dict:
-    """Composite person onto background with effects."""
+    """Composite person onto background with effects for all platforms."""
     sb = await _get_supabase()
     user_id = state["user_id"]
+    platforms = _get_platforms(state)
+    background_urls = state.get("background_urls") or {}
 
-    background_bytes = await sb.storage.from_("outputs").download(
-        state["background_url"]
-    )
     person_bytes = await sb.storage.from_("personal-photos").download(
         f"{user_id}/{state['photo_name']}"
     )
     ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
-
     extra = state.get("extra_instructions")
-    composite_bytes = await composite_with_effects(
-        background_bytes,
-        person_bytes,
-        ref_thumbs,
-        extra_instructions=extra,
-    )
 
-    temp_name = f"comp_{uuid.uuid4().hex[:8]}.png"
-    storage_path = f"{user_id}/{temp_name}"
-    await sb.storage.from_("outputs").upload(
-        storage_path, composite_bytes, {"content-type": "image/png"}
-    )
+    async def _gen_comp(platform: str) -> tuple[str, str]:
+        bg_url = background_urls.get(platform)
+        if not bg_url:
+            raise Exception(f"No background for platform {platform}")
+        bg_bytes = await sb.storage.from_("outputs").download(bg_url)
+        cfg = PLATFORM_CONFIGS[platform]
+        comp_bytes = await composite_with_effects(
+            bg_bytes,
+            person_bytes,
+            ref_thumbs,
+            extra_instructions=extra,
+            aspect_ratio=cfg["aspect_ratio"],
+            image_size=cfg["image_size"],
+        )
+        path = await _upload_image(sb, user_id, f"comp_{platform}", comp_bytes)
+        return platform, path
 
-    return {"composite_url": storage_path, "extra_instructions": None}
+    results = await asyncio.gather(*[_gen_comp(p) for p in platforms])
+    composite_urls = dict(results)
+
+    return {"composite_urls": composite_urls, "extra_instructions": None}
 
 
 async def add_text_node(state: ThumbnailState) -> dict:
-    """Add styled text to composite using Gemini."""
+    """Add styled text to composites for all platforms."""
     sb = await _get_supabase()
     user_id = state["user_id"]
+    platforms = _get_platforms(state)
+    composite_urls = state.get("composite_urls") or {}
 
-    composite_bytes = await sb.storage.from_("outputs").download(state["composite_url"])
     ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
 
-    final_bytes = await add_text_with_style(
-        composite_bytes, state["thumb_text"], ref_thumbs
-    )
+    async def _gen_text(platform: str) -> tuple[str, str]:
+        comp_url = composite_urls.get(platform)
+        if not comp_url:
+            raise Exception(f"No composite for platform {platform}")
+        comp_bytes = await sb.storage.from_("outputs").download(comp_url)
+        cfg = PLATFORM_CONFIGS[platform]
+        final_bytes = await add_text_with_style(
+            comp_bytes,
+            state["thumb_text"],
+            ref_thumbs,
+            aspect_ratio=cfg["aspect_ratio"],
+            image_size=cfg["image_size"],
+        )
+        path = await _upload_image(sb, user_id, f"thumb_{platform}", final_bytes)
+        return platform, path
 
-    temp_name = f"thumb_{uuid.uuid4().hex[:8]}.png"
-    storage_path = f"{user_id}/{temp_name}"
-    await sb.storage.from_("outputs").upload(
-        storage_path, final_bytes, {"content-type": "image/png"}
-    )
+    results = await asyncio.gather(*[_gen_text(p) for p in platforms])
+    final_urls = dict(results)
 
-    return {"final_url": storage_path}
+    return {"final_urls": final_urls}
 
 
 async def save_node(state: ThumbnailState) -> dict:
-    """Save final thumbnail to permanent storage."""
+    """Save final thumbnails to permanent storage for all platforms."""
     sb = await _get_supabase()
     user_id = state["user_id"]
+    final_urls = state.get("final_urls") or {}
 
-    image_data = await sb.storage.from_("outputs").download(state["final_url"])
+    saved_urls = {}
+    for platform, temp_url in final_urls.items():
+        image_data = await sb.storage.from_("outputs").download(temp_url)
+        final_filename = f"thumbnail_{platform}_{uuid.uuid4().hex[:8]}.png"
+        final_path = f"{user_id}/{final_filename}"
+        await sb.storage.from_("outputs").upload(
+            final_path, image_data, {"content-type": "image/png"}
+        )
+        saved_urls[platform] = final_path
 
-    final_filename = f"thumbnail_{uuid.uuid4().hex[:8]}.png"
-    final_path = f"{user_id}/{final_filename}"
-    await sb.storage.from_("outputs").upload(
-        final_path, image_data, {"content-type": "image/png"}
-    )
-
-    # Keep temp file — it's referenced by the chat message history.
-    # Old temp files can be cleaned up periodically.
-
-    return {"final_url": final_path}
+    return {"final_urls": saved_urls}
