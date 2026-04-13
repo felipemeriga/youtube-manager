@@ -7,6 +7,8 @@ import {
   Button,
   Stack,
   Typography,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
@@ -29,6 +31,7 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
+  images?: Record<string, { base64?: string; url?: string }>;
 }
 
 interface Conversation {
@@ -47,13 +50,16 @@ export default function ChatPage() {
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
   const [conversationModel, setConversationModel] = useState<string>("");
   const [showModeDialog, setShowModeDialog] = useState(false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["youtube"]);
   const pendingMessageRef = useRef<{
     content: string;
     type: string;
     imageUrl?: string;
+    platforms?: string[];
   } | null>(null);
   const streamingRef = useRef("");
   const imageRef = useRef<{ base64: string; url: string } | null>(null);
+  const imagesRef = useRef<Record<string, { base64?: string; url?: string }> | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -122,9 +128,9 @@ export default function ChatPage() {
     setConversationMode(mode);
 
     if (pendingMessageRef.current) {
-      const { content, type, imageUrl } = pendingMessageRef.current;
+      const { content, type, imageUrl, platforms } = pendingMessageRef.current;
       pendingMessageRef.current = null;
-      await doStream(newConv.id, content, type, imageUrl);
+      await doStream(newConv.id, content, type, imageUrl, mode === "thumbnail" ? platforms : undefined);
     }
   };
 
@@ -141,13 +147,14 @@ export default function ChatPage() {
     content: string,
     type: string = "text",
     imageUrl?: string,
+    platforms?: string[],
   ) => {
     if (!selectedId) {
-      pendingMessageRef.current = { content, type, imageUrl };
+      pendingMessageRef.current = { content, type, imageUrl, platforms };
       setShowModeDialog(true);
       return;
     }
-    await doStream(selectedId, content, type, imageUrl);
+    await doStream(selectedId, content, type, imageUrl, platforms);
   };
 
   const doStream = async (
@@ -155,6 +162,7 @@ export default function ChatPage() {
     content: string,
     type: string,
     imageUrl?: string,
+    platforms?: string[],
   ) => {
     // Add user message to UI immediately with readable label
     if (type === "text") {
@@ -189,6 +197,7 @@ export default function ChatPage() {
     setStreamingContent("");
     streamingRef.current = "";
     imageRef.current = null;
+    imagesRef.current = null;
 
     setCurrentStage("generating");
 
@@ -203,6 +212,9 @@ export default function ChatPage() {
         },
         onImage: (base64, url) => {
           imageRef.current = { base64, url };
+        },
+        onImages: (imgs) => {
+          imagesRef.current = imgs;
         },
         onError: (error) => {
           const content = error.toLowerCase().includes("persona")
@@ -223,7 +235,15 @@ export default function ChatPage() {
             content: streamingRef.current || (data.content as string) || "",
             type: messageType,
           };
-          if (imageRef.current) {
+          if (imagesRef.current) {
+            newMessage.images = imagesRef.current;
+            // Also set backward-compat fields from first platform image
+            const firstImg = Object.values(imagesRef.current)[0];
+            if (firstImg) {
+              newMessage.image_base64 = firstImg.base64;
+              newMessage.image_url = firstImg.url;
+            }
+          } else if (imageRef.current) {
             newMessage.image_base64 = imageRef.current.base64;
             newMessage.image_url = imageRef.current.url;
           }
@@ -241,7 +261,7 @@ export default function ChatPage() {
           setCurrentStage(null);
           loadConversations();
         },
-      }, imageUrl);
+      }, imageUrl, platforms);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -258,7 +278,12 @@ export default function ChatPage() {
   };
 
   const handleSend = (content: string, imageUrl?: string) =>
-    sendMessage(content, "text", imageUrl);
+    sendMessage(
+      content,
+      "text",
+      imageUrl,
+      conversationMode === "thumbnail" ? selectedPlatforms : undefined,
+    );
 
   const handleTopicSelect = (index: number) => {
     if (!selectedId) return;
@@ -368,23 +393,62 @@ export default function ChatPage() {
             O que você quer criar?
           </Typography>
           <Stack spacing={1.5}>
-            <Button
-              variant="outlined"
-              startIcon={<ImageIcon />}
-              onClick={() => handleModeSelect("thumbnail")}
-              sx={{
-                justifyContent: "flex-start",
-                borderColor: "rgba(255,255,255,0.15)",
-                color: "text.primary",
-                py: 1.5,
-                "&:hover": {
-                  borderColor: "#7c3aed",
-                  backgroundColor: "rgba(124,58,237,0.08)",
-                },
-              }}
-            >
-              Thumbnail
-            </Button>
+            <Box>
+              <Button
+                variant="outlined"
+                startIcon={<ImageIcon />}
+                onClick={() => handleModeSelect("thumbnail")}
+                sx={{
+                  justifyContent: "flex-start",
+                  borderColor: "rgba(255,255,255,0.15)",
+                  color: "text.primary",
+                  py: 1.5,
+                  width: "100%",
+                  "&:hover": {
+                    borderColor: "#7c3aed",
+                    backgroundColor: "rgba(124,58,237,0.08)",
+                  },
+                }}
+              >
+                Thumbnail
+              </Button>
+              <Box sx={{ ml: 4, mt: 1 }}>
+                {[
+                  { key: "youtube", label: "YouTube (16:9)" },
+                  { key: "instagram_post", label: "Instagram Post (1:1)" },
+                  { key: "instagram_story", label: "Instagram Story (9:16)" },
+                ].map((p) => (
+                  <FormControlLabel
+                    key={p.key}
+                    control={
+                      <Checkbox
+                        checked={selectedPlatforms.includes(p.key)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPlatforms((prev) => [...prev, p.key]);
+                          } else {
+                            setSelectedPlatforms((prev) =>
+                              prev.filter((k) => k !== p.key)
+                            );
+                          }
+                        }}
+                        size="small"
+                        sx={{
+                          color: "#7c3aed",
+                          "&.Mui-checked": { color: "#7c3aed" },
+                        }}
+                      />
+                    }
+                    label={p.label}
+                    sx={{
+                      color: "rgba(255,255,255,0.7)",
+                      display: "flex",
+                      "& .MuiTypography-root": { fontSize: 13 },
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
             <Button
               variant="outlined"
               startIcon={<DescriptionIcon />}
