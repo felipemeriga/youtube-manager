@@ -38,7 +38,10 @@ You MUST respond with ONLY a valid JSON object (no markdown fences, no extra tex
 3. Save the script — when the user explicitly approves or says to save:
 {{"action": "save", "message": "optional conversational text"}}
 
-4. Conversational reply — when you need to ask for clarification, acknowledge something, or chat:
+4. Generate YouTube description — when the user asks for a video description, SEO description, or "descrição" for a script or topic:
+{{"action": "description", "content": "...the YouTube description in markdown...", "message": "optional conversational text"}}
+
+5. Conversational reply — when you need to ask for clarification, acknowledge something, or chat about anything:
 {{"action": "message", "content": "your reply"}}
 
 {script_structure}
@@ -50,9 +53,11 @@ Guidelines:
 - Write all script content in {language}
 - When the user gives feedback on a script (e.g. "too long", "more humor"), rewrite incorporating feedback — do NOT restart from topic suggestions
 - When the user says "save", "looks good", "approved", "perfect" about a script, use the "save" action
+- When the user asks for a YouTube description ("descrição", "description", "SEO"), generate an optimized YouTube description with: compelling first line, key points, timestamps placeholder, hashtags, and call to action. If a script exists in the conversation, base the description on it. Use the "description" action.
 - When unclear, ask for clarification using the "message" action
 - After a script is saved, if the user brings up a new topic, start fresh topic suggestions
-- Suggest 5-10 topics when using the "topics" action, each with title, angle, why_timely, source_url, and interest level"""
+- Suggest 5-10 topics when using the "topics" action, each with title, angle, why_timely, source_url, and interest level
+- You can also answer general questions about YouTube strategy, content creation, SEO, engagement, etc. using the "message" action"""
 
 
 async def get_supabase():
@@ -349,6 +354,15 @@ async def handle_script_chat_message(
                         feedback=content,
                     )
                 )
+
+        elif action_type == "description":
+            desc_content = action.get("content", "")
+            await _save_message(
+                sb, conversation_id, "assistant", desc_content, "script"
+            )
+            yield sse_event(
+                {"done": True, "message_type": "script", "content": desc_content}
+            )
 
         elif action_type == "save":
             all_messages = await _get_messages(sb, conversation_id)
