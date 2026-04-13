@@ -28,14 +28,16 @@ def make_initial_state(topic: str = "Test topic") -> dict:
         "topic": topic,
         "user_input": topic,
         "topic_research": "",
-        "background_url": None,
+        "platforms": ["youtube"],
+        "background_urls": {},
         "photo_name": None,
-        "composite_url": None,
-        "final_url": None,
+        "composite_urls": {},
+        "final_urls": {},
         "thumb_text": None,
         "user_intent": None,
         "extra_instructions": None,
         "photo_list": [],
+        "uploaded_image_url": None,
     }
 
 
@@ -55,31 +57,40 @@ async def test_full_flow_background_to_photos(mock_supabase):
             return_value="",
         ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
+                "services.thumbnail_nodes.get_relevant_memories",
                 new_callable=AsyncMock,
-                return_value=fake_image,
+                return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.find_best_photos",
+                    "services.thumbnail_nodes.generate_background",
                     new_callable=AsyncMock,
-                    return_value=["ref1.jpg"],
+                    return_value=fake_image,
                 ):
-                    mock_supabase.storage.from_.return_value.list = AsyncMock(
-                        return_value=[{"name": "photo1.jpg"}, {"name": "photo2.jpg"}]
-                    )
+                    with patch(
+                        "services.thumbnail_nodes.find_best_photos",
+                        new_callable=AsyncMock,
+                        return_value=["ref1.jpg"],
+                    ):
+                        mock_supabase.storage.from_.return_value.list = AsyncMock(
+                            return_value=[
+                                {"name": "photo1.jpg"},
+                                {"name": "photo2.jpg"},
+                            ]
+                        )
 
-                    graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                    config = {"configurable": {"thread_id": "integration-1"}}
+                        graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                        config = {"configurable": {"thread_id": "integration-1"}}
 
-                    # Step 1: Start → generates background, interrupts at review_background
-                    result = await graph.ainvoke(make_initial_state(), config)
-                    assert result.get("background_url") is not None
+                        # Step 1: Start → generates background, interrupts at review_background
+                        result = await graph.ainvoke(make_initial_state(), config)
+                        assert result.get("background_urls") is not None
+                        assert len(result["background_urls"]) > 0
 
-                    # Step 2: Approve background → shows photos, interrupts at review_photo
-                    result = await graph.ainvoke(
-                        Command(resume={"action": "approve"}), config
-                    )
-                    assert len(result.get("photo_list", [])) > 0
+                        # Step 2: Approve background → shows photos, interrupts at review_photo
+                        result = await graph.ainvoke(
+                            Command(resume={"action": "approve"}), config
+                        )
+                        assert len(result.get("photo_list", [])) > 0
 
 
 @pytest.mark.asyncio
@@ -98,44 +109,50 @@ async def test_full_flow_photos_to_composite(mock_supabase):
             return_value="",
         ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
+                "services.thumbnail_nodes.get_relevant_memories",
                 new_callable=AsyncMock,
-                return_value=fake_image,
+                return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.find_best_photos",
+                    "services.thumbnail_nodes.generate_background",
                     new_callable=AsyncMock,
-                    return_value=[],
+                    return_value=fake_image,
                 ):
                     with patch(
-                        "services.thumbnail_nodes.composite_with_effects",
+                        "services.thumbnail_nodes.find_best_photos",
                         new_callable=AsyncMock,
-                        return_value=fake_image,
+                        return_value=[],
                     ):
-                        mock_supabase.storage.from_.return_value.list = AsyncMock(
-                            return_value=[{"name": "photo1.jpg"}]
-                        )
+                        with patch(
+                            "services.thumbnail_nodes.composite_with_effects",
+                            new_callable=AsyncMock,
+                            return_value=fake_image,
+                        ):
+                            mock_supabase.storage.from_.return_value.list = AsyncMock(
+                                return_value=[{"name": "photo1.jpg"}]
+                            )
 
-                        graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                        config = {"configurable": {"thread_id": "integration-2"}}
+                            graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                            config = {"configurable": {"thread_id": "integration-2"}}
 
-                        # Generate background
-                        await graph.ainvoke(make_initial_state(), config)
-                        # Approve background
-                        await graph.ainvoke(
-                            Command(resume={"action": "approve"}), config
-                        )
-                        # Select photo
-                        result = await graph.ainvoke(
-                            Command(
-                                resume={
-                                    "action": "select_photo",
-                                    "photo_name": "photo1.jpg",
-                                }
-                            ),
-                            config,
-                        )
-                        assert result.get("composite_url") is not None
+                            # Generate background
+                            await graph.ainvoke(make_initial_state(), config)
+                            # Approve background
+                            await graph.ainvoke(
+                                Command(resume={"action": "approve"}), config
+                            )
+                            # Select photo
+                            result = await graph.ainvoke(
+                                Command(
+                                    resume={
+                                        "action": "select_photo",
+                                        "photo_name": "photo1.jpg",
+                                    }
+                                ),
+                                config,
+                            )
+                            assert result.get("composite_urls") is not None
+                            assert len(result["composite_urls"]) > 0
 
 
 @pytest.mark.asyncio
@@ -154,27 +171,32 @@ async def test_feedback_regenerates_background(mock_supabase):
             return_value="",
         ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
+                "services.thumbnail_nodes.get_relevant_memories",
                 new_callable=AsyncMock,
-                return_value=fake_image,
-            ) as mock_gen:
-                graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                config = {"configurable": {"thread_id": "integration-3"}}
+                return_value=[],
+            ):
+                with patch(
+                    "services.thumbnail_nodes.generate_background",
+                    new_callable=AsyncMock,
+                    return_value=fake_image,
+                ) as mock_gen:
+                    graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                    config = {"configurable": {"thread_id": "integration-3"}}
 
-                # Generate background (call #1)
-                result1 = await graph.ainvoke(make_initial_state(), config)
-                first_url = result1["background_url"]
+                    # Generate background (call #1)
+                    result1 = await graph.ainvoke(make_initial_state(), config)
+                    first_url = result1["background_urls"]
 
-                # Send feedback (call #2)
-                result2 = await graph.ainvoke(
-                    Command(resume={"action": "feedback", "feedback": "too dark"}),
-                    config,
-                )
-                second_url = result2["background_url"]
+                    # Send feedback (call #2)
+                    result2 = await graph.ainvoke(
+                        Command(resume={"action": "feedback", "feedback": "too dark"}),
+                        config,
+                    )
+                    second_url = result2["background_urls"]
 
-                # Should have generated twice, with different URLs
-                assert mock_gen.call_count == 2
-                assert first_url != second_url
+                    # Should have generated twice, with different URLs
+                    assert mock_gen.call_count == 2
+                    assert first_url != second_url
 
 
 @pytest.mark.asyncio
@@ -193,45 +215,53 @@ async def test_full_flow_to_text_prompt(mock_supabase):
             return_value="",
         ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
+                "services.thumbnail_nodes.get_relevant_memories",
                 new_callable=AsyncMock,
-                return_value=fake_image,
+                return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.find_best_photos",
+                    "services.thumbnail_nodes.generate_background",
                     new_callable=AsyncMock,
-                    return_value=[],
+                    return_value=fake_image,
                 ):
                     with patch(
-                        "services.thumbnail_nodes.composite_with_effects",
+                        "services.thumbnail_nodes.find_best_photos",
                         new_callable=AsyncMock,
-                        return_value=fake_image,
+                        return_value=[],
                     ):
-                        mock_supabase.storage.from_.return_value.list = AsyncMock(
-                            return_value=[{"name": "p.jpg"}]
-                        )
+                        with patch(
+                            "services.thumbnail_nodes.composite_with_effects",
+                            new_callable=AsyncMock,
+                            return_value=fake_image,
+                        ):
+                            mock_supabase.storage.from_.return_value.list = AsyncMock(
+                                return_value=[{"name": "p.jpg"}]
+                            )
 
-                        graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                        config = {"configurable": {"thread_id": "integration-4"}}
+                            graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                            config = {"configurable": {"thread_id": "integration-4"}}
 
-                        await graph.ainvoke(make_initial_state(), config)
-                        await graph.ainvoke(
-                            Command(resume={"action": "approve"}), config
-                        )
-                        await graph.ainvoke(
-                            Command(
-                                resume={"action": "select_photo", "photo_name": "p.jpg"}
-                            ),
-                            config,
-                        )
-                        # Approve composite → should interrupt at ask_text
-                        await graph.ainvoke(
-                            Command(resume={"action": "approve"}), config
-                        )
-                        # The graph should be at ask_text interrupt
-                        state = await graph.aget_state(config)
-                        has_interrupt = any(
-                            hasattr(t, "interrupts") and t.interrupts
-                            for t in state.tasks
-                        )
-                        assert has_interrupt
+                            await graph.ainvoke(make_initial_state(), config)
+                            await graph.ainvoke(
+                                Command(resume={"action": "approve"}), config
+                            )
+                            await graph.ainvoke(
+                                Command(
+                                    resume={
+                                        "action": "select_photo",
+                                        "photo_name": "p.jpg",
+                                    }
+                                ),
+                                config,
+                            )
+                            # Approve composite → should interrupt at ask_text
+                            await graph.ainvoke(
+                                Command(resume={"action": "approve"}), config
+                            )
+                            # The graph should be at ask_text interrupt
+                            state = await graph.aget_state(config)
+                            has_interrupt = any(
+                                hasattr(t, "interrupts") and t.interrupts
+                                for t in state.tasks
+                            )
+                            assert has_interrupt

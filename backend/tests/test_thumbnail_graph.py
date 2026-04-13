@@ -22,16 +22,18 @@ def _initial_state():
         "conversation_id": "conv-1",
         "user_id": "user-1",
         "topic": "AI tutorial",
-        "user_input": "",
+        "user_input": "crie uma thumb sobre AI",
         "topic_research": "",
-        "background_url": None,
+        "platforms": ["youtube"],
+        "background_urls": {},
         "photo_name": None,
-        "composite_url": None,
-        "final_url": None,
+        "composite_urls": {},
+        "final_urls": {},
         "thumb_text": None,
         "user_intent": None,
         "extra_instructions": None,
         "photo_list": [],
+        "uploaded_image_url": None,
     }
 
 
@@ -100,18 +102,23 @@ async def test_graph_starts_and_interrupts_at_background(mock_supabase):
             return_value="",
         ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
+                "services.thumbnail_nodes.get_relevant_memories",
                 new_callable=AsyncMock,
-                return_value=fake_image,
+                return_value=[],
             ):
-                graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                config = {"configurable": {"thread_id": "test-1"}}
+                with patch(
+                    "services.thumbnail_nodes.generate_background",
+                    new_callable=AsyncMock,
+                    return_value=fake_image,
+                ):
+                    graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                    config = {"configurable": {"thread_id": "test-1"}}
 
-                result = await graph.ainvoke(_initial_state(), config)
+                    result = await graph.ainvoke(_initial_state(), config)
 
-    # Should have background_url set and be interrupted
-    assert result.get("background_url") is not None
-    assert result["background_url"].startswith("user-1/bg_")
+    # Should have background_urls set and be interrupted
+    assert result.get("background_urls") is not None
+    assert result["background_urls"]["youtube"].startswith("user-1/bg_")
 
 
 @_requires_py311
@@ -135,26 +142,31 @@ async def test_graph_approve_background_shows_photos(mock_supabase):
             return_value="",
         ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
+                "services.thumbnail_nodes.get_relevant_memories",
                 new_callable=AsyncMock,
-                return_value=fake_image,
+                return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.find_best_photos",
+                    "services.thumbnail_nodes.generate_background",
                     new_callable=AsyncMock,
-                    return_value=["photo1.jpg"],
+                    return_value=fake_image,
                 ):
-                    graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                    config = {"configurable": {"thread_id": "test-2"}}
+                    with patch(
+                        "services.thumbnail_nodes.find_best_photos",
+                        new_callable=AsyncMock,
+                        return_value=["photo1.jpg"],
+                    ):
+                        graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                        config = {"configurable": {"thread_id": "test-2"}}
 
-                    # Start — generates background, interrupts
-                    await graph.ainvoke(_initial_state(), config)
+                        # Start — generates background, interrupts
+                        await graph.ainvoke(_initial_state(), config)
 
-                    # Resume with approval
-                    result = await graph.ainvoke(
-                        Command(resume={"action": "approve"}),
-                        config,
-                    )
+                        # Resume with approval
+                        result = await graph.ainvoke(
+                            Command(resume={"action": "approve"}),
+                            config,
+                        )
 
     # Should have photo_list populated
     assert len(result.get("photo_list", [])) > 0

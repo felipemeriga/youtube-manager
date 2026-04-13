@@ -10,15 +10,17 @@ def make_base_state(**overrides) -> ThumbnailState:
         user_id="user-1",
         topic="",
         topic_research="",
-        background_url=None,
+        platforms=["youtube"],
+        background_urls={},
         photo_name=None,
-        composite_url=None,
-        final_url=None,
+        composite_urls={},
+        final_urls={},
         thumb_text=None,
         user_input="",
         user_intent=None,
         extra_instructions=None,
         photo_list=[],
+        uploaded_image_url=None,
     )
     defaults.update(overrides)
     return defaults
@@ -37,21 +39,26 @@ async def test_generate_background_returns_url():
         return_value="",
     ):
         with patch(
-            "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
-        ) as mock_sb:
-            sb = MagicMock()
-            mock_sb.return_value = sb
-            sb.storage.from_.return_value.list = AsyncMock(return_value=[])
-            sb.storage.from_.return_value.upload = AsyncMock()
+            "services.thumbnail_nodes.get_relevant_memories",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
-                new_callable=AsyncMock,
-                return_value=fake_image,
-            ):
-                result = await generate_background_node(state)
+                "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+            ) as mock_sb:
+                sb = MagicMock()
+                mock_sb.return_value = sb
+                sb.storage.from_.return_value.list = AsyncMock(return_value=[])
+                sb.storage.from_.return_value.upload = AsyncMock()
+                with patch(
+                    "services.thumbnail_nodes.generate_background",
+                    new_callable=AsyncMock,
+                    return_value=fake_image,
+                ):
+                    result = await generate_background_node(state)
 
-    assert result["background_url"] is not None
-    assert result["background_url"].startswith("user-1/bg_")
+    assert result["background_urls"] is not None
+    assert result["background_urls"]["youtube"].startswith("user-1/bg_youtube_")
 
 
 @pytest.mark.asyncio
@@ -87,7 +94,7 @@ async def test_composite_node_returns_url():
     from services.thumbnail_nodes import composite_node
 
     state = make_base_state(
-        background_url="user-1/bg_abc.png",
+        background_urls={"youtube": "user-1/bg_abc.png"},
         photo_name="photo1.jpg",
     )
     fake_image = b"\x89PNG\r\n\x1a\ncomposite"
@@ -107,7 +114,7 @@ async def test_composite_node_returns_url():
         ):
             result = await composite_node(state)
 
-    assert result["composite_url"].startswith("user-1/comp_")
+    assert result["composite_urls"]["youtube"].startswith("user-1/comp_")
 
 
 @pytest.mark.asyncio
@@ -115,7 +122,7 @@ async def test_add_text_node_returns_url():
     from services.thumbnail_nodes import add_text_node
 
     state = make_base_state(
-        composite_url="user-1/comp_abc.png",
+        composite_urls={"youtube": "user-1/comp_abc.png"},
         thumb_text="Guerra do Ira",
     )
     fake_image = b"\x89PNG\r\n\x1a\nfinal"
@@ -135,14 +142,14 @@ async def test_add_text_node_returns_url():
         ):
             result = await add_text_node(state)
 
-    assert result["final_url"].startswith("user-1/thumb_")
+    assert result["final_urls"]["youtube"].startswith("user-1/thumb_")
 
 
 @pytest.mark.asyncio
 async def test_save_node_returns_final_url():
     from services.thumbnail_nodes import save_node
 
-    state = make_base_state(final_url="user-1/thumb_abc.png")
+    state = make_base_state(final_urls={"youtube": "user-1/thumb_abc.png"})
 
     with patch(
         "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
@@ -154,4 +161,4 @@ async def test_save_node_returns_final_url():
         sb.storage.from_.return_value.remove = AsyncMock()
         result = await save_node(state)
 
-    assert result["final_url"].startswith("user-1/thumbnail_")
+    assert result["final_urls"]["youtube"].startswith("user-1/thumbnail_")
