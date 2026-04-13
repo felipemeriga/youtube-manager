@@ -46,7 +46,8 @@ export default function LoginPage() {
         alignItems: "center",
         justifyContent: "center",
         height: "100vh",
-        background: "linear-gradient(135deg, #0a0a0f 0%, #1a1025 100%)",
+        background:
+          "radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 50%, rgba(59,130,246,0.06) 0%, transparent 50%), linear-gradient(180deg, #0f0f14 0%, #13141f 100%)",
       }}
     >
       <Paper
@@ -89,7 +90,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
           <TextField
             fullWidth
-            label="Email"
+            label="E-mail"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -97,7 +98,7 @@ export default function LoginPage() {
           />
           <TextField
             fullWidth
-            label="Password"
+            label="Senha"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -113,7 +114,7 @@ export default function LoginPage() {
               py: 1.5,
             }}
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Entrando..." : "Entrar"}
           </Button>
         </form>
       </Paper>

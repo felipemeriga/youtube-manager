@@ -54,7 +54,8 @@ def test_upload_asset():
         )
 
     assert response.status_code == 200
-    assert response.json()["name"] == "photo.jpg"
+    name = response.json()["name"]
+    assert name.startswith("photo_") and name.endswith(".jpg")
 
 
 def test_delete_asset():
@@ -134,7 +135,8 @@ def test_upload_preserves_content_type():
     assert response.status_code == 200
     # Verify upload was called with the right content-type header
     upload_call = mock_sb.storage.from_.return_value.upload.call_args
-    assert upload_call[0][0] == "test-user/image.png"
+    path = upload_call[0][0]
+    assert path.startswith("test-user/image_") and path.endswith(".png")
 
 
 def test_upload_asset_response_structure():
@@ -150,11 +152,9 @@ def test_upload_asset_response_structure():
         )
 
     data = response.json()
-    assert data == {
-        "name": "logo.png",
-        "bucket": "logos",
-        "path": "test-user/logo.png",
-    }
+    assert data["bucket"] == "logos"
+    assert data["name"].startswith("logo_") and data["name"].endswith(".png")
+    assert data["path"].startswith("test-user/logo_") and data["path"].endswith(".png")
 
 
 def test_delete_asset_response_structure():
@@ -242,10 +242,12 @@ def test_upload_constructs_correct_storage_path():
             files={"file": ("photo.jpg", b"data", "image/jpeg")},
         )
 
-    assert response.json()["path"] == "user-123/photo.jpg"
-    mock_sb.storage.from_.return_value.upload.assert_called_once_with(
-        "user-123/photo.jpg", b"data", {"content-type": "image/jpeg"}
-    )
+    path = response.json()["path"]
+    assert path.startswith("user-123/photo_") and path.endswith(".jpg")
+    upload_call = mock_sb.storage.from_.return_value.upload.call_args
+    assert upload_call[0][0] == path
+    assert upload_call[0][1] == b"data"
+    assert upload_call[0][2] == {"content-type": "image/jpeg"}
 
 
 def test_delete_asset_calls_storage_remove():

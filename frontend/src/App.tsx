@@ -5,6 +5,7 @@ import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
 import ChatPage from "./pages/ChatPage";
 import AssetsPage from "./pages/AssetsPage";
+import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           >
             <Route path="/" element={<ChatPage />} />
             <Route path="/assets" element={<AssetsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </AuthProvider>

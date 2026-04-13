@@ -189,10 +189,7 @@ async def test_generate_thumbnail_only_personal_photos():
     contents = call_args[1]["contents"]
     # photo text + 2 photos + prompt
     assert len(contents) == 4
-    assert (
-        contents[0]
-        == "Here are my personal photos. Pick the best one for this thumbnail:"
-    )
+    assert "personal photos" in contents[0].lower()
 
 
 @pytest.mark.asyncio

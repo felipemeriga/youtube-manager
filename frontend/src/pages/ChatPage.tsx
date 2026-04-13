@@ -18,6 +18,8 @@ import {
   getConversation,
   deleteConversation,
   streamChat,
+  updateConversation,
+  AVAILABLE_MODELS,
 } from "../lib/api";
 
 interface Message {
@@ -43,10 +45,13 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStage, setCurrentStage] = useState<string | null>(null);
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
+  const [conversationModel, setConversationModel] = useState<string>("");
   const [showModeDialog, setShowModeDialog] = useState(false);
-  const pendingMessageRef = useRef<{ content: string; type: string } | null>(
-    null
-  );
+  const pendingMessageRef = useRef<{
+    content: string;
+    type: string;
+    imageUrl?: string;
+  } | null>(null);
   const streamingRef = useRef("");
   const imageRef = useRef<{ base64: string; url: string } | null>(null);
 
@@ -58,68 +63,6 @@ export default function ChatPage() {
       pollRef.current = null;
     }
   }, []);
-
-  const detectPendingStage = (msgs: Message[], mode: string): string | null => {
-    if (msgs.length === 0) return null;
-    const lastMsg = msgs[msgs.length - 1];
-    if (lastMsg.role !== "user") return null;
-
-    if (mode === "script") {
-      if (lastMsg.type === "text") return "finding_trends";
-      if (lastMsg.type === "topic_selection") return "writing_script";
-      if (lastMsg.type === "approval") {
-        const lastAssistant = [...msgs]
-          .reverse()
-          .find((m) => m.role === "assistant");
-        if (lastAssistant?.type === "script") return "saving";
-      }
-    } else {
-      if (lastMsg.type === "text") return "generating";
-      if (lastMsg.type === "save") return "generating";
-      if (lastMsg.type === "regenerate") return "generating";
-    }
-    return null;
-  };
-
-  const startPolling = useCallback(
-    (convId: string, initialCount: number) => {
-      stopPolling();
-      let attempts = 0;
-      const maxAttempts = 60; // ~5 minutes at 5s intervals
-
-      pollRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts > maxAttempts) {
-          stopPolling();
-          setCurrentStage(null);
-          setIsStreaming(false);
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: "Request timed out. Please try again.",
-              type: "text",
-            },
-          ]);
-          return;
-        }
-        try {
-          const data = await getConversation(convId);
-          const convData = data as { messages: Message[]; mode?: string };
-          const newMsgs = convData.messages || [];
-          if (newMsgs.length > initialCount) {
-            setMessages(newMsgs);
-            stopPolling();
-            setCurrentStage(null);
-            setIsStreaming(false);
-          }
-        } catch {
-          // ignore poll errors
-        }
-      }, 5000);
-    },
-    [stopPolling]
-  );
 
   useEffect(() => {
     return () => stopPolling();
@@ -139,23 +82,33 @@ export default function ChatPage() {
     setSelectedId(id);
     setCurrentStage(null);
     setIsStreaming(false);
+    setStreamingContent("");
 
-    const data = await getConversation(id);
-    const convData = data as { messages: Message[]; mode?: string };
-    const msgs = convData.messages || [];
-    const mode = convData.mode || "thumbnail";
-    setMessages(msgs);
-    setConversationMode(mode);
-
-    const pendingStage = detectPendingStage(msgs, mode);
-    if (pendingStage) {
-      setCurrentStage(pendingStage);
-      setIsStreaming(true);
-      startPolling(id, msgs.length);
+    try {
+      const data = await getConversation(id);
+      const convData = data as {
+        messages: Message[];
+        mode?: string;
+        model?: string;
+      };
+      const msgs = convData.messages || [];
+      const mode = convData.mode || "thumbnail";
+      const model = convData.model || "";
+      setMessages(msgs);
+      setConversationMode(mode);
+      setConversationModel(model);
+    } catch {
+      setMessages([]);
+      setCurrentStage(null);
+      setIsStreaming(false);
     }
   };
 
   const handleCreateConversation = () => {
+    stopPolling();
+    setCurrentStage(null);
+    setIsStreaming(false);
+    setStreamingContent("");
     setShowModeDialog(true);
   };
 
@@ -169,9 +122,9 @@ export default function ChatPage() {
     setConversationMode(mode);
 
     if (pendingMessageRef.current) {
-      const { content, type } = pendingMessageRef.current;
+      const { content, type, imageUrl } = pendingMessageRef.current;
       pendingMessageRef.current = null;
-      await doStream(newConv.id, content, type);
+      await doStream(newConv.id, content, type, imageUrl);
     }
   };
 
@@ -184,30 +137,60 @@ export default function ChatPage() {
     }
   };
 
-  const sendMessage = async (content: string, type: string = "text") => {
+  const sendMessage = async (
+    content: string,
+    type: string = "text",
+    imageUrl?: string,
+  ) => {
     if (!selectedId) {
-      pendingMessageRef.current = { content, type };
+      pendingMessageRef.current = { content, type, imageUrl };
       setShowModeDialog(true);
       return;
     }
-    await doStream(selectedId, content, type);
+    await doStream(selectedId, content, type, imageUrl);
   };
 
   const doStream = async (
     conversationId: string,
     content: string,
-    type: string
+    type: string,
+    imageUrl?: string,
   ) => {
-    // Add user message to UI immediately
+    // Add user message to UI immediately with readable label
     if (type === "text") {
-      setMessages((prev) => [...prev, { role: "user", content, type: "text" }]);
+      let displayContent = content;
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed?.action === "approve") displayContent = "Aprovado ✓";
+        else if (parsed?.action === "feedback")
+          displayContent = parsed.feedback || "Refazer";
+        else if (parsed?.action === "select_photo") {
+          displayContent = parsed.feedback
+            ? `Selecionado: ${parsed.photo_name} — "${parsed.feedback}"`
+            : `Selecionado: ${parsed.photo_name}`;
+        } else if (parsed?.action === "provide_text")
+          displayContent = `Texto: "${parsed.text}"`;
+        else if (parsed?.action === "save") displayContent = "Salvar";
+      } catch {
+        // Not JSON — use content as-is
+      }
+      const userMsg: Message = {
+        role: "user",
+        content: displayContent,
+        type: "text",
+      };
+      if (imageUrl) {
+        userMsg.image_url = imageUrl;
+      }
+      setMessages((prev) => [...prev, userMsg]);
     }
 
     setIsStreaming(true);
     setStreamingContent("");
-    setCurrentStage(null);
     streamingRef.current = "";
     imageRef.current = null;
+
+    setCurrentStage("generating");
 
     try {
       await streamChat(conversationId, content, type, {
@@ -222,9 +205,12 @@ export default function ChatPage() {
           imageRef.current = { base64, url };
         },
         onError: (error) => {
+          const content = error.toLowerCase().includes("persona")
+            ? `${error} [Ir para Configurações](/settings)`
+            : `Error: ${error}`;
           setMessages((prev) => [
             ...prev,
-            { role: "assistant", content: `Error: ${error}`, type: "text" },
+            { role: "assistant", content, type: "text" },
           ]);
           setStreamingContent("");
           setIsStreaming(false);
@@ -255,13 +241,13 @@ export default function ChatPage() {
           setCurrentStage(null);
           loadConversations();
         },
-      });
+      }, imageUrl);
     } catch {
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "Something went wrong. Please try again.",
+          content: "Algo deu errado. Tente novamente.",
           type: "text",
         },
       ]);
@@ -271,31 +257,64 @@ export default function ChatPage() {
     }
   };
 
-  const handleSend = (content: string) => sendMessage(content, "text");
+  const handleSend = (content: string, imageUrl?: string) =>
+    sendMessage(content, "text", imageUrl);
 
   const handleTopicSelect = (index: number) => {
     if (!selectedId) return;
-    doStream(selectedId, String(index), "topic_selection");
+    const topicsMsg = messages.find((m) => m.type === "topics");
+    if (topicsMsg) {
+      try {
+        const topics = JSON.parse(topicsMsg.content);
+        const topic = topics[index];
+        const title = topic?.title || `Topic ${index + 1}`;
+        sendMessage(`I want to make a video about: ${title}`);
+      } catch {
+        sendMessage(`I choose topic ${index + 1}`);
+      }
+    } else {
+      sendMessage(`I choose topic ${index + 1}`);
+    }
+  };
+
+  const handlePhotoSelect = (photoName: string, instructions?: string) => {
+    if (!selectedId) return;
+    const payload = JSON.stringify({
+      action: "select_photo",
+      photo_name: photoName,
+      feedback: instructions || null,
+    });
+    doStream(selectedId, payload, "text");
+  };
+
+  const handleSubmitText = (text: string) => {
+    if (!selectedId) return;
+    doStream(
+      selectedId,
+      JSON.stringify({ action: "provide_text", text }),
+      "text"
+    );
   };
 
   const handleApprove = () => {
     if (!selectedId) return;
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.type === "image") {
-      sendMessage("SAVE_OUTPUT", "save");
-    } else if (lastMsg?.type === "script") {
-      doStream(selectedId, "", "approve_script");
-    }
+    doStream(selectedId, JSON.stringify({ action: "approve" }), "text");
   };
 
   const handleReject = () => {
     if (!selectedId) return;
     const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.type === "image") {
-      sendMessage("REGENERATE", "regenerate");
-    } else if (lastMsg?.type === "script") {
-      doStream(selectedId, "", "reject_script");
+    if (lastMsg?.type === "script") {
+      sendMessage("Reescreva o roteiro com melhorias");
+    } else {
+      doStream(selectedId, JSON.stringify({ action: "feedback" }), "text");
     }
+  };
+
+  const handleModelChange = async (newModel: string) => {
+    if (!selectedId) return;
+    setConversationModel(newModel);
+    await updateConversation(selectedId, { model: newModel || undefined });
   };
 
   return (
@@ -316,7 +335,20 @@ export default function ChatPage() {
         onApprove={handleApprove}
         onReject={handleReject}
         onTopicSelect={handleTopicSelect}
+        onPhotoSelect={handlePhotoSelect}
+        onSubmitText={handleSubmitText}
         conversationMode={conversationMode}
+        models={
+          conversationMode === "script" && selectedId
+            ? AVAILABLE_MODELS
+            : undefined
+        }
+        selectedModel={conversationModel}
+        onModelChange={
+          conversationMode === "script" && selectedId
+            ? handleModelChange
+            : undefined
+        }
       />
       <Dialog
         open={showModeDialog}
@@ -330,10 +362,10 @@ export default function ChatPage() {
           },
         }}
       >
-        <DialogTitle>New Conversation</DialogTitle>
+        <DialogTitle>Nova Conversa</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            What would you like to create?
+            O que você quer criar?
           </Typography>
           <Stack spacing={1.5}>
             <Button
@@ -368,7 +400,7 @@ export default function ChatPage() {
                 },
               }}
             >
-              Video Script
+              Roteiro de Vídeo
             </Button>
           </Stack>
         </DialogContent>

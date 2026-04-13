@@ -39,7 +39,7 @@ export default function ScriptTopicList({
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-        Select a topic to develop:
+        Selecione um tema para desenvolver:
       </Typography>
       {topics.map((topic, index) => (
         <Card
@@ -114,7 +114,7 @@ export default function ScriptTopicList({
                   }}
                 >
                   <OpenInNewIcon sx={{ fontSize: 12 }} />
-                  Source
+                  Fonte
                 </Link>
               )}
             </CardContent>

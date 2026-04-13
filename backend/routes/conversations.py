@@ -12,6 +12,10 @@ class CreateConversationRequest(BaseModel):
     mode: str = "thumbnail"
 
 
+class UpdateConversationRequest(BaseModel):
+    model: str | None = None
+
+
 router = APIRouter()
 
 
@@ -69,6 +73,30 @@ async def get_conversation(
         .execute()
     )
     return {**conv.data, "messages": messages.data}
+
+
+@router.patch("/api/conversations/{conversation_id}")
+async def update_conversation(
+    conversation_id: str,
+    request: UpdateConversationRequest,
+    user_id: str = Depends(get_current_user),
+):
+    sb = get_supabase()
+    updates = {}
+    if request.model is not None:
+        updates["model"] = request.model
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    result = (
+        sb.table("conversations")
+        .update(updates)
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return result.data[0]
 
 
 @router.delete("/api/conversations/{conversation_id}")
