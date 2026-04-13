@@ -59,7 +59,7 @@ async def get_conversation(
         .select("*")
         .eq("id", conversation_id)
         .eq("user_id", user_id)
-        .single()
+        .maybe_single()
         .execute()
     )
     if not conv.data:

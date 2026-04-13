@@ -21,7 +21,7 @@ CREATE TABLE messages (
     role            TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
     content         TEXT NOT NULL,
     type            TEXT NOT NULL DEFAULT 'text'
-                    CHECK (type IN ('text', 'plan', 'approval', 'image', 'save', 'regenerate', 'topics', 'script', 'saved', 'topic_selection', 'background', 'photo_grid', 'composite', 'photo_selected', 'final_thumbnail')),
+                    CHECK (type IN ('text', 'plan', 'approval', 'image', 'save', 'regenerate', 'regenerate_composite', 'regenerate_text', 'topics', 'script', 'saved', 'topic_selection', 'background', 'photo_grid', 'composite', 'photo_selected', 'final_thumbnail', 'text_prompt', 'submit_text', 'outline', 'research')),
     image_url       TEXT,
     created_at      TIMESTAMPTZ DEFAULT now()
 );
