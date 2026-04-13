@@ -39,16 +39,17 @@ async def entry_router(
         )
         action = intent.get("action", "use_as_background")
 
+        platforms = state.get("platforms") or ["youtube"]
         if action in ("use_as_composite", "skip_to_text"):
-            # Image is a composite, skip to text
+            # Image is a composite — use for all platforms
             return Command(
-                update={"composite_url": uploaded},
+                update={"composite_urls": {p: uploaded for p in platforms}},
                 goto="ask_text",
             )
         else:
-            # Default: use as background
+            # Default: use as background for all platforms
             return Command(
-                update={"background_url": uploaded},
+                update={"background_urls": {p: uploaded for p in platforms}},
                 goto="show_photos",
             )
 
@@ -68,7 +69,7 @@ async def review_background(
     user_response = interrupt(
         {
             "type": "background",
-            "image_url": state["background_url"],
+            "image_urls": state.get("background_urls") or {},
         }
     )
 
@@ -139,7 +140,7 @@ async def review_composite(
     user_response = interrupt(
         {
             "type": "composite",
-            "image_url": state["composite_url"],
+            "image_urls": state.get("composite_urls") or {},
         }
     )
 
@@ -198,7 +199,7 @@ async def review_final(
     user_response = interrupt(
         {
             "type": "image",
-            "image_url": state["final_url"],
+            "image_urls": state.get("final_urls") or {},
         }
     )
 
