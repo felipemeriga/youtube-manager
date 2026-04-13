@@ -29,6 +29,7 @@ class ChatRequest(BaseModel):
     content: str
     type: str = "text"
     image_url: str | None = None  # Storage path of uploaded image
+    platforms: list[str] | None = None  # e.g. ["youtube", "instagram_post"]
 
 
 def sse_event(data: dict) -> str:
@@ -115,6 +116,7 @@ async def thumbnail_stream(
     content: str,
     user_id: str,
     image_url: str | None = None,
+    platforms: list[str] | None = None,
 ):
     """Run the thumbnail graph and stream SSE events."""
     graph = await get_thumbnail_graph()
@@ -180,10 +182,11 @@ async def thumbnail_stream(
                     "topic": content,
                     "user_input": content,
                     "topic_research": "",
-                    "background_url": None,
+                    "platforms": platforms or ["youtube"],
+                    "background_urls": {},
                     "photo_name": None,
-                    "composite_url": None,
-                    "final_url": None,
+                    "composite_urls": {},
+                    "final_urls": {},
                     "thumb_text": None,
                     "user_intent": None,
                     "extra_instructions": None,
@@ -206,47 +209,57 @@ async def thumbnail_stream(
             msg_type = interrupt_value.get("type", "text")
 
             if msg_type in ("background", "composite", "image"):
-                image_url = interrupt_value.get("image_url", "")
-                if image_url:
-                    # Retry download — large files may not be ready immediately
-                    image_data = None
-                    for attempt in range(3):
-                        try:
-                            image_data = await sb.storage.from_("outputs").download(
-                                image_url
-                            )
-                            break
-                        except Exception:
-                            if attempt < 2:
-                                await asyncio.sleep(1)
-                    if not image_data:
+                image_urls = interrupt_value.get("image_urls") or {}
+                if image_urls:
+                    # Download all platform images
+                    images_b64 = {}
+                    for platform, url in image_urls.items():
+                        img_data = None
+                        for attempt in range(3):
+                            try:
+                                img_data = await sb.storage.from_("outputs").download(
+                                    url
+                                )
+                                break
+                            except Exception:
+                                if attempt < 2:
+                                    await asyncio.sleep(1)
+                        if img_data:
+                            images_b64[platform] = base64.b64encode(img_data).decode()
+
+                    if not images_b64:
                         yield sse_event(
                             {"error": "Falha ao baixar imagem", "done": True}
                         )
                         return
-                    image_b64 = base64.b64encode(image_data).decode()
 
-                    # Save assistant message
+                    # Save assistant message (use first platform URL)
                     labels = {
                         "background": "Aqui está o fundo.",
                         "composite": "Aqui está a composição.",
                         "image": "Aqui está sua thumbnail final!",
                     }
+                    first_url = next(iter(image_urls.values()))
                     await _save_message(
                         sb,
                         conversation_id,
                         "assistant",
                         labels.get(msg_type, ""),
                         msg_type,
-                        image_url=image_url,
+                        image_url=first_url,
                     )
 
                     yield sse_event(
                         {
                             "done": True,
                             "message_type": msg_type,
-                            "image_base64": image_b64,
-                            "image_url": image_url,
+                            "images": {
+                                p: {"base64": b64, "url": image_urls[p]}
+                                for p, b64 in images_b64.items()
+                            },
+                            # Keep backward compat — first platform as main
+                            "image_base64": next(iter(images_b64.values())),
+                            "image_url": first_url,
                         }
                     )
                     return
@@ -286,7 +299,6 @@ async def thumbnail_stream(
                 return
         else:
             # Graph completed (saved)
-            final_url = result.get("final_url", "")
             await _save_message(
                 sb,
                 conversation_id,
@@ -294,12 +306,14 @@ async def thumbnail_stream(
                 "Thumbnail salva!",
                 "text",
             )
+            final_urls = result.get("final_urls") or {}
             yield sse_event(
                 {
                     "done": True,
                     "saved": True,
                     "content": "Thumbnail salva!",
-                    "path": final_url,
+                    "paths": final_urls,
+                    "path": next(iter(final_urls.values()), ""),
                 }
             )
             return
@@ -339,6 +353,7 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
             content=request.content,
             user_id=user_id,
             image_url=request.image_url,
+            platforms=request.platforms,
         )
 
     return StreamingResponse(stream, media_type="text/event-stream")
