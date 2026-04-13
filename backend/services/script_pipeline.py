@@ -358,7 +358,20 @@ async def handle_script_chat_message(
             )
             script_content = script_msg["content"] if script_msg else ""
 
-            slug = slugify(content) if content.strip() else "script"
+            # Use conversation title for filename, not the raw save command
+            conv_result = (
+                await sb.table("conversations")
+                .select("title")
+                .eq("id", conversation_id)
+                .maybe_single()
+                .execute()
+            )
+            title = (
+                conv_result.data.get("title", "")
+                if conv_result and conv_result.data
+                else ""
+            )
+            slug = slugify(title) if title and title.strip() else "script"
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
             path = f"{user_id}/{slug}-{timestamp}.md"
 
