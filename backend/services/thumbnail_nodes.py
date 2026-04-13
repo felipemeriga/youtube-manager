@@ -67,8 +67,9 @@ def _get_platforms(state: ThumbnailState) -> list[str]:
     return state.get("platforms") or DEFAULT_PLATFORMS
 
 
-async def _upload_image(sb, user_id: str, prefix: str, image_bytes: bytes) -> str:
-    """Upload image to outputs bucket and return storage path."""
+async def _upload_image(user_id: str, prefix: str, image_bytes: bytes) -> str:
+    """Upload image to outputs bucket using a fresh client to avoid HTTP/2 conflicts."""
+    sb = await _get_supabase()
     temp_name = f"{prefix}_{uuid.uuid4().hex[:8]}.png"
     storage_path = f"{user_id}/{temp_name}"
     await sb.storage.from_("outputs").upload(
@@ -130,7 +131,7 @@ async def generate_background_node(state: ThumbnailState) -> dict:
             aspect_ratio=cfg["aspect_ratio"],
             image_size=cfg["image_size"],
         )
-        path = await _upload_image(sb, user_id, f"bg_{platform}", bg_bytes)
+        path = await _upload_image(user_id, f"bg_{platform}", bg_bytes)
         return platform, path
 
     results = await asyncio.gather(*[_gen_bg(p) for p in platforms])
@@ -193,7 +194,7 @@ async def composite_node(state: ThumbnailState) -> dict:
             aspect_ratio=cfg["aspect_ratio"],
             image_size=cfg["image_size"],
         )
-        path = await _upload_image(sb, user_id, f"comp_{platform}", comp_bytes)
+        path = await _upload_image(user_id, f"comp_{platform}", comp_bytes)
         return platform, path
 
     results = await asyncio.gather(*[_gen_comp(p) for p in platforms])
@@ -224,7 +225,7 @@ async def add_text_node(state: ThumbnailState) -> dict:
             aspect_ratio=cfg["aspect_ratio"],
             image_size=cfg["image_size"],
         )
-        path = await _upload_image(sb, user_id, f"thumb_{platform}", final_bytes)
+        path = await _upload_image(user_id, f"thumb_{platform}", final_bytes)
         return platform, path
 
     results = await asyncio.gather(*[_gen_text(p) for p in platforms])
