@@ -121,8 +121,8 @@ async def generate_background_node(state: ThumbnailState) -> dict:
         "Place the logo in the same position as the references."
     )
 
-    # Generate for all platforms concurrently
-    async def _gen_bg(platform: str) -> tuple[str, str]:
+    # Generate for all platforms concurrently, then upload sequentially
+    async def _gen_bg(platform: str) -> tuple[str, bytes]:
         cfg = PLATFORM_CONFIGS[platform]
         bg_bytes = await generate_background(
             prompt=prompt,
@@ -131,11 +131,15 @@ async def generate_background_node(state: ThumbnailState) -> dict:
             aspect_ratio=cfg["aspect_ratio"],
             image_size=cfg["image_size"],
         )
-        path = await _upload_image(user_id, f"bg_{platform}", bg_bytes)
-        return platform, path
+        return platform, bg_bytes
 
-    results = await asyncio.gather(*[_gen_bg(p) for p in platforms])
-    background_urls = dict(results)
+    gen_results = await asyncio.gather(*[_gen_bg(p) for p in platforms])
+
+    # Upload sequentially to avoid connection pool exhaustion
+    background_urls = {}
+    for platform, bg_bytes in gen_results:
+        path = await _upload_image(user_id, f"bg_{platform}", bg_bytes)
+        background_urls[platform] = path
 
     return {
         "background_urls": background_urls,
@@ -180,11 +184,12 @@ async def composite_node(state: ThumbnailState) -> dict:
     ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
     extra = state.get("extra_instructions")
 
-    async def _gen_comp(platform: str) -> tuple[str, str]:
+    async def _gen_comp(platform: str) -> tuple[str, bytes]:
         bg_url = background_urls.get(platform)
         if not bg_url:
             raise Exception(f"No background for platform {platform}")
-        bg_bytes = await sb.storage.from_("outputs").download(bg_url)
+        dl_sb = await _get_supabase()
+        bg_bytes = await dl_sb.storage.from_("outputs").download(bg_url)
         cfg = PLATFORM_CONFIGS[platform]
         comp_bytes = await composite_with_effects(
             bg_bytes,
@@ -194,11 +199,14 @@ async def composite_node(state: ThumbnailState) -> dict:
             aspect_ratio=cfg["aspect_ratio"],
             image_size=cfg["image_size"],
         )
-        path = await _upload_image(user_id, f"comp_{platform}", comp_bytes)
-        return platform, path
+        return platform, comp_bytes
 
-    results = await asyncio.gather(*[_gen_comp(p) for p in platforms])
-    composite_urls = dict(results)
+    gen_results = await asyncio.gather(*[_gen_comp(p) for p in platforms])
+
+    composite_urls = {}
+    for platform, comp_bytes in gen_results:
+        path = await _upload_image(user_id, f"comp_{platform}", comp_bytes)
+        composite_urls[platform] = path
 
     return {"composite_urls": composite_urls, "extra_instructions": None}
 
@@ -212,11 +220,12 @@ async def add_text_node(state: ThumbnailState) -> dict:
 
     ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
 
-    async def _gen_text(platform: str) -> tuple[str, str]:
+    async def _gen_text(platform: str) -> tuple[str, bytes]:
         comp_url = composite_urls.get(platform)
         if not comp_url:
             raise Exception(f"No composite for platform {platform}")
-        comp_bytes = await sb.storage.from_("outputs").download(comp_url)
+        dl_sb = await _get_supabase()
+        comp_bytes = await dl_sb.storage.from_("outputs").download(comp_url)
         cfg = PLATFORM_CONFIGS[platform]
         final_bytes = await add_text_with_style(
             comp_bytes,
@@ -225,11 +234,14 @@ async def add_text_node(state: ThumbnailState) -> dict:
             aspect_ratio=cfg["aspect_ratio"],
             image_size=cfg["image_size"],
         )
-        path = await _upload_image(user_id, f"thumb_{platform}", final_bytes)
-        return platform, path
+        return platform, final_bytes
 
-    results = await asyncio.gather(*[_gen_text(p) for p in platforms])
-    final_urls = dict(results)
+    gen_results = await asyncio.gather(*[_gen_text(p) for p in platforms])
+
+    final_urls = {}
+    for platform, final_bytes in gen_results:
+        path = await _upload_image(user_id, f"thumb_{platform}", final_bytes)
+        final_urls[platform] = path
 
     return {"final_urls": final_urls}
 
