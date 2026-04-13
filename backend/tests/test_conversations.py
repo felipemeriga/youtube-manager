@@ -66,35 +66,49 @@ def test_create_conversation():
     assert response.json()["id"] == "new-conv"
 
 
+class _ChainableMock:
+    """A mock that returns itself for any chained method call, until execute()."""
+
+    def __init__(self, execute_data=None):
+        self._execute_data = execute_data
+
+    def __getattr__(self, name):
+        if name == "execute":
+            result = MagicMock()
+            result.data = self._execute_data
+            return lambda: result
+        return lambda *a, **kw: self
+
+
+def _make_sb_for_get_conv(conv_data, msg_data):
+    """Build a mock supabase for get_conversation endpoint."""
+    mock_sb = MagicMock()
+
+    def table_fn(name):
+        if name == "conversations":
+            return _ChainableMock(execute_data=conv_data)
+        return _ChainableMock(execute_data=msg_data)
+
+    mock_sb.table = table_fn
+    return mock_sb
+
+
 def test_get_conversation_with_messages():
     user_id = "test-user-id"
     client = create_app(user_id)
 
-    mock_sb = MagicMock()
-
-    conv_result = MagicMock()
-    conv_result.data = {"id": "conv-1", "title": "Test", "user_id": user_id}
-
-    msg_result = MagicMock()
-    msg_result.data = [
-        {
-            "id": "msg-1",
-            "role": "user",
-            "content": "hello",
-            "type": "text",
-            "image_url": None,
-        }
-    ]
-
-    def table_dispatch(name):
-        q = MagicMock()
-        if name == "conversations":
-            q.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = conv_result
-        else:
-            q.select.return_value.eq.return_value.order.return_value.execute.return_value = msg_result
-        return q
-
-    mock_sb.table.side_effect = table_dispatch
+    mock_sb = _make_sb_for_get_conv(
+        conv_data={"id": "conv-1", "title": "Test", "user_id": user_id},
+        msg_data=[
+            {
+                "id": "msg-1",
+                "role": "user",
+                "content": "hello",
+                "type": "text",
+                "image_url": None,
+            }
+        ],
+    )
 
     with patch("routes.conversations.get_supabase", return_value=mock_sb):
         response = client.get("/api/conversations/conv-1")
@@ -148,10 +162,7 @@ def test_get_nonexistent_conversation_returns_404():
     user_id = "test-user-id"
     client = create_app(user_id)
 
-    mock_sb = MagicMock()
-    conv_result = MagicMock()
-    conv_result.data = None
-    mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = conv_result
+    mock_sb = _make_sb_for_get_conv(conv_data=None, msg_data=[])
 
     with patch("routes.conversations.get_supabase", return_value=mock_sb):
         response = client.get("/api/conversations/nonexistent-id")
@@ -193,28 +204,16 @@ def test_get_conversation_response_structure():
     user_id = "test-user-id"
     client = create_app(user_id)
 
-    mock_sb = MagicMock()
-
-    conv_result = MagicMock()
-    conv_result.data = {
-        "id": "conv-1",
-        "title": "Test",
-        "user_id": user_id,
-        "created_at": "2026-04-03T00:00:00Z",
-        "updated_at": "2026-04-03T00:00:00Z",
-    }
-    msg_result = MagicMock()
-    msg_result.data = []
-
-    def table_dispatch(name):
-        q = MagicMock()
-        if name == "conversations":
-            q.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = conv_result
-        else:
-            q.select.return_value.eq.return_value.order.return_value.execute.return_value = msg_result
-        return q
-
-    mock_sb.table.side_effect = table_dispatch
+    mock_sb = _make_sb_for_get_conv(
+        conv_data={
+            "id": "conv-1",
+            "title": "Test",
+            "user_id": user_id,
+            "created_at": "2026-04-03T00:00:00Z",
+            "updated_at": "2026-04-03T00:00:00Z",
+        },
+        msg_data=[],
+    )
 
     with patch("routes.conversations.get_supabase", return_value=mock_sb):
         response = client.get("/api/conversations/conv-1")
@@ -272,21 +271,13 @@ def test_get_conversation_with_multiple_messages():
     user_id = "test-user-id"
     client = create_app(user_id)
 
-    mock_sb = mock_supabase()
-    conv_query = MagicMock()
-    conv_query.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
-        "id": "conv-1",
-        "title": "Test",
-        "user_id": user_id,
-    }
-    msg_query = MagicMock()
-    msg_query.select.return_value.eq.return_value.order.return_value.execute.return_value.data = [
-        {"id": "msg-1", "role": "user", "content": "hello", "type": "text"},
-        {"id": "msg-2", "role": "assistant", "content": "plan", "type": "plan"},
-        {"id": "msg-3", "role": "user", "content": "APPROVED", "type": "approval"},
-    ]
-    mock_sb.table.side_effect = lambda name: (
-        conv_query if name == "conversations" else msg_query
+    mock_sb = _make_sb_for_get_conv(
+        conv_data={"id": "conv-1", "title": "Test", "user_id": user_id},
+        msg_data=[
+            {"id": "msg-1", "role": "user", "content": "hello", "type": "text"},
+            {"id": "msg-2", "role": "assistant", "content": "plan", "type": "plan"},
+            {"id": "msg-3", "role": "user", "content": "APPROVED", "type": "approval"},
+        ],
     )
 
     with patch("routes.conversations.get_supabase", return_value=mock_sb):
