@@ -8,6 +8,24 @@ class UserIntent(TypedDict):
     text: str | None
 
 
+# Platform configs: aspect_ratio for Gemini, label for UI
+PLATFORM_CONFIGS = {
+    "youtube": {"aspect_ratio": "16:9", "label": "YouTube", "image_size": "4K"},
+    "instagram_post": {
+        "aspect_ratio": "1:1",
+        "label": "Instagram Post",
+        "image_size": "4K",
+    },
+    "instagram_story": {
+        "aspect_ratio": "9:16",
+        "label": "Instagram Story",
+        "image_size": "4K",
+    },
+}
+
+DEFAULT_PLATFORMS = ["youtube"]
+
+
 class ThumbnailState(TypedDict):
     # Identity
     conversation_id: str
@@ -17,11 +35,14 @@ class ThumbnailState(TypedDict):
     topic: str
     topic_research: str
 
-    # Artifacts (Supabase storage paths)
-    background_url: str | None
+    # Platforms to generate for
+    platforms: list[str]  # e.g. ["youtube", "instagram_post", "instagram_story"]
+
+    # Artifacts per platform: {"youtube": "path", "instagram_post": "path", ...}
+    background_urls: dict[str, str]
     photo_name: str | None
-    composite_url: str | None
-    final_url: str | None
+    composite_urls: dict[str, str]
+    final_urls: dict[str, str]
     thumb_text: str | None
 
     # User interaction

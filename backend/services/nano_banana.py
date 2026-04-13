@@ -74,6 +74,8 @@ async def generate_background(
     prompt: str,
     reference_images: list[bytes],
     logos: list[bytes] | None = None,
+    aspect_ratio: str = "16:9",
+    image_size: str = "4K",
 ) -> bytes:
     """Generate ONLY background + logo, no person, no text."""
     client = genai.Client(api_key=settings.gemini_api_key)
@@ -112,8 +114,8 @@ async def generate_background(
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE", "TEXT"],
             image_config=types.ImageConfig(
-                aspect_ratio="16:9",
-                image_size="4K",
+                aspect_ratio=aspect_ratio,
+                image_size=image_size,
             ),
         ),
     )
@@ -131,6 +133,8 @@ async def composite_with_effects(
     person_bytes: bytes,
     reference_images: list[bytes],
     extra_instructions: str | None = None,
+    aspect_ratio: str = "16:9",
+    image_size: str = "4K",
 ) -> bytes:
     """Use Gemini to composite person onto background with effects matching references."""
     client = genai.Client(api_key=settings.gemini_api_key)
@@ -186,8 +190,8 @@ async def composite_with_effects(
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE", "TEXT"],
             image_config=types.ImageConfig(
-                aspect_ratio="16:9",
-                image_size="4K",
+                aspect_ratio=aspect_ratio,
+                image_size=image_size,
             ),
         ),
     )
@@ -204,6 +208,8 @@ async def add_text_with_style(
     composite_bytes: bytes,
     text: str,
     reference_images: list[bytes],
+    aspect_ratio: str = "16:9",
+    image_size: str = "4K",
 ) -> bytes:
     """Use Gemini to add styled text to the composite, matching reference typography."""
     client = genai.Client(api_key=settings.gemini_api_key)
@@ -246,8 +252,8 @@ async def add_text_with_style(
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE", "TEXT"],
             image_config=types.ImageConfig(
-                aspect_ratio="16:9",
-                image_size="4K",
+                aspect_ratio=aspect_ratio,
+                image_size=image_size,
             ),
         ),
     )
