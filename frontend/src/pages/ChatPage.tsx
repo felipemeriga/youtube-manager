@@ -72,7 +72,12 @@ export default function ChatPage() {
   const imageRef = useRef<{ base64: string; url: string } | null>(null);
   const imagesRef = useRef<Record<
     string,
-    { base64?: string; url?: string }
+    {
+      preview_base64?: string;
+      preview_url?: string;
+      url?: string;
+      base64?: string;
+    }
   > | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -270,10 +275,10 @@ export default function ChatPage() {
             };
             if (imagesRef.current) {
               newMessage.images = imagesRef.current;
-              // Also set backward-compat fields from first platform image
               const firstImg = Object.values(imagesRef.current)[0];
               if (firstImg) {
-                newMessage.image_base64 = firstImg.base64;
+                newMessage.image_base64 =
+                  firstImg.preview_base64 || firstImg.base64;
                 newMessage.image_url = firstImg.url;
               }
             } else if (imageRef.current) {

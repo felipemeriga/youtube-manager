@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
-import { Box, TextField, Button, CircularProgress, Typography } from "@mui/material";
+import {
+  Box,
+  TextField,
+  Button,
+  CircularProgress,
+  Typography,
+  IconButton,
+} from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
+import DownloadIcon from "@mui/icons-material/Download";
 import ReactMarkdown from "react-markdown";
 import ApprovalButtons from "./ApprovalButtons";
 import PhotoGrid from "./PhotoGrid";
@@ -16,7 +24,15 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
-  images?: Record<string, { base64?: string; url?: string }>;
+  images?: Record<
+    string,
+    {
+      preview_base64?: string;
+      preview_url?: string;
+      url?: string;
+      base64?: string;
+    }
+  >;
 }
 
 const platformLabels: Record<string, string> = {
@@ -218,12 +234,28 @@ export default function MessageBubble({
                   {platformLabels[platform] || platform}
                 </Typography>
                 <AuthOutputImage
+                  previewBase64={img.preview_base64}
+                  previewUrl={img.preview_url}
+                  originalUrl={img.url}
                   base64={img.base64}
                   storagePath={img.url || ""}
                 />
               </Box>
             ))}
           </Box>
+        ) : message.images && Object.keys(message.images).length === 1 ? (
+          (() => {
+            const singleImg = Object.values(message.images)[0];
+            return (
+              <AuthOutputImage
+                previewBase64={singleImg?.preview_base64}
+                previewUrl={singleImg?.preview_url}
+                originalUrl={singleImg?.url}
+                base64={singleImg?.base64}
+                storagePath={singleImg?.url || ""}
+              />
+            );
+          })()
         ) : (
           (message.image_base64 || message.image_url) && (
             <AuthOutputImage
@@ -253,15 +285,14 @@ export default function MessageBubble({
             }
           })()}
 
-        {message.type === "text_prompt" && (
-          isLatest && !isStreaming && onSubmitText ? (
+        {message.type === "text_prompt" &&
+          (isLatest && !isStreaming && onSubmitText ? (
             <TextPromptInput onSubmit={onSubmitText} />
           ) : (
             <Box sx={{ fontSize: 14, color: "rgba(255,255,255,0.5)" }}>
               {message.content}
             </Box>
-          )
-        )}
+          ))}
 
         {message.type === "topics" &&
           (() => {
@@ -325,32 +356,43 @@ export default function MessageBubble({
 }
 
 function AuthOutputImage({
+  previewBase64,
+  previewUrl,
+  originalUrl,
   base64,
   storagePath,
 }: {
+  previewBase64?: string;
+  previewUrl?: string;
+  originalUrl?: string;
   base64?: string;
-  storagePath: string;
+  storagePath?: string;
 }) {
-  const [src, setSrc] = useState<string | null>(
-    base64 ? `data:image/png;base64,${base64}` : null
-  );
-  const [loading, setLoading] = useState(!base64);
+  const initialSrc = previewBase64
+    ? `data:image/jpeg;base64,${previewBase64}`
+    : base64
+    ? `data:image/png;base64,${base64}`
+    : null;
+
+  const [src, setSrc] = useState<string | null>(initialSrc);
+  const [loading, setLoading] = useState(!initialSrc);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    if (base64 || !storagePath) return;
+    const fetchPath = previewUrl || storagePath;
+    if (!fetchPath) return;
+    if (base64 && !previewBase64) return;
 
     let revoke: string | null = null;
-    const fetchImage = async () => {
+    const fetchPreview = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) return;
 
-      // Extract filename from storage path (user-id/filename.png → filename.png)
-      const filename = storagePath.includes("/")
-        ? storagePath.split("/").pop()!
-        : storagePath;
-
+      const filename = fetchPath.includes("/")
+        ? fetchPath.split("/").pop()!
+        : fetchPath;
       try {
         const res = await fetch(`/api/assets/outputs/${filename}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -361,16 +403,44 @@ function AuthOutputImage({
           setSrc(revoke);
         }
       } catch {
-        // Network error — image unavailable
+        // keep whatever we have
       }
       setLoading(false);
     };
-    fetchImage();
+    fetchPreview();
 
     return () => {
       if (revoke) URL.revokeObjectURL(revoke);
     };
-  }, [base64, storagePath]);
+  }, [previewUrl, storagePath, base64, previewBase64]);
+
+  const handleDownload = async () => {
+    const dlPath = originalUrl || storagePath;
+    if (!dlPath) return;
+    setDownloading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+      const filename = dlPath.includes("/") ? dlPath.split("/").pop()! : dlPath;
+      const res = await fetch(`/api/assets/outputs/${filename}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -395,18 +465,37 @@ function AuthOutputImage({
   if (!src) return null;
 
   return (
-    <Box
-      component="img"
-      src={src}
-      alt="Thumbnail"
-      sx={{
-        width: "100%",
-        maxWidth: 512,
-        borderRadius: 1,
-        mb: 1,
-        display: "block",
-      }}
-    />
+    <Box sx={{ position: "relative", display: "inline-block", mb: 1 }}>
+      <Box
+        component="img"
+        src={src}
+        alt="Thumbnail"
+        sx={{ width: "100%", maxWidth: 512, borderRadius: 1, display: "block" }}
+      />
+      {(originalUrl || storagePath) && (
+        <IconButton
+          onClick={handleDownload}
+          disabled={downloading}
+          size="small"
+          sx={{
+            position: "absolute",
+            bottom: 8,
+            right: 8,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            color: "#fff",
+            "&:hover": { backgroundColor: "rgba(0,0,0,0.8)" },
+            width: 32,
+            height: 32,
+          }}
+        >
+          {downloading ? (
+            <CircularProgress size={16} sx={{ color: "#fff" }} />
+          ) : (
+            <DownloadIcon sx={{ fontSize: 18 }} />
+          )}
+        </IconButton>
+      )}
+    </Box>
   );
 }
 
