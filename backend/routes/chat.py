@@ -307,13 +307,19 @@ async def thumbnail_stream(
                 "text",
             )
             final_urls = result.get("final_urls") or {}
+            first_paths = next(iter(final_urls.values()), {})
+            first_url = (
+                first_paths["url"]
+                if isinstance(first_paths, dict)
+                else first_paths or ""
+            )
             yield sse_event(
                 {
                     "done": True,
                     "saved": True,
                     "content": "Thumbnail salva!",
                     "paths": final_urls,
-                    "path": next(iter(final_urls.values()), ""),
+                    "path": first_url,
                 }
             )
             return

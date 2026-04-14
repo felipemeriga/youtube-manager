@@ -112,14 +112,18 @@ async def test_graph_starts_and_interrupts_at_background(mock_supabase):
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ):
-                    graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                    config = {"configurable": {"thread_id": "test-1"}}
+                    with patch(
+                        "services.thumbnail_nodes._make_preview",
+                        return_value=b"preview-jpg",
+                    ):
+                        graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                        config = {"configurable": {"thread_id": "test-1"}}
 
-                    result = await graph.ainvoke(_initial_state(), config)
+                        result = await graph.ainvoke(_initial_state(), config)
 
     # Should have background_urls set and be interrupted
     assert result.get("background_urls") is not None
-    assert result["background_urls"]["youtube"].startswith("user-1/bg_")
+    assert result["background_urls"]["youtube"]["url"].startswith("user-1/bg_")
 
 
 @_requires_py311
@@ -157,17 +161,21 @@ async def test_graph_approve_background_shows_photos(mock_supabase):
                         new_callable=AsyncMock,
                         return_value=["photo1.jpg"],
                     ):
-                        graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                        config = {"configurable": {"thread_id": "test-2"}}
+                        with patch(
+                            "services.thumbnail_nodes._make_preview",
+                            return_value=b"preview-jpg",
+                        ):
+                            graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                            config = {"configurable": {"thread_id": "test-2"}}
 
-                        # Start — generates background, interrupts
-                        await graph.ainvoke(_initial_state(), config)
+                            # Start — generates background, interrupts
+                            await graph.ainvoke(_initial_state(), config)
 
-                        # Resume with approval
-                        result = await graph.ainvoke(
-                            Command(resume={"action": "approve"}),
-                            config,
-                        )
+                            # Resume with approval
+                            result = await graph.ainvoke(
+                                Command(resume={"action": "approve"}),
+                                config,
+                            )
 
     # Should have photo_list populated
     assert len(result.get("photo_list", [])) > 0

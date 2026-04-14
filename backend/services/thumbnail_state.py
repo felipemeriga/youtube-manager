@@ -45,11 +45,11 @@ class ThumbnailState(TypedDict):
     # Platforms to generate for
     platforms: list[str]  # e.g. ["youtube", "instagram_post", "instagram_story"]
 
-    # Artifacts per platform: {"youtube": "path", "instagram_post": "path", ...}
-    background_urls: dict[str, str]
+    # Artifacts per platform: {"youtube": {"url": "path", "preview_url": "path"}, ...}
+    background_urls: dict[str, dict[str, str]]
     photo_name: str | None
-    composite_urls: dict[str, str]
-    final_urls: dict[str, str]
+    composite_urls: dict[str, dict[str, str]]
+    final_urls: dict[str, dict[str, str]]
     thumb_text: str | None
 
     # User interaction

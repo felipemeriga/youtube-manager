@@ -1,8 +1,10 @@
 import asyncio
+import io
 import logging
 import time
 import uuid
 
+from PIL import Image
 from supabase._async.client import create_client as create_async_client
 
 from config import settings
@@ -105,6 +107,42 @@ async def _upload_image(user_id: str, prefix: str, image_bytes: bytes) -> str:
     return storage_path
 
 
+def _make_preview(image_bytes: bytes, max_edge: int = 720) -> bytes:
+    """Resize image to max_edge on longest side, return as JPEG bytes."""
+    img = Image.open(io.BytesIO(image_bytes))
+    img.thumbnail((max_edge, max_edge), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
+
+
+async def _upload_image_with_preview(
+    user_id: str, prefix: str, image_bytes: bytes
+) -> tuple[str, str]:
+    """Upload original image and 720p JPEG preview. Returns (original_path, preview_path)."""
+    sb = await _get_supabase()
+    name_id = uuid.uuid4().hex[:8]
+    original_name = f"{prefix}_{name_id}.png"
+    preview_name = f"preview_{prefix}_{name_id}.jpg"
+    original_path = f"{user_id}/{original_name}"
+    preview_path = f"{user_id}/{preview_name}"
+
+    await sb.storage.from_("outputs").upload(
+        original_path, image_bytes, {"content-type": "image/png"}
+    )
+
+    try:
+        preview_bytes = _make_preview(image_bytes)
+        await sb.storage.from_("outputs").upload(
+            preview_path, preview_bytes, {"content-type": "image/jpeg"}
+        )
+    except Exception:
+        logger.warning("preview upload failed for %s, skipping", original_path)
+        preview_path = ""
+
+    return original_path, preview_path
+
+
 async def generate_background_node(state: ThumbnailState) -> dict:
     """Generate background images for all platforms."""
     sb = await _get_supabase()
@@ -153,8 +191,9 @@ async def generate_background_node(state: ThumbnailState) -> dict:
     existing_bg_urls = state.get("background_urls") or {}
     if feedback and existing_bg_urls:
 
-        async def _dl_prev_bg(platform: str, url: str) -> tuple[str, bytes]:
+        async def _dl_prev_bg(platform: str, paths: dict) -> tuple[str, bytes]:
             dl_sb = await _get_supabase()
+            url = paths["url"] if isinstance(paths, dict) else paths
             data = await dl_sb.storage.from_("outputs").download(url)
             return platform, data
 
@@ -186,8 +225,10 @@ async def generate_background_node(state: ThumbnailState) -> dict:
     # Upload sequentially to avoid connection pool exhaustion
     background_urls = {}
     for platform, bg_bytes in gen_results:
-        path = await _upload_image(user_id, f"bg_{platform}", bg_bytes)
-        background_urls[platform] = path
+        original_path, preview_path = await _upload_image_with_preview(
+            user_id, f"bg_{platform}", bg_bytes
+        )
+        background_urls[platform] = {"url": original_path, "preview_url": preview_path}
 
     return {
         "background_urls": background_urls,
@@ -240,8 +281,9 @@ async def composite_node(state: ThumbnailState) -> dict:
     )
     if is_feedback and existing_comp_urls:
 
-        async def _dl_prev_comp(platform: str, url: str) -> tuple[str, bytes]:
+        async def _dl_prev_comp(platform: str, paths: dict) -> tuple[str, bytes]:
             dl_sb = await _get_supabase()
+            url = paths["url"] if isinstance(paths, dict) else paths
             data = await dl_sb.storage.from_("outputs").download(url)
             return platform, data
 
@@ -255,9 +297,10 @@ async def composite_node(state: ThumbnailState) -> dict:
     )
 
     async def _gen_comp(platform: str) -> tuple[str, bytes]:
-        bg_url = background_urls.get(platform)
-        if not bg_url:
+        bg_paths = background_urls.get(platform)
+        if not bg_paths:
             raise Exception(f"No background for platform {platform}")
+        bg_url = bg_paths["url"] if isinstance(bg_paths, dict) else bg_paths
         dl_sb = await _get_supabase()
         bg_bytes = await dl_sb.storage.from_("outputs").download(bg_url)
         cfg = PLATFORM_CONFIGS[platform]
@@ -277,8 +320,10 @@ async def composite_node(state: ThumbnailState) -> dict:
 
     composite_urls = {}
     for platform, comp_bytes in gen_results:
-        path = await _upload_image(user_id, f"comp_{platform}", comp_bytes)
-        composite_urls[platform] = path
+        original_path, preview_path = await _upload_image_with_preview(
+            user_id, f"comp_{platform}", comp_bytes
+        )
+        composite_urls[platform] = {"url": original_path, "preview_url": preview_path}
 
     return {"composite_urls": composite_urls, "extra_instructions": None}
 
@@ -297,8 +342,9 @@ async def add_text_node(state: ThumbnailState) -> dict:
     existing_final_urls = state.get("final_urls") or {}
     if existing_final_urls:
 
-        async def _dl_prev_final(platform: str, url: str) -> tuple[str, bytes]:
+        async def _dl_prev_final(platform: str, paths: dict) -> tuple[str, bytes]:
             dl_sb = await _get_supabase()
+            url = paths["url"] if isinstance(paths, dict) else paths
             data = await dl_sb.storage.from_("outputs").download(url)
             return platform, data
 
@@ -312,9 +358,10 @@ async def add_text_node(state: ThumbnailState) -> dict:
     )
 
     async def _gen_text(platform: str) -> tuple[str, bytes]:
-        comp_url = composite_urls.get(platform)
-        if not comp_url:
+        comp_paths = composite_urls.get(platform)
+        if not comp_paths:
             raise Exception(f"No composite for platform {platform}")
+        comp_url = comp_paths["url"] if isinstance(comp_paths, dict) else comp_paths
         dl_sb = await _get_supabase()
         comp_bytes = await dl_sb.storage.from_("outputs").download(comp_url)
         cfg = PLATFORM_CONFIGS[platform]
@@ -333,8 +380,10 @@ async def add_text_node(state: ThumbnailState) -> dict:
 
     final_urls = {}
     for platform, final_bytes in gen_results:
-        path = await _upload_image(user_id, f"thumb_{platform}", final_bytes)
-        final_urls[platform] = path
+        original_path, preview_path = await _upload_image_with_preview(
+            user_id, f"thumb_{platform}", final_bytes
+        )
+        final_urls[platform] = {"url": original_path, "preview_url": preview_path}
 
     return {"final_urls": final_urls}
 
@@ -346,14 +395,15 @@ async def save_node(state: ThumbnailState) -> dict:
     final_urls = state.get("final_urls") or {}
 
     saved_urls = {}
-    for platform, temp_url in final_urls.items():
+    for platform, paths in final_urls.items():
+        temp_url = paths["url"] if isinstance(paths, dict) else paths
         image_data = await sb.storage.from_("outputs").download(temp_url)
         final_filename = f"thumbnail_{platform}_{uuid.uuid4().hex[:8]}.png"
         final_path = f"{user_id}/{final_filename}"
         await sb.storage.from_("outputs").upload(
             final_path, image_data, {"content-type": "image/png"}
         )
-        saved_urls[platform] = final_path
+        saved_urls[platform] = {"url": final_path, "preview_url": ""}
 
     # Extract style memory in background (don't block the save)
     asyncio.create_task(extract_and_store_memory(sb, user_id, state["conversation_id"]))

@@ -43,13 +43,21 @@ async def entry_router(
         if action in ("use_as_composite", "skip_to_text"):
             # Image is a composite — use for all platforms
             return Command(
-                update={"composite_urls": {p: uploaded for p in platforms}},
+                update={
+                    "composite_urls": {
+                        p: {"url": uploaded, "preview_url": ""} for p in platforms
+                    }
+                },
                 goto="ask_text",
             )
         else:
             # Default: use as background for all platforms
             return Command(
-                update={"background_urls": {p: uploaded for p in platforms}},
+                update={
+                    "background_urls": {
+                        p: {"url": uploaded, "preview_url": ""} for p in platforms
+                    }
+                },
                 goto="show_photos",
             )
 
