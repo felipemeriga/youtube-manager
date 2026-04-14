@@ -32,7 +32,10 @@ interface PhotoGridProps {
  * Fetch an image through the authenticated backend proxy
  * and return a local blob URL.
  */
-async function fetchAuthImage(apiPath: string): Promise<string> {
+async function fetchAuthImage(
+  apiPath: string,
+  signal?: AbortSignal
+): Promise<string> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -40,6 +43,7 @@ async function fetchAuthImage(apiPath: string): Promise<string> {
 
   const res = await fetch(apiPath, {
     headers: { Authorization: `Bearer ${session.access_token}` },
+    signal,
   });
   if (!res.ok) throw new Error(`${res.status}`);
   const blob = await res.blob();
@@ -60,14 +64,19 @@ function AuthImage({
 
   useEffect(() => {
     let revoke: string | null = null;
-    fetchAuthImage(apiPath)
+    const controller = new AbortController();
+
+    fetchAuthImage(apiPath, controller.signal)
       .then((url) => {
         revoke = url;
         setSrc(url);
       })
-      .catch(() => setError(true));
+      .catch((e) => {
+        if (e.name !== "AbortError") setError(true);
+      });
 
     return () => {
+      controller.abort();
       if (revoke) URL.revokeObjectURL(revoke);
     };
   }, [apiPath]);
@@ -95,6 +104,7 @@ function AuthImage({
       component="img"
       src={src}
       alt={alt}
+      loading="lazy"
       sx={{
         width: "100%",
         height,
@@ -220,8 +230,7 @@ export default function PhotoGrid({
               <Box
                 sx={{
                   display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(200px, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
                   gap: 2,
                 }}
               >
@@ -256,8 +265,7 @@ export default function PhotoGrid({
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fill, minmax(200px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
                 gap: 2,
               }}
             >
@@ -276,7 +284,13 @@ export default function PhotoGrid({
 
           {/* Optional instructions */}
           {selected && (
-            <Box sx={{ mt: 3, pt: 2, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <Box
+              sx={{
+                mt: 3,
+                pt: 2,
+                borderTop: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
               <Typography
                 variant="subtitle2"
                 sx={{ color: "rgba(255,255,255,0.5)", mb: 1 }}
@@ -349,7 +363,7 @@ function PhotoCard({
         },
       }}
     >
-      <AuthImage apiPath={photo.url} alt={photo.name} height={240} />
+      <AuthImage apiPath={photo.url} alt={photo.name} height={160} />
       {photo.recommended && (
         <Chip
           icon={<StarIcon sx={{ fontSize: 14 }} />}
