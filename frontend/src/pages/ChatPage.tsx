@@ -405,21 +405,34 @@ export default function ChatPage() {
       photo_name: photoName,
       feedback: instructions || null,
     });
-    doStream(selectedId, payload, "text");
+    const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
+    doStream(selectedId, payload, "text", undefined, undefined, tier);
   };
 
   const handleSubmitText = (text: string) => {
     if (!selectedId) return;
+    const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
     doStream(
       selectedId,
       JSON.stringify({ action: "provide_text", text }),
-      "text"
+      "text",
+      undefined,
+      undefined,
+      tier
     );
   };
 
   const handleApprove = () => {
     if (!selectedId) return;
-    doStream(selectedId, JSON.stringify({ action: "approve" }), "text");
+    const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
+    doStream(
+      selectedId,
+      JSON.stringify({ action: "approve" }),
+      "text",
+      undefined,
+      undefined,
+      tier
+    );
   };
 
   const handleReject = () => {
@@ -428,7 +441,15 @@ export default function ChatPage() {
     if (lastMsg?.type === "script") {
       sendMessage("Reescreva o roteiro com melhorias");
     } else {
-      doStream(selectedId, JSON.stringify({ action: "feedback" }), "text");
+      const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
+      doStream(
+        selectedId,
+        JSON.stringify({ action: "feedback" }),
+        "text",
+        undefined,
+        undefined,
+        tier
+      );
     }
   };
 
