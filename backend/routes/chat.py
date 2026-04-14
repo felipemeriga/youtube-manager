@@ -364,6 +364,30 @@ async def thumbnail_stream(
     yield sse_event({"done": True})
 
 
+@router.get("/api/conversations/{conversation_id}/status")
+async def conversation_status(
+    conversation_id: str, user_id: str = Depends(get_current_user)
+):
+    """Check if a thumbnail conversation has a pending interrupt."""
+    try:
+        graph = await get_thumbnail_graph()
+        config = {"configurable": {"thread_id": conversation_id}}
+        state = await graph.aget_state(config)
+        if state and state.tasks:
+            for task in state.tasks:
+                if hasattr(task, "interrupts") and task.interrupts:
+                    interrupt_value = task.interrupts[0].value
+                    return {
+                        "status": "waiting",
+                        "type": interrupt_value.get("type", "unknown"),
+                    }
+        if state and state.values:
+            return {"status": "idle"}
+        return {"status": "new"}
+    except Exception:
+        return {"status": "unknown"}
+
+
 @router.post("/api/chat")
 async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     sb = get_supabase()

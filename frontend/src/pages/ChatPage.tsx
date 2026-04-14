@@ -18,6 +18,7 @@ import {
   listConversations,
   createConversation,
   getConversation,
+  getConversationStatus,
   deleteConversation,
   streamChat,
   updateConversation,
@@ -116,12 +117,42 @@ export default function ChatPage() {
         mode?: string;
         model?: string;
       };
-      const msgs = convData.messages || [];
+      let msgs = convData.messages || [];
       const mode = convData.mode || "thumbnail";
       const model = convData.model || "";
-      setMessages(msgs);
       setConversationMode(mode);
       setConversationModel(model);
+
+      // If the last message is from the user (no assistant response yet),
+      // check the backend graph state — the generation may have completed
+      // while the user was away from this conversation.
+      if (
+        mode === "thumbnail" &&
+        msgs.length > 0 &&
+        msgs[msgs.length - 1].role === "user"
+      ) {
+        try {
+          const { status } = await getConversationStatus(id);
+          if (status === "waiting" || status === "idle") {
+            // Graph finished (or paused at an interrupt) — reload messages
+            // so the saved assistant response is displayed.
+            const refreshed = await getConversation(id);
+            const refreshedMsgs =
+              (refreshed as { messages: Message[] }).messages || [];
+            if (refreshedMsgs.length > msgs.length) {
+              msgs = refreshedMsgs;
+            }
+          } else if (status === "unknown") {
+            // Cannot determine state — show generating indicator so the user
+            // knows something may be in progress.
+            setCurrentStage("generating");
+          }
+        } catch {
+          // Ignore — proceed with whatever messages we have
+        }
+      }
+
+      setMessages(msgs);
     } catch {
       setMessages([]);
       setCurrentStage(null);

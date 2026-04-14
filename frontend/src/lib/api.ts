@@ -181,6 +181,10 @@ export const updateConversation = (id: string, data: { model?: string }) =>
     method: "PATCH",
     body: JSON.stringify(data),
   });
+export const getConversationStatus = (id: string) =>
+  apiFetch<{ status: string; type?: string }>(
+    `/api/conversations/${id}/status`
+  );
 
 export const listAssets = (bucket: string) =>
   apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`);
