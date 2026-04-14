@@ -34,6 +34,7 @@ def _initial_state():
         "extra_instructions": None,
         "photo_list": [],
         "uploaded_image_url": None,
+        "quality_tier": "balanced",
     }
 
 

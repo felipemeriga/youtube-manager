@@ -21,6 +21,7 @@ def make_base_state(**overrides) -> ThumbnailState:
         extra_instructions=None,
         photo_list=[],
         uploaded_image_url=None,
+        quality_tier="balanced",
     )
     defaults.update(overrides)
     return defaults

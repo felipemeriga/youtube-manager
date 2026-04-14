@@ -8,6 +8,13 @@ class UserIntent(TypedDict):
     text: str | None
 
 
+QUALITY_TIERS = {
+    "fast": {"model": "gemini-3.1-flash-image-preview", "image_size": "1K"},
+    "balanced": {"model": "gemini-3-pro-image-preview", "image_size": "1K"},
+    "quality": {"model": "gemini-3-pro-image-preview", "image_size": "4K"},
+}
+
+
 # Platform configs: aspect_ratio for Gemini, label for UI
 PLATFORM_CONFIGS = {
     "youtube": {"aspect_ratio": "16:9", "label": "YouTube", "image_size": "4K"},
@@ -55,3 +62,6 @@ class ThumbnailState(TypedDict):
 
     # User-uploaded image storage path
     uploaded_image_url: str | None
+
+    # Quality tier for generation
+    quality_tier: str
