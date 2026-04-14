@@ -147,6 +147,42 @@ async def test_add_text_node_returns_url():
 
 
 @pytest.mark.asyncio
+async def test_generate_background_uses_quality_tier_model():
+    from services.thumbnail_nodes import generate_background_node
+
+    state = make_base_state(topic="Test topic", quality_tier="fast")
+    fake_image = b"\x89PNG\r\n\x1a\nfake"
+
+    with patch(
+        "services.thumbnail_nodes._research_topic",
+        new_callable=AsyncMock,
+        return_value="",
+    ):
+        with patch(
+            "services.thumbnail_nodes.get_relevant_memories",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            with patch(
+                "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+            ) as mock_sb:
+                sb = MagicMock()
+                mock_sb.return_value = sb
+                sb.storage.from_.return_value.list = AsyncMock(return_value=[])
+                sb.storage.from_.return_value.upload = AsyncMock()
+                with patch(
+                    "services.thumbnail_nodes.generate_background",
+                    new_callable=AsyncMock,
+                    return_value=fake_image,
+                ) as mock_gen:
+                    await generate_background_node(state)
+
+    call_kwargs = mock_gen.call_args[1]
+    assert call_kwargs["model"] == "gemini-3.1-flash-image-preview"
+    assert call_kwargs["image_size"] == "1K"
+
+
+@pytest.mark.asyncio
 async def test_save_node_returns_final_url():
     from services.thumbnail_nodes import save_node
 

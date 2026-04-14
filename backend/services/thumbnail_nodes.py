@@ -14,7 +14,12 @@ from services.nano_banana import (
 )
 from services.photo_search import find_best_photos
 from services.thumbnail_memory import get_relevant_memories, extract_and_store_memory
-from services.thumbnail_state import PLATFORM_CONFIGS, DEFAULT_PLATFORMS, ThumbnailState
+from services.thumbnail_state import (
+    PLATFORM_CONFIGS,
+    DEFAULT_PLATFORMS,
+    QUALITY_TIERS,
+    ThumbnailState,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +163,10 @@ async def generate_background_node(state: ThumbnailState) -> dict:
         )
         previous_bgs = dict(prev_results)
 
+    tier = QUALITY_TIERS.get(
+        state.get("quality_tier") or "balanced", QUALITY_TIERS["balanced"]
+    )
+
     # Generate for all platforms concurrently, then upload sequentially
     async def _gen_bg(platform: str) -> tuple[str, bytes]:
         cfg = PLATFORM_CONFIGS[platform]
@@ -167,7 +176,8 @@ async def generate_background_node(state: ThumbnailState) -> dict:
             logos=logos,
             previous_image=previous_bgs.get(platform),
             aspect_ratio=cfg["aspect_ratio"],
-            image_size=cfg["image_size"],
+            image_size=tier["image_size"],
+            model=tier["model"],
         )
         return platform, bg_bytes
 
@@ -240,6 +250,10 @@ async def composite_node(state: ThumbnailState) -> dict:
         )
         previous_comps = dict(prev_results)
 
+    tier = QUALITY_TIERS.get(
+        state.get("quality_tier") or "balanced", QUALITY_TIERS["balanced"]
+    )
+
     async def _gen_comp(platform: str) -> tuple[str, bytes]:
         bg_url = background_urls.get(platform)
         if not bg_url:
@@ -254,7 +268,8 @@ async def composite_node(state: ThumbnailState) -> dict:
             extra_instructions=extra,
             previous_image=previous_comps.get(platform),
             aspect_ratio=cfg["aspect_ratio"],
-            image_size=cfg["image_size"],
+            image_size=tier["image_size"],
+            model=tier["model"],
         )
         return platform, comp_bytes
 
@@ -292,6 +307,10 @@ async def add_text_node(state: ThumbnailState) -> dict:
         )
         previous_finals = dict(prev_results)
 
+    tier = QUALITY_TIERS.get(
+        state.get("quality_tier") or "balanced", QUALITY_TIERS["balanced"]
+    )
+
     async def _gen_text(platform: str) -> tuple[str, bytes]:
         comp_url = composite_urls.get(platform)
         if not comp_url:
@@ -305,7 +324,8 @@ async def add_text_node(state: ThumbnailState) -> dict:
             ref_thumbs,
             previous_image=previous_finals.get(platform),
             aspect_ratio=cfg["aspect_ratio"],
-            image_size=cfg["image_size"],
+            image_size=tier["image_size"],
+            model=tier["model"],
         )
         return platform, final_bytes
 

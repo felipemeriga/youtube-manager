@@ -77,6 +77,7 @@ async def generate_background(
     previous_image: bytes | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
+    model: str = "gemini-3-pro-image-preview",
 ) -> bytes:
     """Generate ONLY background + logo, no person, no text."""
     client = genai.Client(api_key=settings.gemini_api_key)
@@ -122,7 +123,7 @@ async def generate_background(
     contents.append(prompt)
 
     response = client.models.generate_content(
-        model="gemini-3-pro-image-preview",
+        model=model,
         contents=contents,
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE", "TEXT"],
@@ -149,6 +150,7 @@ async def composite_with_effects(
     previous_image: bytes | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
+    model: str = "gemini-3-pro-image-preview",
 ) -> bytes:
     """Use Gemini to composite person onto background with effects matching references."""
     client = genai.Client(api_key=settings.gemini_api_key)
@@ -210,7 +212,7 @@ async def composite_with_effects(
     contents.append(instructions)
 
     response = client.models.generate_content(
-        model="gemini-3-pro-image-preview",
+        model=model,
         contents=contents,
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE", "TEXT"],
@@ -236,6 +238,7 @@ async def add_text_with_style(
     previous_image: bytes | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
+    model: str = "gemini-3-pro-image-preview",
 ) -> bytes:
     """Use Gemini to add styled text to the composite, matching reference typography."""
     client = genai.Client(api_key=settings.gemini_api_key)
@@ -284,7 +287,7 @@ async def add_text_with_style(
     )
 
     response = client.models.generate_content(
-        model="gemini-3-pro-image-preview",
+        model=model,
         contents=contents,
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE", "TEXT"],
