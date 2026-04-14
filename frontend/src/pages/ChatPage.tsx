@@ -125,27 +125,50 @@ export default function ChatPage() {
 
       // If the last message is from the user (no assistant response yet),
       // check the backend graph state — the generation may have completed
-      // while the user was away from this conversation.
+      // while the user was away (SSE stream was abandoned).
       if (
         mode === "thumbnail" &&
         msgs.length > 0 &&
         msgs[msgs.length - 1].role === "user"
       ) {
         try {
-          const { status } = await getConversationStatus(id);
-          if (status === "waiting" || status === "idle") {
-            // Graph finished (or paused at an interrupt) — reload messages
-            // so the saved assistant response is displayed.
+          const statusData = (await getConversationStatus(id)) as Record<
+            string,
+            unknown
+          >;
+          if (statusData.status === "waiting") {
+            // Graph finished and is at an interrupt — build the message
+            // from the interrupt data returned by the status endpoint.
+            const msgType = (statusData.type as string) || "text";
+            const assistantMsg: Message = {
+              role: "assistant",
+              content: "",
+              type: msgType,
+            };
+
+            if (statusData.images) {
+              assistantMsg.images = statusData.images as Message["images"];
+              const firstImg = Object.values(assistantMsg.images!)[0];
+              if (firstImg) {
+                assistantMsg.image_base64 =
+                  firstImg.preview_base64 || firstImg.base64;
+                assistantMsg.image_url = firstImg.url;
+              }
+            } else if (msgType === "photo_grid") {
+              assistantMsg.content = JSON.stringify(statusData.photos || []);
+            } else if (msgType === "text_prompt") {
+              assistantMsg.content = "Qual texto você quer na thumbnail?";
+            }
+
+            msgs = [...msgs, assistantMsg];
+          } else if (statusData.status === "idle") {
+            // Graph completed — reload messages from DB
             const refreshed = await getConversation(id);
             const refreshedMsgs =
               (refreshed as { messages: Message[] }).messages || [];
             if (refreshedMsgs.length > msgs.length) {
               msgs = refreshedMsgs;
             }
-          } else if (status === "unknown") {
-            // Cannot determine state — show generating indicator so the user
-            // knows something may be in progress.
-            setCurrentStage("generating");
           }
         } catch {
           // Ignore — proceed with whatever messages we have

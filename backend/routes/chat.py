@@ -368,7 +368,12 @@ async def thumbnail_stream(
 async def conversation_status(
     conversation_id: str, user_id: str = Depends(get_current_user)
 ):
-    """Check if a thumbnail conversation has a pending interrupt."""
+    """Check if a thumbnail conversation has a pending interrupt.
+
+    When the graph is waiting at an image interrupt, returns the interrupt
+    payload (with tiny preview base64) so the frontend can display it even
+    if the original SSE stream was abandoned.
+    """
     try:
         graph = await get_thumbnail_graph()
         config = {"configurable": {"thread_id": conversation_id}}
@@ -377,14 +382,83 @@ async def conversation_status(
             for task in state.tasks:
                 if hasattr(task, "interrupts") and task.interrupts:
                     interrupt_value = task.interrupts[0].value
-                    return {
+                    msg_type = interrupt_value.get("type", "unknown")
+                    result: dict = {
                         "status": "waiting",
-                        "type": interrupt_value.get("type", "unknown"),
+                        "type": msg_type,
                     }
+
+                    # For image interrupts, build the same payload the SSE
+                    # would have sent so the frontend can display it.
+                    if msg_type in ("background", "composite", "image"):
+                        image_urls = interrupt_value.get("image_urls") or {}
+                        if image_urls:
+                            sb = await _get_async_supabase()
+                            images_payload: dict = {}
+                            for platform, paths in image_urls.items():
+                                url = paths["url"] if isinstance(paths, dict) else paths
+                                preview_url = (
+                                    paths.get("preview_url", "")
+                                    if isinstance(paths, dict)
+                                    else ""
+                                )
+                                try:
+                                    dl_path = preview_url or url
+                                    preview_data = await sb.storage.from_(
+                                        "outputs"
+                                    ).download(dl_path)
+                                    tiny_bytes = _make_preview(
+                                        preview_data, max_edge=200
+                                    )
+                                    tiny_b64 = base64.b64encode(tiny_bytes).decode()
+                                except Exception:
+                                    tiny_b64 = ""
+                                images_payload[platform] = {
+                                    "preview_base64": tiny_b64,
+                                    "preview_url": preview_url,
+                                    "url": url,
+                                }
+                            if images_payload:
+                                result["images"] = images_payload
+
+                    elif msg_type == "photo_grid":
+                        result["photos"] = interrupt_value.get("photos", [])
+                    elif msg_type == "text_prompt":
+                        result["suggestion"] = interrupt_value.get("suggestion", "")
+
+                    # Also save the assistant message to DB so it persists
+                    labels = {
+                        "background": "Aqui está o fundo.",
+                        "composite": "Aqui está a composição.",
+                        "image": "Aqui está sua thumbnail final!",
+                        "photo_grid": "",
+                        "text_prompt": "Qual texto você quer na thumbnail?",
+                    }
+                    if msg_type in labels:
+                        sb = await _get_async_supabase()
+                        content = labels[msg_type]
+                        if msg_type == "photo_grid":
+                            content = json.dumps(interrupt_value.get("photos", []))
+                        image_urls_raw = interrupt_value.get("image_urls") or {}
+                        first_url = None
+                        if image_urls_raw:
+                            fp = next(iter(image_urls_raw.values()))
+                            first_url = fp["url"] if isinstance(fp, dict) else fp
+                        await _save_message(
+                            sb,
+                            conversation_id,
+                            "assistant",
+                            content,
+                            msg_type,
+                            image_url=first_url,
+                        )
+
+                    return result
         if state and state.values:
             return {"status": "idle"}
         return {"status": "new"}
     except Exception:
+        logger.exception("conversation status check failed")
         return {"status": "unknown"}
 
 
