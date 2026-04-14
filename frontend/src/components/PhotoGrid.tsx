@@ -363,7 +363,7 @@ function PhotoCard({
         },
       }}
     >
-      <AuthImage apiPath={photo.url} alt={photo.name} height={160} />
+      <AuthImage apiPath={`${photo.url}?w=300`} alt={photo.name} height={160} />
       {photo.recommended && (
         <Chip
           icon={<StarIcon sx={{ fontSize: 14 }} />}

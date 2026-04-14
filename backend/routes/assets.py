@@ -206,12 +206,35 @@ async def get_batch_signed_urls(
 
 @router.get("/api/assets/{bucket}/{filename}")
 async def download_asset(
-    bucket: str, filename: str, user_id: str = Depends(get_current_user)
+    bucket: str,
+    filename: str,
+    user_id: str = Depends(get_current_user),
+    w: int | None = None,
 ):
     validate_bucket(bucket)
     sb = get_supabase()
     storage_path = f"{user_id}/{filename}"
     data = sb.storage.from_(bucket).download(storage_path)
+
+    # Optional resize: ?w=200 returns a JPEG thumbnail
+    if w and 0 < w <= 1024:
+        import io
+
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(data))
+        img.thumbnail((w, w), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=80)
+        data = buf.getvalue()
+        from fastapi.responses import Response
+
+        return Response(
+            content=data,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
     from fastapi.responses import Response
 
     return Response(
