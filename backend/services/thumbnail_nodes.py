@@ -143,6 +143,21 @@ async def generate_background_node(state: ThumbnailState) -> dict:
         "Place the logo in the same position as the references."
     )
 
+    # When feedback (not restart), download previous backgrounds for context
+    previous_bgs: dict[str, bytes] = {}
+    existing_bg_urls = state.get("background_urls") or {}
+    if feedback and existing_bg_urls:
+
+        async def _dl_prev_bg(platform: str, url: str) -> tuple[str, bytes]:
+            dl_sb = await _get_supabase()
+            data = await dl_sb.storage.from_("outputs").download(url)
+            return platform, data
+
+        prev_results = await asyncio.gather(
+            *[_dl_prev_bg(p, u) for p, u in existing_bg_urls.items()]
+        )
+        previous_bgs = dict(prev_results)
+
     # Generate for all platforms concurrently, then upload sequentially
     async def _gen_bg(platform: str) -> tuple[str, bytes]:
         cfg = PLATFORM_CONFIGS[platform]
@@ -150,6 +165,7 @@ async def generate_background_node(state: ThumbnailState) -> dict:
             prompt=prompt,
             reference_images=ref_thumbs,
             logos=logos,
+            previous_image=previous_bgs.get(platform),
             aspect_ratio=cfg["aspect_ratio"],
             image_size=cfg["image_size"],
         )
@@ -206,6 +222,24 @@ async def composite_node(state: ThumbnailState) -> dict:
     ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
     extra = state.get("extra_instructions")
 
+    # When feedback, download previous composites for context
+    previous_comps: dict[str, bytes] = {}
+    existing_comp_urls = state.get("composite_urls") or {}
+    is_feedback = (
+        state.get("user_intent") and state["user_intent"]["action"] == "feedback"
+    )
+    if is_feedback and existing_comp_urls:
+
+        async def _dl_prev_comp(platform: str, url: str) -> tuple[str, bytes]:
+            dl_sb = await _get_supabase()
+            data = await dl_sb.storage.from_("outputs").download(url)
+            return platform, data
+
+        prev_results = await asyncio.gather(
+            *[_dl_prev_comp(p, u) for p, u in existing_comp_urls.items()]
+        )
+        previous_comps = dict(prev_results)
+
     async def _gen_comp(platform: str) -> tuple[str, bytes]:
         bg_url = background_urls.get(platform)
         if not bg_url:
@@ -218,6 +252,7 @@ async def composite_node(state: ThumbnailState) -> dict:
             person_bytes,
             ref_thumbs,
             extra_instructions=extra,
+            previous_image=previous_comps.get(platform),
             aspect_ratio=cfg["aspect_ratio"],
             image_size=cfg["image_size"],
         )
@@ -242,6 +277,21 @@ async def add_text_node(state: ThumbnailState) -> dict:
 
     ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
 
+    # When re-doing text, download previous finals for context
+    previous_finals: dict[str, bytes] = {}
+    existing_final_urls = state.get("final_urls") or {}
+    if existing_final_urls:
+
+        async def _dl_prev_final(platform: str, url: str) -> tuple[str, bytes]:
+            dl_sb = await _get_supabase()
+            data = await dl_sb.storage.from_("outputs").download(url)
+            return platform, data
+
+        prev_results = await asyncio.gather(
+            *[_dl_prev_final(p, u) for p, u in existing_final_urls.items()]
+        )
+        previous_finals = dict(prev_results)
+
     async def _gen_text(platform: str) -> tuple[str, bytes]:
         comp_url = composite_urls.get(platform)
         if not comp_url:
@@ -253,6 +303,7 @@ async def add_text_node(state: ThumbnailState) -> dict:
             comp_bytes,
             state["thumb_text"],
             ref_thumbs,
+            previous_image=previous_finals.get(platform),
             aspect_ratio=cfg["aspect_ratio"],
             image_size=cfg["image_size"],
         )

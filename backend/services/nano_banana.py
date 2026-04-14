@@ -74,6 +74,7 @@ async def generate_background(
     prompt: str,
     reference_images: list[bytes],
     logos: list[bytes] | None = None,
+    previous_image: bytes | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
 ) -> bytes:
@@ -106,6 +107,18 @@ async def generate_background(
                 types.Part.from_bytes(data=logo_bytes, mime_type="image/png")
             )
 
+    if previous_image:
+        contents.append(
+            "This is the CURRENT background image that the user already reviewed. "
+            "They liked the overall direction but want specific changes. "
+            "Use this image as the starting point — keep everything the user "
+            "did NOT mention changing, and ONLY modify what they ask for in "
+            "the feedback below:"
+        )
+        contents.append(
+            types.Part.from_bytes(data=previous_image, mime_type="image/png")
+        )
+
     contents.append(prompt)
 
     response = client.models.generate_content(
@@ -133,6 +146,7 @@ async def composite_with_effects(
     person_bytes: bytes,
     reference_images: list[bytes],
     extra_instructions: str | None = None,
+    previous_image: bytes | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
 ) -> bytes:
@@ -152,6 +166,17 @@ async def composite_with_effects(
             contents.append(
                 types.Part.from_bytes(data=img_bytes, mime_type="image/png")
             )
+
+    if previous_image:
+        contents.append(
+            "This is the CURRENT composite image that the user already reviewed. "
+            "They liked the overall result but want specific changes. "
+            "Use this as your starting point — keep everything the user did NOT "
+            "mention changing, and ONLY modify what they ask for in the instructions below:"
+        )
+        contents.append(
+            types.Part.from_bytes(data=previous_image, mime_type="image/png")
+        )
 
     # Provide the background
     contents.append(
@@ -208,6 +233,7 @@ async def add_text_with_style(
     composite_bytes: bytes,
     text: str,
     reference_images: list[bytes],
+    previous_image: bytes | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
 ) -> bytes:
@@ -228,6 +254,17 @@ async def add_text_with_style(
             contents.append(
                 types.Part.from_bytes(data=img_bytes, mime_type="image/png")
             )
+
+    if previous_image:
+        contents.append(
+            "This is the PREVIOUS final thumbnail that the user already reviewed. "
+            "They want changes to the text. Use this as reference for what was "
+            "already done — keep everything else identical and ONLY change what "
+            "the user asked for:"
+        )
+        contents.append(
+            types.Part.from_bytes(data=previous_image, mime_type="image/png")
+        )
 
     contents.append(
         "This is the current thumbnail (background + person already composited). "
