@@ -14,7 +14,7 @@ import {
 import StarIcon from "@mui/icons-material/Star";
 import CloseIcon from "@mui/icons-material/Close";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
-import { getBatchSignedUrls } from "../lib/api";
+import { getBatchThumbnails } from "../lib/api";
 
 interface Photo {
   name: string;
@@ -52,16 +52,9 @@ export default function PhotoGrid({
     setLoadingUrls(true);
     const filenames = photos.map((p) => p.name);
 
-    getBatchSignedUrls("personal-photos", filenames)
-      .then((results) => {
+    getBatchThumbnails("personal-photos", filenames, 200)
+      .then((urlMap) => {
         if (controller.signal.aborted) return;
-        const urlMap: Record<string, string> = {};
-        for (const r of results) {
-          if (r.signedURL && r.path) {
-            const name = r.path.split("/").pop() || "";
-            urlMap[name] = r.signedURL;
-          }
-        }
         setSignedUrls(urlMap);
       })
       .catch(() => {

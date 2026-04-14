@@ -204,6 +204,43 @@ async def get_batch_signed_urls(
     return result
 
 
+@router.post("/api/assets/batch-thumbnails")
+async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current_user)):
+    """Download, resize and return multiple images as base64 in a single request.
+
+    Body: {"bucket": "personal-photos", "filenames": ["a.jpg", "b.jpg"], "w": 200}
+    Returns: {"a.jpg": "data:image/jpeg;base64,...", "b.jpg": "..."}
+    """
+    import base64
+    import io
+
+    from PIL import Image
+
+    bucket = request.get("bucket", "")
+    filenames = request.get("filenames", [])
+    w = request.get("w", 200)
+    validate_bucket(bucket)
+
+    sb_async = await create_async_client(
+        settings.supabase_url, settings.supabase_service_key
+    )
+
+    async def _resize_one(name: str) -> tuple[str, str]:
+        try:
+            data = await sb_async.storage.from_(bucket).download(f"{user_id}/{name}")
+            img = Image.open(io.BytesIO(data))
+            img.thumbnail((w, w), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="JPEG", quality=70)
+            b64 = base64.b64encode(buf.getvalue()).decode()
+            return name, f"data:image/jpeg;base64,{b64}"
+        except Exception:
+            return name, ""
+
+    results = await asyncio.gather(*[_resize_one(n) for n in filenames])
+    return {name: data_uri for name, data_uri in results if data_uri}
+
+
 @router.get("/api/assets/{bucket}/{filename}")
 async def download_asset(
     bucket: str,

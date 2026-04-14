@@ -197,6 +197,16 @@ export const getBatchSignedUrls = (bucket: string, filenames: string[]) =>
       body: JSON.stringify({ bucket, filenames }),
     }
   );
+export const getBatchThumbnails = (
+  bucket: string,
+  filenames: string[],
+  w: number = 200
+) =>
+  apiFetch<Record<string, string>>("/api/assets/batch-thumbnails", {
+    method: "POST",
+    body: JSON.stringify({ bucket, filenames, w }),
+  });
+
 export const deleteAsset = (bucket: string, name: string) =>
   apiFetch<void>(`/api/assets/${bucket}/${name}`, { method: "DELETE" });
 export const uploadAsset = (bucket: string, file: File) =>
