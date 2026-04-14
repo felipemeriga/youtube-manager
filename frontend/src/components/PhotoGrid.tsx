@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -14,7 +14,7 @@ import {
 import StarIcon from "@mui/icons-material/Star";
 import CloseIcon from "@mui/icons-material/Close";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
-import { supabase } from "../lib/supabase";
+import { getBatchSignedUrls } from "../lib/api";
 
 interface Photo {
   name: string;
@@ -28,93 +28,6 @@ interface PhotoGridProps {
   disabled?: boolean;
 }
 
-/**
- * Fetch an image through the authenticated backend proxy
- * and return a local blob URL.
- */
-async function fetchAuthImage(
-  apiPath: string,
-  signal?: AbortSignal
-): Promise<string> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) throw new Error("Not authenticated");
-
-  const res = await fetch(apiPath, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-    signal,
-  });
-  if (!res.ok) throw new Error(`${res.status}`);
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
-}
-
-function AuthImage({
-  apiPath,
-  alt,
-  height,
-}: {
-  apiPath: string;
-  alt: string;
-  height: number;
-}) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let revoke: string | null = null;
-    const controller = new AbortController();
-
-    fetchAuthImage(apiPath, controller.signal)
-      .then((url) => {
-        revoke = url;
-        setSrc(url);
-      })
-      .catch((e) => {
-        if (e.name !== "AbortError") setError(true);
-      });
-
-    return () => {
-      controller.abort();
-      if (revoke) URL.revokeObjectURL(revoke);
-    };
-  }, [apiPath]);
-
-  if (error) return null;
-  if (!src) {
-    return (
-      <Box
-        sx={{
-          width: "100%",
-          height,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(255,255,255,0.03)",
-        }}
-      >
-        <CircularProgress size={24} sx={{ color: "#7c3aed" }} />
-      </Box>
-    );
-  }
-
-  return (
-    <Box
-      component="img"
-      src={src}
-      alt={alt}
-      loading="lazy"
-      sx={{
-        width: "100%",
-        height,
-        objectFit: "cover",
-        display: "block",
-      }}
-    />
-  );
-}
-
 export default function PhotoGrid({
   photos,
   onSelect,
@@ -123,6 +36,49 @@ export default function PhotoGrid({
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [instructions, setInstructions] = useState("");
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [loadingUrls, setLoadingUrls] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Fetch all signed URLs in one batch when dialog opens
+  useEffect(() => {
+    if (!open || photos.length === 0) return;
+
+    // Abort any previous batch
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoadingUrls(true);
+    const filenames = photos.map((p) => p.name);
+
+    getBatchSignedUrls("personal-photos", filenames)
+      .then((results) => {
+        if (controller.signal.aborted) return;
+        const urlMap: Record<string, string> = {};
+        for (const r of results) {
+          if (r.signedURL && r.path) {
+            const name = r.path.split("/").pop() || "";
+            urlMap[name] = r.signedURL;
+          }
+        }
+        setSignedUrls(urlMap);
+      })
+      .catch(() => {
+        // ignore
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingUrls(false);
+      });
+
+    return () => controller.abort();
+  }, [open, photos]);
+
+  // Abort all image loading when dialog closes
+  const handleClose = () => {
+    abortRef.current?.abort();
+    setOpen(false);
+  };
 
   const handleSelect = (name: string) => {
     if (disabled) return;
@@ -132,6 +88,7 @@ export default function PhotoGrid({
   const handleConfirm = () => {
     if (selected) {
       onSelect(selected, instructions.trim() || undefined);
+      abortRef.current?.abort();
       setOpen(false);
     }
   };
@@ -168,7 +125,7 @@ export default function PhotoGrid({
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={handleClose}
         maxWidth="lg"
         fullWidth
         PaperProps={{
@@ -208,79 +165,94 @@ export default function PhotoGrid({
                 Usar esta foto
               </Button>
             )}
-            <IconButton
-              onClick={() => setOpen(false)}
-              sx={{ color: "#94a3b8" }}
-            >
+            <IconButton onClick={handleClose} sx={{ color: "#94a3b8" }}>
               <CloseIcon />
             </IconButton>
           </Box>
         </DialogTitle>
 
         <DialogContent sx={{ pt: 3 }}>
-          {/* Recommended section */}
-          {photos.some((p) => p.recommended) && (
-            <Box sx={{ mb: 3 }}>
-              <Typography
-                variant="subtitle2"
-                sx={{ color: "#a78bfa", mb: 1.5, fontWeight: 600 }}
-              >
-                Recomendadas para este tema
-              </Typography>
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                  gap: 2,
-                }}
-              >
-                {photos
-                  .filter((p) => p.recommended)
-                  .map((photo) => (
-                    <PhotoCard
-                      key={photo.name}
-                      photo={photo}
-                      selected={selected === photo.name}
-                      onSelect={handleSelect}
-                    />
-                  ))}
-              </Box>
-            </Box>
-          )}
-
-          {/* All photos */}
-          <Box>
-            {photos.some((p) => p.recommended) && (
-              <Typography
-                variant="subtitle2"
-                sx={{
-                  color: "rgba(255,255,255,0.5)",
-                  mb: 1.5,
-                  fontWeight: 600,
-                }}
-              >
-                Todas as fotos
-              </Typography>
-            )}
+          {loadingUrls ? (
             <Box
               sx={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                gap: 2,
+                display: "flex",
+                justifyContent: "center",
+                py: 4,
               }}
             >
-              {photos
-                .filter((p) => !p.recommended)
-                .map((photo) => (
-                  <PhotoCard
-                    key={photo.name}
-                    photo={photo}
-                    selected={selected === photo.name}
-                    onSelect={handleSelect}
-                  />
-                ))}
+              <CircularProgress size={32} sx={{ color: "#7c3aed" }} />
             </Box>
-          </Box>
+          ) : (
+            <>
+              {/* Recommended section */}
+              {photos.some((p) => p.recommended) && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ color: "#a78bfa", mb: 1.5, fontWeight: 600 }}
+                  >
+                    Recomendadas para este tema
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(200px, 1fr))",
+                      gap: 2,
+                    }}
+                  >
+                    {photos
+                      .filter((p) => p.recommended)
+                      .map((photo) => (
+                        <PhotoCard
+                          key={photo.name}
+                          photo={photo}
+                          signedUrl={signedUrls[photo.name]}
+                          selected={selected === photo.name}
+                          onSelect={handleSelect}
+                        />
+                      ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* All photos */}
+              <Box>
+                {photos.some((p) => p.recommended) && (
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      color: "rgba(255,255,255,0.5)",
+                      mb: 1.5,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Todas as fotos
+                  </Typography>
+                )}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: 2,
+                  }}
+                >
+                  {photos
+                    .filter((p) => !p.recommended)
+                    .map((photo) => (
+                      <PhotoCard
+                        key={photo.name}
+                        photo={photo}
+                        signedUrl={signedUrls[photo.name]}
+                        selected={selected === photo.name}
+                        onSelect={handleSelect}
+                      />
+                    ))}
+                </Box>
+              </Box>
+            </>
+          )}
 
           {/* Optional instructions */}
           {selected && (
@@ -339,10 +311,12 @@ export default function PhotoGrid({
 
 function PhotoCard({
   photo,
+  signedUrl,
   selected,
   onSelect,
 }: {
   photo: Photo;
+  signedUrl?: string;
   selected: boolean;
   onSelect: (name: string) => void;
 }) {
@@ -363,7 +337,33 @@ function PhotoCard({
         },
       }}
     >
-      <AuthImage apiPath={`${photo.url}?w=300`} alt={photo.name} height={160} />
+      {signedUrl ? (
+        <Box
+          component="img"
+          src={signedUrl}
+          alt={photo.name}
+          loading="lazy"
+          sx={{
+            width: "100%",
+            height: 160,
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
+      ) : (
+        <Box
+          sx={{
+            width: "100%",
+            height: 160,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(255,255,255,0.03)",
+          }}
+        >
+          <CircularProgress size={20} sx={{ color: "#7c3aed" }} />
+        </Box>
+      )}
       {photo.recommended && (
         <Chip
           icon={<StarIcon sx={{ fontSize: 14 }} />}
