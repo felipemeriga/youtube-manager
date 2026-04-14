@@ -204,6 +204,11 @@ async def get_batch_signed_urls(
     return result
 
 
+# In-memory cache for batch thumbnails: (user_id, bucket, name, w) -> data_uri
+_thumb_cache: dict[tuple[str, str, str, int], str] = {}
+_THUMB_CACHE_MAX = 500
+
+
 @router.post("/api/assets/batch-thumbnails")
 async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current_user)):
     """Download, resize and return multiple images as base64 in a single request.
@@ -221,24 +226,53 @@ async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current
     w = request.get("w", 200)
     validate_bucket(bucket)
 
-    sb_async = await create_async_client(
-        settings.supabase_url, settings.supabase_service_key
-    )
+    # Return cached thumbnails immediately, only fetch missing ones
+    result: dict[str, str] = {}
+    to_fetch: list[str] = []
+    for name in filenames:
+        cache_key = (user_id, bucket, name, w)
+        cached = _thumb_cache.get(cache_key)
+        if cached:
+            result[name] = cached
+        else:
+            to_fetch.append(name)
+
+    if not to_fetch:
+        return result
+
+    # Limit concurrency to avoid exhausting Supabase connections
+    sem = asyncio.Semaphore(10)
 
     async def _resize_one(name: str) -> tuple[str, str]:
-        try:
-            data = await sb_async.storage.from_(bucket).download(f"{user_id}/{name}")
-            img = Image.open(io.BytesIO(data))
-            img.thumbnail((w, w), Image.LANCZOS)
-            buf = io.BytesIO()
-            img.convert("RGB").save(buf, format="JPEG", quality=70)
-            b64 = base64.b64encode(buf.getvalue()).decode()
-            return name, f"data:image/jpeg;base64,{b64}"
-        except Exception:
-            return name, ""
+        async with sem:
+            try:
+                sb = await create_async_client(
+                    settings.supabase_url, settings.supabase_service_key
+                )
+                data = await sb.storage.from_(bucket).download(f"{user_id}/{name}")
+                img = Image.open(io.BytesIO(data))
+                img.thumbnail((w, w), Image.LANCZOS)
+                buf = io.BytesIO()
+                img.convert("RGB").save(buf, format="JPEG", quality=70)
+                b64 = base64.b64encode(buf.getvalue()).decode()
+                data_uri = f"data:image/jpeg;base64,{b64}"
 
-    results = await asyncio.gather(*[_resize_one(n) for n in filenames])
-    return {name: data_uri for name, data_uri in results if data_uri}
+                # Cache for next time
+                cache_key = (user_id, bucket, name, w)
+                if len(_thumb_cache) < _THUMB_CACHE_MAX:
+                    _thumb_cache[cache_key] = data_uri
+
+                return name, data_uri
+            except Exception:
+                logger.warning("batch-thumbnails: failed to resize %s", name)
+                return name, ""
+
+    fetched = await asyncio.gather(*[_resize_one(n) for n in to_fetch])
+    for name, data_uri in fetched:
+        if data_uri:
+            result[name] = data_uri
+
+    return result
 
 
 @router.get("/api/assets/{bucket}/{filename}")
