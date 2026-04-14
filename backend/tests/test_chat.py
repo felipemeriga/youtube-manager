@@ -79,6 +79,7 @@ def test_chat_endpoint_default_type_is_text():
         user_id="test-user",
         image_url=None,
         platforms=None,
+        quality_tier=None,
     )
 
 
@@ -198,5 +199,6 @@ def test_chat_dispatches_to_thumbnail_stream_for_thumbnail_mode():
         user_id="test-user",
         image_url=None,
         platforms=None,
+        quality_tier=None,
     )
     mock_script.assert_not_called()
