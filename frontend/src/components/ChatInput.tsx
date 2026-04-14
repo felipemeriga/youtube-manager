@@ -15,10 +15,15 @@ import {
   Tabs,
   Tab,
 } from "@mui/material";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import SendIcon from "@mui/icons-material/Send";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import CloseIcon from "@mui/icons-material/Close";
+import BoltIcon from "@mui/icons-material/Bolt";
+import BalanceIcon from "@mui/icons-material/Balance";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { uploadAsset, listAssets, getBatchSignedUrls } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
@@ -33,6 +38,9 @@ interface ChatInputProps {
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (model: string) => void;
+  qualityTier?: string;
+  onQualityTierChange?: (tier: string) => void;
+  showQualityTier?: boolean;
 }
 
 interface StorageFile {
@@ -53,6 +61,9 @@ export default function ChatInput({
   models,
   selectedModel,
   onModelChange,
+  qualityTier,
+  onQualityTierChange,
+  showQualityTier,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [attachedImage, setAttachedImage] = useState<{
@@ -100,7 +111,7 @@ export default function ChatInput({
 
   const handleBrowserSelect = (
     bucket: string,
-    file: StorageFile & { signedUrl?: string },
+    file: StorageFile & { signedUrl?: string }
   ) => {
     const fullPath = `${bucket}/${file.name}`;
     const preview =
@@ -159,6 +170,54 @@ export default function ChatInput({
               ))}
             </Select>
           </FormControl>
+        </Box>
+      )}
+
+      {showQualityTier && onQualityTierChange && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+          <ToggleButtonGroup
+            value={qualityTier || "balanced"}
+            exclusive
+            onChange={(_, val) => val && onQualityTierChange(val)}
+            size="small"
+            sx={{
+              "& .MuiToggleButton-root": {
+                fontSize: "0.7rem",
+                py: 0.25,
+                px: 1.5,
+                color: "rgba(255,255,255,0.5)",
+                borderColor: "rgba(255,255,255,0.1)",
+                textTransform: "none",
+                "&.Mui-selected": {
+                  color: "#a78bfa",
+                  backgroundColor: "rgba(124,58,237,0.15)",
+                  borderColor: "rgba(124,58,237,0.3)",
+                },
+              },
+            }}
+          >
+            <ToggleButton value="fast">
+              <Tooltip title="Gemini Flash · 1K">
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <BoltIcon sx={{ fontSize: 14 }} /> Rápido
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="balanced">
+              <Tooltip title="Gemini Pro · 1K">
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <BalanceIcon sx={{ fontSize: 14 }} /> Balanceado
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="quality">
+              <Tooltip title="Gemini Pro · 4K">
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <AutoAwesomeIcon sx={{ fontSize: 14 }} /> Qualidade
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
         </Box>
       )}
 
@@ -387,7 +446,7 @@ function StorageBrowserDialog({
 }) {
   const [tab, setTab] = useState(0);
   const [files, setFiles] = useState<(StorageFile & { signedUrl?: string })[]>(
-    [],
+    []
   );
   const [loading, setLoading] = useState(false);
 
@@ -400,19 +459,16 @@ function StorageBrowserDialog({
     const loadFiles = async () => {
       try {
         const data = (await listAssets(
-          currentBucket.key,
+          currentBucket.key
         )) as unknown as StorageFile[];
         const imageFiles = data.filter(
-          (f) => f.name && /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name),
+          (f) => f.name && /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name)
         );
 
         // Get signed URLs in one batch request
         if (imageFiles.length > 0) {
           const filenames = imageFiles.map((f) => f.name);
-          const signed = await getBatchSignedUrls(
-            currentBucket.key,
-            filenames,
-          );
+          const signed = await getBatchSignedUrls(currentBucket.key, filenames);
           const urlMap = new Map<string, string>();
           for (const s of signed) {
             if (s.signedURL && s.path) {
@@ -424,7 +480,7 @@ function StorageBrowserDialog({
             imageFiles.map((f) => ({
               ...f,
               signedUrl: urlMap.get(f.name),
-            })),
+            }))
           );
         } else {
           setFiles([]);
@@ -555,10 +611,7 @@ function StorageBrowserDialog({
                         backgroundColor: "rgba(255,255,255,0.03)",
                       }}
                     >
-                      <CircularProgress
-                        size={16}
-                        sx={{ color: "#7c3aed" }}
-                      />
+                      <CircularProgress size={16} sx={{ color: "#7c3aed" }} />
                     </Box>
                   )}
                   <Box sx={{ px: 0.5, py: 0.25 }}>
@@ -585,4 +638,3 @@ function StorageBrowserDialog({
     </Dialog>
   );
 }
-

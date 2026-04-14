@@ -31,7 +31,15 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
-  images?: Record<string, { base64?: string; url?: string }>;
+  images?: Record<
+    string,
+    {
+      preview_base64?: string;
+      preview_url?: string;
+      url?: string;
+      base64?: string;
+    }
+  >;
 }
 
 interface Conversation {
@@ -50,7 +58,10 @@ export default function ChatPage() {
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
   const [conversationModel, setConversationModel] = useState<string>("");
   const [showModeDialog, setShowModeDialog] = useState(false);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["youtube"]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([
+    "youtube",
+  ]);
+  const [qualityTier, setQualityTier] = useState("balanced");
   const pendingMessageRef = useRef<{
     content: string;
     type: string;
@@ -59,7 +70,10 @@ export default function ChatPage() {
   } | null>(null);
   const streamingRef = useRef("");
   const imageRef = useRef<{ base64: string; url: string } | null>(null);
-  const imagesRef = useRef<Record<string, { base64?: string; url?: string }> | null>(null);
+  const imagesRef = useRef<Record<
+    string,
+    { base64?: string; url?: string }
+  > | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -130,7 +144,14 @@ export default function ChatPage() {
     if (pendingMessageRef.current) {
       const { content, type, imageUrl, platforms } = pendingMessageRef.current;
       pendingMessageRef.current = null;
-      await doStream(newConv.id, content, type, imageUrl, mode === "thumbnail" ? platforms : undefined);
+      await doStream(
+        newConv.id,
+        content,
+        type,
+        imageUrl,
+        mode === "thumbnail" ? platforms : undefined,
+        mode === "thumbnail" ? qualityTier : undefined
+      );
     }
   };
 
@@ -147,14 +168,21 @@ export default function ChatPage() {
     content: string,
     type: string = "text",
     imageUrl?: string,
-    platforms?: string[],
+    platforms?: string[]
   ) => {
     if (!selectedId) {
       pendingMessageRef.current = { content, type, imageUrl, platforms };
       setShowModeDialog(true);
       return;
     }
-    await doStream(selectedId, content, type, imageUrl, platforms);
+    await doStream(
+      selectedId,
+      content,
+      type,
+      imageUrl,
+      platforms,
+      conversationMode === "thumbnail" ? qualityTier : undefined
+    );
   };
 
   const doStream = async (
@@ -163,6 +191,7 @@ export default function ChatPage() {
     type: string,
     imageUrl?: string,
     platforms?: string[],
+    tier?: string
   ) => {
     // Add user message to UI immediately with readable label
     if (type === "text") {
@@ -202,66 +231,74 @@ export default function ChatPage() {
     setCurrentStage("generating");
 
     try {
-      await streamChat(conversationId, content, type, {
-        onToken: (token) => {
-          streamingRef.current += token;
-          setStreamingContent(streamingRef.current);
-        },
-        onStage: (stage) => {
-          setCurrentStage(stage);
-        },
-        onImage: (base64, url) => {
-          imageRef.current = { base64, url };
-        },
-        onImages: (imgs) => {
-          imagesRef.current = imgs;
-        },
-        onError: (error) => {
-          const content = error.toLowerCase().includes("persona")
-            ? `${error} [Ir para Configurações](/settings)`
-            : `Error: ${error}`;
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content, type: "text" },
-          ]);
-          setStreamingContent("");
-          setIsStreaming(false);
-          setCurrentStage(null);
-        },
-        onDone: (data) => {
-          const messageType = (data.message_type as string) || "text";
-          const newMessage: Message = {
-            role: "assistant",
-            content: streamingRef.current || (data.content as string) || "",
-            type: messageType,
-          };
-          if (imagesRef.current) {
-            newMessage.images = imagesRef.current;
-            // Also set backward-compat fields from first platform image
-            const firstImg = Object.values(imagesRef.current)[0];
-            if (firstImg) {
-              newMessage.image_base64 = firstImg.base64;
-              newMessage.image_url = firstImg.url;
+      await streamChat(
+        conversationId,
+        content,
+        type,
+        {
+          onToken: (token) => {
+            streamingRef.current += token;
+            setStreamingContent(streamingRef.current);
+          },
+          onStage: (stage) => {
+            setCurrentStage(stage);
+          },
+          onImage: (base64, url) => {
+            imageRef.current = { base64, url };
+          },
+          onImages: (imgs) => {
+            imagesRef.current = imgs;
+          },
+          onError: (error) => {
+            const content = error.toLowerCase().includes("persona")
+              ? `${error} [Ir para Configurações](/settings)`
+              : `Error: ${error}`;
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", content, type: "text" },
+            ]);
+            setStreamingContent("");
+            setIsStreaming(false);
+            setCurrentStage(null);
+          },
+          onDone: (data) => {
+            const messageType = (data.message_type as string) || "text";
+            const newMessage: Message = {
+              role: "assistant",
+              content: streamingRef.current || (data.content as string) || "",
+              type: messageType,
+            };
+            if (imagesRef.current) {
+              newMessage.images = imagesRef.current;
+              // Also set backward-compat fields from first platform image
+              const firstImg = Object.values(imagesRef.current)[0];
+              if (firstImg) {
+                newMessage.image_base64 = firstImg.base64;
+                newMessage.image_url = firstImg.url;
+              }
+            } else if (imageRef.current) {
+              newMessage.image_base64 = imageRef.current.base64;
+              newMessage.image_url = imageRef.current.url;
             }
-          } else if (imageRef.current) {
-            newMessage.image_base64 = imageRef.current.base64;
-            newMessage.image_url = imageRef.current.url;
-          }
-          if (data.saved) {
-            const savedLabel =
-              conversationMode === "script" ? "Script" : "Thumbnail";
-            newMessage.content =
-              (data.content as string) ||
-              `${savedLabel} saved to ${(data.path as string) || "storage"}!`;
-            newMessage.type = "text";
-          }
-          setMessages((prev) => [...prev, newMessage]);
-          setStreamingContent("");
-          setIsStreaming(false);
-          setCurrentStage(null);
-          loadConversations();
+            if (data.saved) {
+              const savedLabel =
+                conversationMode === "script" ? "Script" : "Thumbnail";
+              newMessage.content =
+                (data.content as string) ||
+                `${savedLabel} saved to ${(data.path as string) || "storage"}!`;
+              newMessage.type = "text";
+            }
+            setMessages((prev) => [...prev, newMessage]);
+            setStreamingContent("");
+            setIsStreaming(false);
+            setCurrentStage(null);
+            loadConversations();
+          },
         },
-      }, imageUrl, platforms);
+        imageUrl,
+        platforms,
+        tier
+      );
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -282,7 +319,7 @@ export default function ChatPage() {
       content,
       "text",
       imageUrl,
-      conversationMode === "thumbnail" ? selectedPlatforms : undefined,
+      conversationMode === "thumbnail" ? selectedPlatforms : undefined
     );
 
   const handleTopicSelect = (index: number) => {
@@ -374,6 +411,9 @@ export default function ChatPage() {
             ? handleModelChange
             : undefined
         }
+        qualityTier={qualityTier}
+        onQualityTierChange={setQualityTier}
+        showQualityTier={conversationMode === "thumbnail"}
       />
       <Dialog
         open={showModeDialog}

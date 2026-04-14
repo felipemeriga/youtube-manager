@@ -52,7 +52,17 @@ interface StreamCallbacks {
   onToken: (token: string) => void;
   onStage: (stage: string) => void;
   onImage: (base64: string, url: string) => void;
-  onImages?: (images: Record<string, { base64?: string; url?: string }>) => void;
+  onImages?: (
+    images: Record<
+      string,
+      {
+        preview_base64?: string;
+        preview_url?: string;
+        url?: string;
+        base64?: string;
+      }
+    >
+  ) => void;
   onDone: (data: Record<string, unknown>) => void;
   onError?: (error: string) => void;
   onTopics?: (content: string) => void;
@@ -65,6 +75,7 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   imageUrl?: string,
   platforms?: string[],
+  qualityTier?: string
 ): Promise<void> {
   const headers = await getAuthHeaders();
 
@@ -75,6 +86,7 @@ export async function streamChat(
   };
   if (imageUrl) body.image_url = imageUrl;
   if (platforms) body.platforms = platforms;
+  if (qualityTier) body.quality_tier = qualityTier;
 
   const response = await fetch("/api/chat", {
     method: "POST",
@@ -120,7 +132,17 @@ export async function streamChat(
         if (data.image_base64)
           callbacks.onImage(data.image_base64, data.image_url || "");
         if (data.images && callbacks.onImages)
-          callbacks.onImages(data.images as Record<string, { base64?: string; url?: string }>);
+          callbacks.onImages(
+            data.images as Record<
+              string,
+              {
+                preview_base64?: string;
+                preview_url?: string;
+                url?: string;
+                base64?: string;
+              }
+            >
+          );
         if (data.error && callbacks.onError) {
           callbacks.onError(data.error as string);
         }
@@ -169,7 +191,7 @@ export const getBatchSignedUrls = (bucket: string, filenames: string[]) =>
     {
       method: "POST",
       body: JSON.stringify({ bucket, filenames }),
-    },
+    }
   );
 export const deleteAsset = (bucket: string, name: string) =>
   apiFetch<void>(`/api/assets/${bucket}/${name}`, { method: "DELETE" });

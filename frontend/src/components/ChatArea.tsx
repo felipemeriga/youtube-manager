@@ -12,7 +12,15 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
-  images?: Record<string, { base64?: string; url?: string }>;
+  images?: Record<
+    string,
+    {
+      preview_base64?: string;
+      preview_url?: string;
+      url?: string;
+      base64?: string;
+    }
+  >;
 }
 
 interface ModelOption {
@@ -35,6 +43,9 @@ interface ChatAreaProps {
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (model: string) => void;
+  qualityTier?: string;
+  onQualityTierChange?: (tier: string) => void;
+  showQualityTier?: boolean;
 }
 
 export default function ChatArea({
@@ -52,6 +63,9 @@ export default function ChatArea({
   models,
   selectedModel,
   onModelChange,
+  qualityTier,
+  onQualityTierChange,
+  showQualityTier,
 }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -63,7 +77,6 @@ export default function ChatArea({
   }, [messages, streamingContent]);
 
   const isEmpty = messages.length === 0 && !isStreaming;
-
 
   return (
     <Box
@@ -151,6 +164,9 @@ export default function ChatArea({
         models={models}
         selectedModel={selectedModel}
         onModelChange={onModelChange}
+        qualityTier={qualityTier}
+        onQualityTierChange={onQualityTierChange}
+        showQualityTier={showQualityTier}
       />
     </Box>
   );
