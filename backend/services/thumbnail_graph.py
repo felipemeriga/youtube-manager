@@ -18,6 +18,13 @@ from services.thumbnail_state import ThumbnailState
 logger = logging.getLogger(__name__)
 
 
+def _extract_quality_tier(user_response) -> dict:
+    """Extract quality_tier from resume value if present, return as state update."""
+    if isinstance(user_response, dict) and user_response.get("quality_tier"):
+        return {"quality_tier": user_response["quality_tier"]}
+    return {}
+
+
 # ---------------------------------------------------------------------------
 # Entry router (flexible start based on uploaded image)
 # ---------------------------------------------------------------------------
@@ -90,17 +97,18 @@ async def review_background(
 
     action = intent.get("action", "approve")
 
+    tier = _extract_quality_tier(user_response)
+
     if action in ("approve", "save", "change_photo"):
-        return Command(goto="show_photos")
+        return Command(update=tier or None, goto="show_photos")
     elif action == "clarify":
-        # Ask the user to clarify — re-interrupt with a question
         return Command(
-            update={"clarify_question": intent.get("feedback")},
+            update={"clarify_question": intent.get("feedback"), **tier},
             goto="review_background",
         )
     else:
         # feedback, change_background, or restart — regenerate background
-        updates: dict = {"user_intent": intent}
+        updates: dict = {"user_intent": intent, **tier}
         if action == "restart" and intent.get("feedback"):
             updates["topic"] = intent["feedback"]
         return Command(
@@ -126,35 +134,33 @@ async def review_photo(
         intent = await classify_intent(str(user_response), "review_photo")
 
     action = intent.get("action", "select_photo")
+    tier = _extract_quality_tier(user_response)
 
     if action == "skip_photo":
-        # Skip person compositing — use background directly for text step
         return Command(
             update={
                 "composite_urls": state.get("background_urls") or {},
                 "photo_name": None,
+                **tier,
             },
             goto="ask_text",
         )
     if action in ("restart", "change_background"):
-        updates: dict = {"user_intent": intent}
+        updates: dict = {"user_intent": intent, **tier}
         if intent.get("feedback"):
             updates["topic"] = intent["feedback"]
-        return Command(
-            update=updates,
-            goto="generate_background",
-        )
+        return Command(update=updates, goto="generate_background")
     if action == "select_photo" and intent.get("photo_name"):
         return Command(
             update={
                 "photo_name": intent["photo_name"],
                 "extra_instructions": intent.get("feedback"),
+                **tier,
             },
             goto="composite",
         )
     else:
-        # change_photo, clarify, or anything else — stay on photo grid
-        return Command(goto="show_photos")
+        return Command(update=tier or None, goto="show_photos")
 
 
 async def review_composite(
@@ -183,19 +189,20 @@ async def review_composite(
         intent = await classify_intent(str(user_response), "review_composite")
 
     action = intent.get("action", "approve")
+    tier = _extract_quality_tier(user_response)
 
     if action in ("approve", "save"):
-        return Command(goto="ask_text")
+        return Command(update=tier or None, goto="ask_text")
     elif action == "change_photo":
         return Command(
-            update={"extra_instructions": intent.get("feedback")},
+            update={"extra_instructions": intent.get("feedback"), **tier},
             goto="show_photos",
         )
     elif action == "change_text":
-        return Command(goto="ask_text")
+        return Command(update=tier or None, goto="ask_text")
     elif action == "change_background":
         return Command(
-            update={"user_intent": intent},
+            update={"user_intent": intent, **tier},
             goto="generate_background",
         )
     elif action == "feedback":
@@ -203,21 +210,22 @@ async def review_composite(
             update={
                 "extra_instructions": intent.get("feedback"),
                 "user_intent": intent,
+                **tier,
             },
             goto="composite",
         )
     elif action == "clarify":
         return Command(
-            update={"clarify_question": intent.get("feedback")},
+            update={"clarify_question": intent.get("feedback"), **tier},
             goto="review_composite",
         )
     elif action == "restart":
-        updates_rc: dict = {"user_intent": intent}
+        updates_rc: dict = {"user_intent": intent, **tier}
         if intent.get("feedback"):
             updates_rc["topic"] = intent["feedback"]
         return Command(update=updates_rc, goto="generate_background")
     else:
-        return Command(goto="show_photos")
+        return Command(update=tier or None, goto="show_photos")
 
 
 async def ask_text(state: ThumbnailState) -> Command[Literal["add_text"]]:
@@ -233,11 +241,11 @@ async def ask_text(state: ThumbnailState) -> Command[Literal["add_text"]]:
         intent = user_response
         text = intent.get("text") or intent.get("feedback")
     else:
-        # Free text — treat the entire response as the thumbnail text
         text = str(user_response)
 
+    tier = _extract_quality_tier(user_response)
     return Command(
-        update={"thumb_text": text or state["topic"]},
+        update={"thumb_text": text or state["topic"], **tier},
         goto="add_text",
     )
 
@@ -270,46 +278,44 @@ async def review_final(
         intent = await classify_intent(str(user_response), "review_final")
 
     action = intent.get("action", "save")
+    tier = _extract_quality_tier(user_response)
 
     if action in ("save", "approve"):
-        return Command(goto="save")
+        return Command(update=tier or None, goto="save")
     elif action == "change_photo":
         return Command(
-            update={"extra_instructions": intent.get("feedback")},
+            update={"extra_instructions": intent.get("feedback"), **tier},
             goto="show_photos",
         )
     elif action == "change_text":
-        return Command(goto="ask_text")
+        return Command(update=tier or None, goto="ask_text")
     elif action == "change_background":
         return Command(
-            update={"user_intent": intent},
+            update={"user_intent": intent, **tier},
             goto="generate_background",
         )
     elif action == "feedback":
-        # Visual tweaks on the final image (text effects, styling) —
-        # keep the same text, send feedback to the text rendering step
         return Command(
-            update={"user_intent": intent},
+            update={"user_intent": intent, **tier},
             goto="add_text",
         )
     elif action == "provide_text":
-        # User provided new text content directly
         text = intent.get("text") or intent.get("feedback")
         if text:
-            return Command(update={"thumb_text": text}, goto="add_text")
-        return Command(goto="ask_text")
+            return Command(update={"thumb_text": text, **tier}, goto="add_text")
+        return Command(update=tier or None, goto="ask_text")
     elif action == "clarify":
         return Command(
-            update={"clarify_question": intent.get("feedback")},
+            update={"clarify_question": intent.get("feedback"), **tier},
             goto="review_final",
         )
     elif action == "restart":
-        updates_rf: dict = {"user_intent": intent}
+        updates_rf: dict = {"user_intent": intent, **tier}
         if intent.get("feedback"):
             updates_rf["topic"] = intent["feedback"]
         return Command(update=updates_rf, goto="generate_background")
     else:
-        return Command(goto="save")
+        return Command(update=tier or None, goto="save")
 
 
 # ---------------------------------------------------------------------------

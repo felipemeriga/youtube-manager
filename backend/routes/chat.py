@@ -167,12 +167,12 @@ async def thumbnail_stream(
                     "feedback": resume_value if resume_value else None,
                 }
 
-            result = await graph.ainvoke(Command(resume=resume_value), config)
+            # Embed quality_tier in resume value so graph nodes can read it
+            # (aupdate_state forks the checkpoint and breaks interrupt flow)
+            if quality_tier and isinstance(resume_value, dict):
+                resume_value["quality_tier"] = quality_tier
 
-            # Update quality tier for next generation step (after resume
-            # to avoid creating a checkpoint fork that loses the interrupt)
-            if quality_tier:
-                await graph.aupdate_state(config, {"quality_tier": quality_tier})
+            result = await graph.ainvoke(Command(resume=resume_value), config)
         else:
             # Fresh start — save user message and set title
             await _save_message(sb, conversation_id, "user", content, "text")
