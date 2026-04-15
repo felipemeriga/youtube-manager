@@ -26,32 +26,42 @@ def _generate_image(
     aspect_ratio: str,
     image_size: str,
 ) -> bytes:
-    """Call Gemini image generation with automatic retry on 400 (drops image_size)."""
-    config = types.GenerateContentConfig(
-        response_modalities=["IMAGE", "TEXT"],
-        image_config=types.ImageConfig(
-            aspect_ratio=aspect_ratio,
-            image_size=image_size,
-        ),
-    )
-    try:
-        response = client.models.generate_content(
-            model=model, contents=contents, config=config
-        )
-    except Exception as exc:
-        logger.warning(
-            "Gemini %s failed (size=%s): %s — retrying without image_size",
-            model,
-            image_size,
-            exc,
-        )
-        config_fallback = types.GenerateContentConfig(
+    """Call Gemini image generation with automatic fallback on 400.
+
+    Tries: requested size → 2K → 1K → no size constraint.
+    """
+    fallback_chain = [image_size]
+    for size in ["2K", "1K"]:
+        if size != image_size and size not in fallback_chain:
+            fallback_chain.append(size)
+    fallback_chain.append(None)  # last resort: let Gemini decide
+
+    last_exc = None
+    for size in fallback_chain:
+        img_config = types.ImageConfig(aspect_ratio=aspect_ratio)
+        if size:
+            img_config = types.ImageConfig(aspect_ratio=aspect_ratio, image_size=size)
+        config = types.GenerateContentConfig(
             response_modalities=["IMAGE", "TEXT"],
-            image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
+            image_config=img_config,
         )
-        response = client.models.generate_content(
-            model=model, contents=contents, config=config_fallback
-        )
+        try:
+            response = client.models.generate_content(
+                model=model, contents=contents, config=config
+            )
+            if size != image_size:
+                logger.info("Gemini succeeded with fallback size=%s", size)
+            break
+        except Exception as exc:
+            logger.warning(
+                "Gemini %s failed (size=%s): %s",
+                model,
+                size,
+                exc,
+            )
+            last_exc = exc
+    else:
+        raise last_exc  # type: ignore[misc]
 
     for part in response.parts:
         if part.inline_data is not None:

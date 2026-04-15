@@ -330,7 +330,10 @@ async def add_text_node(state: ThumbnailState) -> dict:
     platforms = _get_platforms(state)
     composite_urls = state.get("composite_urls") or {}
 
-    ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
+    all_refs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
+    # Only need 2 references for typography style — fewer images = higher
+    # chance of 4K output succeeding and faster API calls
+    ref_thumbs = all_refs[:2]
 
     # Extract feedback for text styling (e.g. "add shadow", "bigger font")
     text_feedback = None
