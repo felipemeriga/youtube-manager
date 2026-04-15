@@ -54,7 +54,7 @@ export default function PhotoGrid({
     setLoadingUrls(true);
     const filenames = photos.map((p) => p.name);
 
-    getBatchThumbnails("personal-photos", filenames, 200)
+    getBatchThumbnails("personal-photos", filenames, 400)
       .then((urlMap) => {
         if (controller.signal.aborted) return;
         setSignedUrls(urlMap);

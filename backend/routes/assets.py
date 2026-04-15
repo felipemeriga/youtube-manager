@@ -253,7 +253,7 @@ async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current
                 # difference is imperceptible
                 img.thumbnail((w, w), Image.BILINEAR)
                 buf = io.BytesIO()
-                img.convert("RGB").save(buf, format="JPEG", quality=60)
+                img.convert("RGB").save(buf, format="JPEG", quality=75)
                 b64 = base64.b64encode(buf.getvalue()).decode()
                 data_uri = f"data:image/jpeg;base64,{b64}"
 
