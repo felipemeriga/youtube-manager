@@ -368,49 +368,70 @@ function AuthOutputImage({
   base64?: string;
   storagePath?: string;
 }) {
-  const initialSrc = previewBase64
-    ? `data:image/jpeg;base64,${previewBase64}`
-    : base64
-    ? `data:image/png;base64,${base64}`
-    : null;
-
-  const [src, setSrc] = useState<string | null>(initialSrc);
-  const [loading, setLoading] = useState(!initialSrc);
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
+  // Convert base64 to blob URL immediately to avoid keeping large data URIs in DOM
   useEffect(() => {
-    const fetchPath = previewUrl || storagePath;
-    if (!fetchPath) return;
-    if (base64 && !previewBase64) return;
+    const revokeList: string[] = [];
 
-    let revoke: string | null = null;
-    const fetchPreview = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const filename = fetchPath.includes("/")
-        ? fetchPath.split("/").pop()!
-        : fetchPath;
-      try {
-        const res = await fetch(`/api/assets/outputs/${filename}`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (res.ok) {
-          const blob = await res.blob();
-          revoke = URL.createObjectURL(blob);
-          setSrc(revoke);
+    const resolve = async () => {
+      // 1. Try fetching from API (preferred — avoids holding base64 in memory)
+      const fetchPath = previewUrl || storagePath;
+      if (fetchPath && !(base64 && !previewBase64)) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session) {
+            const filename = fetchPath.includes("/")
+              ? fetchPath.split("/").pop()!
+              : fetchPath;
+            const res = await fetch(`/api/assets/outputs/${filename}`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (res.ok) {
+              const blob = await res.blob();
+              const objUrl = URL.createObjectURL(blob);
+              revokeList.push(objUrl);
+              setSrc(objUrl);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // fall through to base64
         }
-      } catch {
-        // keep whatever we have
+      }
+
+      // 2. Convert base64 to blob URL instead of using data URI
+      const raw = previewBase64 || base64;
+      if (raw) {
+        try {
+          const mime = previewBase64 ? "image/jpeg" : "image/png";
+          const byteChars = atob(raw);
+          const byteArray = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) {
+            byteArray[i] = byteChars.charCodeAt(i);
+          }
+          const blob = new Blob([byteArray], { type: mime });
+          const objUrl = URL.createObjectURL(blob);
+          revokeList.push(objUrl);
+          setSrc(objUrl);
+        } catch {
+          // last resort: inline data URI
+          const mime = previewBase64 ? "image/jpeg" : "image/png";
+          setSrc(`data:${mime};base64,${raw}`);
+        }
       }
       setLoading(false);
     };
-    fetchPreview();
+
+    resolve();
 
     return () => {
-      if (revoke) URL.revokeObjectURL(revoke);
+      revokeList.forEach((u) => URL.revokeObjectURL(u));
     };
   }, [previewUrl, storagePath, base64, previewBase64]);
 
