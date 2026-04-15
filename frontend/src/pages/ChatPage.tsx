@@ -347,7 +347,15 @@ export default function ChatPage() {
                 `${savedLabel} saved to ${(data.path as string) || "storage"}!`;
               newMessage.type = "text";
             }
-            setMessages((prev) => [...prev, newMessage]);
+            const newMessages: Message[] = [newMessage];
+            if (data.clarify_question) {
+              newMessages.push({
+                role: "assistant",
+                content: data.clarify_question as string,
+                type: "text",
+              });
+            }
+            setMessages((prev) => [...prev, ...newMessages]);
             setStreamingContent("");
             setIsStreaming(false);
             setCurrentStage(null);
