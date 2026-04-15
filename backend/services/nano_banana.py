@@ -4,6 +4,17 @@ from google.genai import types
 from config import settings
 
 
+def _detect_mime(data: bytes) -> str:
+    """Detect image MIME type from magic bytes, defaulting to image/png."""
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data[:4] == b"GIF8":
+        return "image/gif"
+    return "image/png"
+
+
 async def generate_thumbnail(
     prompt: str,
     reference_images: list[bytes],
@@ -19,7 +30,7 @@ async def generate_thumbnail(
         contents.append("Here are my reference thumbnails for style inspiration:")
         for img_bytes in reference_images:
             contents.append(
-                types.Part.from_bytes(data=img_bytes, mime_type="image/png")
+                types.Part.from_bytes(data=img_bytes, mime_type=_detect_mime(img_bytes))
             )
 
     # Add channel logo(s)
@@ -31,7 +42,9 @@ async def generate_thumbnail(
         )
         for logo_bytes in logos:
             contents.append(
-                types.Part.from_bytes(data=logo_bytes, mime_type="image/png")
+                types.Part.from_bytes(
+                    data=logo_bytes, mime_type=_detect_mime(logo_bytes)
+                )
             )
 
     # Add personal photos
@@ -92,7 +105,7 @@ async def generate_background(
         )
         for img_bytes in reference_images:
             contents.append(
-                types.Part.from_bytes(data=img_bytes, mime_type="image/png")
+                types.Part.from_bytes(data=img_bytes, mime_type=_detect_mime(img_bytes))
             )
 
     if logos:
@@ -102,7 +115,9 @@ async def generate_background(
         )
         for logo_bytes in logos:
             contents.append(
-                types.Part.from_bytes(data=logo_bytes, mime_type="image/png")
+                types.Part.from_bytes(
+                    data=logo_bytes, mime_type=_detect_mime(logo_bytes)
+                )
             )
 
     if previous_image:
@@ -110,7 +125,9 @@ async def generate_background(
             "Current background (user wants changes). Keep everything unchanged except what they asked for:"
         )
         contents.append(
-            types.Part.from_bytes(data=previous_image, mime_type="image/png")
+            types.Part.from_bytes(
+                data=previous_image, mime_type=_detect_mime(previous_image)
+            )
         )
 
     contents.append(prompt)
@@ -157,7 +174,7 @@ async def composite_with_effects(
         )
         for img_bytes in reference_images:
             contents.append(
-                types.Part.from_bytes(data=img_bytes, mime_type="image/png")
+                types.Part.from_bytes(data=img_bytes, mime_type=_detect_mime(img_bytes))
             )
 
     if previous_image:
@@ -165,16 +182,24 @@ async def composite_with_effects(
             "Current composite (user wants changes). Keep everything unchanged except what they asked for:"
         )
         contents.append(
-            types.Part.from_bytes(data=previous_image, mime_type="image/png")
+            types.Part.from_bytes(
+                data=previous_image, mime_type=_detect_mime(previous_image)
+            )
         )
 
     contents.append("Background image (use as-is, do NOT modify):")
-    contents.append(types.Part.from_bytes(data=background_bytes, mime_type="image/png"))
+    contents.append(
+        types.Part.from_bytes(
+            data=background_bytes, mime_type=_detect_mime(background_bytes)
+        )
+    )
 
     contents.append(
         "Person photo (remove its background, place onto the background above):"
     )
-    contents.append(types.Part.from_bytes(data=person_bytes, mime_type="image/png"))
+    contents.append(
+        types.Part.from_bytes(data=person_bytes, mime_type=_detect_mime(person_bytes))
+    )
 
     instructions = (
         "1. Preserve the person's face/body exactly — no redrawing or distortion\n"
@@ -229,7 +254,7 @@ async def add_text_with_style(
         )
         for img_bytes in reference_images:
             contents.append(
-                types.Part.from_bytes(data=img_bytes, mime_type="image/png")
+                types.Part.from_bytes(data=img_bytes, mime_type=_detect_mime(img_bytes))
             )
 
     if previous_image:
@@ -237,11 +262,17 @@ async def add_text_with_style(
             "Previous version (user wants changes). Keep everything except what they asked for:"
         )
         contents.append(
-            types.Part.from_bytes(data=previous_image, mime_type="image/png")
+            types.Part.from_bytes(
+                data=previous_image, mime_type=_detect_mime(previous_image)
+            )
         )
 
     contents.append("Current thumbnail (add text only, change nothing else):")
-    contents.append(types.Part.from_bytes(data=composite_bytes, mime_type="image/png"))
+    contents.append(
+        types.Part.from_bytes(
+            data=composite_bytes, mime_type=_detect_mime(composite_bytes)
+        )
+    )
 
     text_prompt = (
         f'Add this text: "{text}"\n'

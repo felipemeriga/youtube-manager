@@ -34,8 +34,16 @@ ACTIONS:
 - save — save final result ("save", "done", "salvar")
 - restart — new topic entirely ("começar de novo", "outro tema")
 - clarify — genuinely ambiguous, ask what they mean (put question in feedback)
-- use_as_background — uploaded image to use as background
-- use_as_composite — uploaded image already has person, just needs text
+- use_as_background — uploaded image to use as background, then pick a person photo to composite
+- use_as_composite — uploaded image is ready (already has person/content), just needs text added
+- skip_to_text — same as use_as_composite: skip background and composition, go straight to adding text
+
+WHEN STEP IS "entry_with_image":
+The user uploaded an image. Decide what to do with it:
+- If they want to use it as a background and add a person on top → use_as_background
+- If they want to just add text to it (skip background generation AND person composition) → use_as_composite
+- If they mention "pular", "skip", "só texto", "just add text", "direto pro texto" → use_as_composite
+- Default to use_as_background if unclear
 
 WHAT "feedback" MEANS AT EACH STEP:
 - review_background: tweak the background (colors, style, brightness). NOT "add text" or "add person".
