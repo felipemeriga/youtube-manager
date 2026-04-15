@@ -167,9 +167,12 @@ async def generate_background_node(state: ThumbnailState) -> dict:
     prompt_topic = f"{topic}\n\nAdditional feedback: {feedback}" if feedback else topic
 
     prompt = (
-        "GENERATE ONLY THE BACKGROUND AND LOGO.\n"
-        "Do NOT include any person, face, or human figure.\n"
-        "Do NOT include any text or title.\n\n"
+        "CRITICAL RULES — YOU MUST FOLLOW ALL OF THESE:\n"
+        "1. Generate ONLY the background scene and the channel logo.\n"
+        "2. ABSOLUTELY NO TEXT of any kind — no title, no words, no letters, no numbers as text. "
+        "The text will be added in a LATER step. If you add text now, the final result will have duplicate text.\n"
+        "3. ABSOLUTELY NO person, face, or human figure — the person will be composited in a LATER step.\n"
+        "4. Leave empty space where the person and text will go (refer to reference layout).\n\n"
         f"Topic: {prompt_topic}\n"
         "The background MUST visually represent this topic. "
         "Use imagery, colors, and elements directly related to it.\n"
@@ -183,7 +186,8 @@ async def generate_background_node(state: ThumbnailState) -> dict:
     prompt += (
         "\nUse the reference thumbnails ONLY for layout and composition guidance. "
         "The actual visual content and colors must come from the topic, NOT from the references. "
-        "Place the logo in the same position as the references."
+        "Place the logo in the same position as the references.\n\n"
+        "REMINDER: Output an image with ZERO text and ZERO people. Only background + logo."
     )
 
     # When feedback (not restart), download previous backgrounds for context
@@ -337,6 +341,11 @@ async def add_text_node(state: ThumbnailState) -> dict:
 
     ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
 
+    # Extract feedback for text styling (e.g. "add shadow", "bigger font")
+    text_feedback = None
+    if state.get("user_intent") and state["user_intent"]["action"] == "feedback":
+        text_feedback = state["user_intent"].get("feedback")
+
     # When re-doing text, download previous finals for context
     previous_finals: dict[str, bytes] = {}
     existing_final_urls = state.get("final_urls") or {}
@@ -370,6 +379,7 @@ async def add_text_node(state: ThumbnailState) -> dict:
             state["thumb_text"],
             ref_thumbs,
             previous_image=previous_finals.get(platform),
+            extra_instructions=text_feedback,
             aspect_ratio=cfg["aspect_ratio"],
             image_size=tier["image_size"],
             model=tier["model"],

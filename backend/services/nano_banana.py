@@ -90,8 +90,12 @@ async def generate_background(
             "general layout, logo placement, and composition style (where elements go). "
             "Do NOT copy their colors, visual effects, or subject matter. "
             "The background you generate must be about the TOPIC described below — "
-            "use visuals, colors, and imagery that represent THAT topic specifically. "
-            "Generate ONLY the background and logo. Do NOT include any person or any text."
+            "use visuals, colors, and imagery that represent THAT topic specifically.\n\n"
+            "IMPORTANT: The reference thumbnails contain text and people — IGNORE those. "
+            "You are generating ONLY the background layer. "
+            "Do NOT include ANY text, titles, words, or letters. "
+            "Do NOT include ANY person, face, or human figure. "
+            "These will be added in separate steps later."
         )
         for img_bytes in reference_images:
             contents.append(
@@ -236,6 +240,7 @@ async def add_text_with_style(
     text: str,
     reference_images: list[bytes],
     previous_image: bytes | None = None,
+    extra_instructions: str | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
     model: str = "gemini-3-pro-image-preview",
@@ -276,7 +281,7 @@ async def add_text_with_style(
     )
     contents.append(types.Part.from_bytes(data=composite_bytes, mime_type="image/png"))
 
-    contents.append(
+    text_prompt = (
         f'Add the following text to the thumbnail: "{text}"\n\n'
         f"Requirements:\n"
         f"1. Use the SAME font style, size, color, and effects as the reference thumbnails\n"
@@ -285,6 +290,9 @@ async def add_text_with_style(
         f"4. Do NOT change the background, person, logo, or any other element\n"
         f"5. The text should look like it belongs in this thumbnail series"
     )
+    if extra_instructions:
+        text_prompt += f"\n\nAdditional user instructions: {extra_instructions}"
+    contents.append(text_prompt)
 
     response = client.models.generate_content(
         model=model,
