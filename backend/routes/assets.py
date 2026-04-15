@@ -240,20 +240,20 @@ async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current
     if not to_fetch:
         return result
 
-    # Limit concurrency to avoid exhausting Supabase connections
-    sem = asyncio.Semaphore(10)
+    # Single shared client for all downloads (avoid 50 TCP connections)
+    sb = await create_async_client(settings.supabase_url, settings.supabase_service_key)
+    sem = asyncio.Semaphore(20)
 
     async def _resize_one(name: str) -> tuple[str, str]:
         async with sem:
             try:
-                sb = await create_async_client(
-                    settings.supabase_url, settings.supabase_service_key
-                )
                 data = await sb.storage.from_(bucket).download(f"{user_id}/{name}")
                 img = Image.open(io.BytesIO(data))
-                img.thumbnail((w, w), Image.LANCZOS)
+                # BILINEAR is much faster than LANCZOS; at 200px the quality
+                # difference is imperceptible
+                img.thumbnail((w, w), Image.BILINEAR)
                 buf = io.BytesIO()
-                img.convert("RGB").save(buf, format="JPEG", quality=70)
+                img.convert("RGB").save(buf, format="JPEG", quality=60)
                 b64 = base64.b64encode(buf.getvalue()).decode()
                 data_uri = f"data:image/jpeg;base64,{b64}"
 
