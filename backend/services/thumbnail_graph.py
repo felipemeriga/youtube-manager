@@ -72,14 +72,15 @@ async def entry_router(
 
 async def review_background(
     state: ThumbnailState,
-) -> Command[Literal["generate_background", "show_photos"]]:
+) -> Command[Literal["generate_background", "show_photos", "review_background"]]:
     """Interrupt to show background. Resume routes based on user intent."""
-    user_response = interrupt(
-        {
-            "type": "background",
-            "image_urls": state.get("background_urls") or {},
-        }
-    )
+    payload: dict = {
+        "type": "background",
+        "image_urls": state.get("background_urls") or {},
+    }
+    if state.get("clarify_question"):
+        payload["clarify_question"] = state["clarify_question"]
+    user_response = interrupt(payload)
 
     # Parse intent — button clicks send dicts, free text sends strings
     if isinstance(user_response, dict) and "action" in user_response:
@@ -89,10 +90,16 @@ async def review_background(
 
     action = intent.get("action", "approve")
 
-    if action in ("approve", "save"):
+    if action in ("approve", "save", "change_photo"):
         return Command(goto="show_photos")
+    elif action == "clarify":
+        # Ask the user to clarify — re-interrupt with a question
+        return Command(
+            update={"clarify_question": intent.get("feedback")},
+            goto="review_background",
+        )
     else:
-        # feedback or restart — regenerate background
+        # feedback, change_background, or restart — regenerate background
         updates: dict = {"user_intent": intent}
         if action == "restart" and intent.get("feedback"):
             updates["topic"] = intent["feedback"]
@@ -120,9 +127,8 @@ async def review_photo(
 
     action = intent.get("action", "select_photo")
 
-    if action == "restart":
+    if action in ("restart", "change_background"):
         updates: dict = {"user_intent": intent}
-        # If restart includes a new description, update the topic
         if intent.get("feedback"):
             updates["topic"] = intent["feedback"]
         return Command(
@@ -138,19 +144,29 @@ async def review_photo(
             goto="composite",
         )
     else:
+        # change_photo, clarify, or anything else — stay on photo grid
         return Command(goto="show_photos")
 
 
 async def review_composite(
     state: ThumbnailState,
-) -> Command[Literal["ask_text", "show_photos", "composite", "generate_background"]]:
+) -> Command[
+    Literal[
+        "ask_text",
+        "show_photos",
+        "composite",
+        "generate_background",
+        "review_composite",
+    ]
+]:
     """Interrupt to show composite. Resume routes based on user intent."""
-    user_response = interrupt(
-        {
-            "type": "composite",
-            "image_urls": state.get("composite_urls") or {},
-        }
-    )
+    payload_comp: dict = {
+        "type": "composite",
+        "image_urls": state.get("composite_urls") or {},
+    }
+    if state.get("clarify_question"):
+        payload_comp["clarify_question"] = state["clarify_question"]
+    user_response = interrupt(payload_comp)
 
     if isinstance(user_response, dict) and "action" in user_response:
         intent = user_response
@@ -161,6 +177,18 @@ async def review_composite(
 
     if action in ("approve", "save"):
         return Command(goto="ask_text")
+    elif action == "change_photo":
+        return Command(
+            update={"extra_instructions": intent.get("feedback")},
+            goto="show_photos",
+        )
+    elif action == "change_text":
+        return Command(goto="ask_text")
+    elif action == "change_background":
+        return Command(
+            update={"user_intent": intent},
+            goto="generate_background",
+        )
     elif action == "feedback":
         return Command(
             update={
@@ -168,6 +196,11 @@ async def review_composite(
                 "user_intent": intent,
             },
             goto="composite",
+        )
+    elif action == "clarify":
+        return Command(
+            update={"clarify_question": intent.get("feedback")},
+            goto="review_composite",
         )
     elif action == "restart":
         updates_rc: dict = {"user_intent": intent}
@@ -202,14 +235,25 @@ async def ask_text(state: ThumbnailState) -> Command[Literal["add_text"]]:
 
 async def review_final(
     state: ThumbnailState,
-) -> Command[Literal["save", "add_text", "ask_text", "generate_background"]]:
+) -> Command[
+    Literal[
+        "save",
+        "add_text",
+        "ask_text",
+        "show_photos",
+        "composite",
+        "generate_background",
+        "review_final",
+    ]
+]:
     """Interrupt to show final thumbnail. Resume routes to save or redo."""
-    user_response = interrupt(
-        {
-            "type": "image",
-            "image_urls": state.get("final_urls") or {},
-        }
-    )
+    payload_final: dict = {
+        "type": "image",
+        "image_urls": state.get("final_urls") or {},
+    }
+    if state.get("clarify_question"):
+        payload_final["clarify_question"] = state["clarify_question"]
+    user_response = interrupt(payload_final)
 
     if isinstance(user_response, dict) and "action" in user_response:
         intent = user_response
@@ -220,11 +264,36 @@ async def review_final(
 
     if action in ("save", "approve"):
         return Command(goto="save")
+    elif action == "change_photo":
+        return Command(
+            update={"extra_instructions": intent.get("feedback")},
+            goto="show_photos",
+        )
+    elif action == "change_text":
+        return Command(goto="ask_text")
+    elif action == "change_background":
+        return Command(
+            update={"user_intent": intent},
+            goto="generate_background",
+        )
     elif action == "feedback":
+        # Visual tweaks on the final image (text effects, styling) —
+        # keep the same text, send feedback to the text rendering step
+        return Command(
+            update={"user_intent": intent},
+            goto="add_text",
+        )
+    elif action == "provide_text":
+        # User provided new text content directly
         text = intent.get("text") or intent.get("feedback")
         if text:
             return Command(update={"thumb_text": text}, goto="add_text")
         return Command(goto="ask_text")
+    elif action == "clarify":
+        return Command(
+            update={"clarify_question": intent.get("feedback")},
+            goto="review_final",
+        )
     elif action == "restart":
         updates_rf: dict = {"user_intent": intent}
         if intent.get("feedback"):

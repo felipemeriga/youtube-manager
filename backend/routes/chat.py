@@ -284,16 +284,19 @@ async def thumbnail_stream(
                     )
 
                     first_payload = next(iter(images_payload.values()))
-                    yield sse_event(
-                        {
-                            "done": True,
-                            "message_type": msg_type,
-                            "images": images_payload,
-                            # Backward compat
-                            "image_base64": first_payload["preview_base64"],
-                            "image_url": first_url,
-                        }
-                    )
+                    event_data: dict = {
+                        "done": True,
+                        "message_type": msg_type,
+                        "images": images_payload,
+                        # Backward compat
+                        "image_base64": first_payload["preview_base64"],
+                        "image_url": first_url,
+                    }
+                    if interrupt_value.get("clarify_question"):
+                        event_data["clarify_question"] = interrupt_value[
+                            "clarify_question"
+                        ]
+                    yield sse_event(event_data)
                     return
             elif msg_type == "photo_grid":
                 photos_json = json.dumps(interrupt_value.get("photos", []))

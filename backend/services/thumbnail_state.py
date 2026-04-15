@@ -56,6 +56,7 @@ class ThumbnailState(TypedDict):
     user_input: str
     user_intent: UserIntent | None
     extra_instructions: str | None
+    clarify_question: str | None
 
     # Photo list for selection
     photo_list: list[dict]
