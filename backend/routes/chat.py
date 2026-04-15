@@ -199,6 +199,7 @@ async def thumbnail_stream(
                     "photo_list": [],
                     "uploaded_image_url": image_url,
                     "quality_tier": quality_tier or "balanced",
+                    "clarify_question": None,
                 },
                 config,
             )
@@ -220,7 +221,7 @@ async def thumbnail_stream(
                 if image_urls:
                     images_payload = {}
                     for platform, paths in image_urls.items():
-                        url = paths["url"] if isinstance(paths, dict) else paths
+                        url = paths.get("url", "") if isinstance(paths, dict) else paths
                         preview_url = (
                             paths.get("preview_url", "")
                             if isinstance(paths, dict)
@@ -270,7 +271,7 @@ async def thumbnail_stream(
                     }
                     first_paths = next(iter(image_urls.values()))
                     first_url = (
-                        first_paths["url"]
+                        first_paths.get("url", "")
                         if isinstance(first_paths, dict)
                         else first_paths
                     )
@@ -344,7 +345,7 @@ async def thumbnail_stream(
             final_urls = result.get("final_urls") or {}
             first_paths = next(iter(final_urls.values()), {})
             first_url = (
-                first_paths["url"]
+                first_paths.get("url", "")
                 if isinstance(first_paths, dict)
                 else first_paths or ""
             )
@@ -399,7 +400,11 @@ async def conversation_status(
                             sb = await _get_async_supabase()
                             images_payload: dict = {}
                             for platform, paths in image_urls.items():
-                                url = paths["url"] if isinstance(paths, dict) else paths
+                                url = (
+                                    paths.get("url", "")
+                                    if isinstance(paths, dict)
+                                    else paths
+                                )
                                 preview_url = (
                                     paths.get("preview_url", "")
                                     if isinstance(paths, dict)
@@ -446,7 +451,9 @@ async def conversation_status(
                         first_url = None
                         if image_urls_raw:
                             fp = next(iter(image_urls_raw.values()))
-                            first_url = fp["url"] if isinstance(fp, dict) else fp
+                            first_url = (
+                                fp.get("url", "") if isinstance(fp, dict) else fp
+                            )
                         await _save_message(
                             sb,
                             conversation_id,
