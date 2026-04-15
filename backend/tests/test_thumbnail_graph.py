@@ -248,6 +248,35 @@ async def test_review_photo_select_routes_to_composite():
 
 
 @pytest.mark.asyncio
+async def test_review_photo_skip_routes_to_ask_text():
+    """review_photo with skip_photo should route to ask_text with background as composite."""
+    from services.thumbnail_graph import review_photo
+
+    state = {
+        **_initial_state(),
+        "background_urls": {"youtube": {"url": "user-1/bg.png", "preview_url": ""}},
+        "photo_list": [
+            {
+                "name": "photo1.jpg",
+                "url": "/api/assets/personal-photos/photo1.jpg",
+                "recommended": True,
+            }
+        ],
+    }
+
+    with patch(
+        "services.thumbnail_graph.interrupt",
+        return_value={"action": "skip_photo"},
+    ):
+        result = await review_photo(state)
+
+    assert isinstance(result, Command)
+    assert result.goto == "ask_text"
+    assert result.update["composite_urls"] == state["background_urls"]
+    assert result.update["photo_name"] is None
+
+
+@pytest.mark.asyncio
 async def test_review_composite_approve_routes_to_ask_text():
     """review_composite should route to ask_text on approve."""
     from services.thumbnail_graph import review_composite

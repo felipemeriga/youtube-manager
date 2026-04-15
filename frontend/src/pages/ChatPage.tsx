@@ -417,6 +417,19 @@ export default function ChatPage() {
     doStream(selectedId, payload, "text", undefined, undefined, tier);
   };
 
+  const handleSkipPhoto = () => {
+    if (!selectedId) return;
+    const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
+    doStream(
+      selectedId,
+      JSON.stringify({ action: "skip_photo" }),
+      "text",
+      undefined,
+      undefined,
+      tier
+    );
+  };
+
   const handleSubmitText = (text: string) => {
     if (!selectedId) return;
     const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
@@ -486,6 +499,7 @@ export default function ChatPage() {
         onReject={handleReject}
         onTopicSelect={handleTopicSelect}
         onPhotoSelect={handlePhotoSelect}
+        onSkipPhoto={handleSkipPhoto}
         onSubmitText={handleSubmitText}
         conversationMode={conversationMode}
         models={

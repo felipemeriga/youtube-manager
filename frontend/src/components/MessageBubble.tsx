@@ -47,6 +47,7 @@ interface MessageBubbleProps {
   onReject?: () => void;
   onTopicSelect?: (index: number) => void;
   onPhotoSelect?: (name: string, instructions?: string) => void;
+  onSkipPhoto?: () => void;
   onSubmitText?: (text: string) => void;
   isLatest?: boolean;
   isStreaming?: boolean;
@@ -166,6 +167,7 @@ export default function MessageBubble({
   onReject,
   onTopicSelect,
   onPhotoSelect,
+  onSkipPhoto,
   onSubmitText,
   isLatest,
   isStreaming,
@@ -273,6 +275,7 @@ export default function MessageBubble({
                 <PhotoGrid
                   photos={photos}
                   onSelect={onPhotoSelect || (() => {})}
+                  onSkip={isLatest && !isStreaming ? onSkipPhoto : undefined}
                   disabled={!isLatest || isStreaming}
                 />
               );

@@ -38,6 +38,7 @@ interface ChatAreaProps {
   onReject: () => void;
   onTopicSelect?: (index: number) => void;
   onPhotoSelect?: (name: string, instructions?: string) => void;
+  onSkipPhoto?: () => void;
   onSubmitText?: (text: string) => void;
   conversationMode?: string;
   models?: ModelOption[];
@@ -58,6 +59,7 @@ export default function ChatArea({
   onReject,
   onTopicSelect,
   onPhotoSelect,
+  onSkipPhoto,
   onSubmitText,
   conversationMode,
   models,
@@ -139,6 +141,7 @@ export default function ChatArea({
             onReject={onReject}
             onTopicSelect={onTopicSelect}
             onPhotoSelect={onPhotoSelect}
+            onSkipPhoto={onSkipPhoto}
             onSubmitText={onSubmitText}
             conversationMode={conversationMode}
           />

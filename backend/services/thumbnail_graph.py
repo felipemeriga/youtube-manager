@@ -111,7 +111,7 @@ async def review_background(
 
 async def review_photo(
     state: ThumbnailState,
-) -> Command[Literal["composite", "show_photos", "generate_background"]]:
+) -> Command[Literal["composite", "show_photos", "generate_background", "ask_text"]]:
     """Interrupt to show photo grid. Resume routes based on selection."""
     user_response = interrupt(
         {
@@ -127,6 +127,15 @@ async def review_photo(
 
     action = intent.get("action", "select_photo")
 
+    if action == "skip_photo":
+        # Skip person compositing — use background directly for text step
+        return Command(
+            update={
+                "composite_urls": state.get("background_urls") or {},
+                "photo_name": None,
+            },
+            goto="ask_text",
+        )
     if action in ("restart", "change_background"):
         updates: dict = {"user_intent": intent}
         if intent.get("feedback"):

@@ -25,12 +25,14 @@ interface Photo {
 interface PhotoGridProps {
   photos: Photo[];
   onSelect: (name: string, instructions?: string) => void;
+  onSkip?: () => void;
   disabled?: boolean;
 }
 
 export default function PhotoGrid({
   photos,
   onSelect,
+  onSkip,
   disabled,
 }: PhotoGridProps) {
   const [open, setOpen] = useState(false);
@@ -95,26 +97,46 @@ export default function PhotoGrid({
         Selecione uma foto para a thumbnail:
       </Typography>
 
-      <Button
-        variant="outlined"
-        startIcon={<PhotoLibraryIcon />}
-        onClick={() => setOpen(true)}
-        disabled={disabled}
-        sx={{
-          borderColor: "#7c3aed",
-          color: "#c4b5fd",
-          textTransform: "none",
-          fontSize: 14,
-          px: 3,
-          py: 1.2,
-          "&:hover": {
-            borderColor: "#a78bfa",
-            backgroundColor: "rgba(124,58,237,0.1)",
-          },
-        }}
-      >
-        Ver fotos ({photos.length})
-      </Button>
+      <Box sx={{ display: "flex", gap: 1.5 }}>
+        <Button
+          variant="outlined"
+          startIcon={<PhotoLibraryIcon />}
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+          sx={{
+            borderColor: "#7c3aed",
+            color: "#c4b5fd",
+            textTransform: "none",
+            fontSize: 14,
+            px: 3,
+            py: 1.2,
+            "&:hover": {
+              borderColor: "#a78bfa",
+              backgroundColor: "rgba(124,58,237,0.1)",
+            },
+          }}
+        >
+          Ver fotos ({photos.length})
+        </Button>
+        {onSkip && (
+          <Button
+            variant="text"
+            onClick={onSkip}
+            disabled={disabled}
+            sx={{
+              color: "rgba(255,255,255,0.4)",
+              textTransform: "none",
+              fontSize: 13,
+              "&:hover": {
+                color: "rgba(255,255,255,0.7)",
+                backgroundColor: "rgba(255,255,255,0.05)",
+              },
+            }}
+          >
+            Pular foto
+          </Button>
+        )}
+      </Box>
 
       <Dialog
         open={open}
