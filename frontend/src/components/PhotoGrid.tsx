@@ -139,7 +139,11 @@ export default function PhotoGrid({
             pb: 1.5,
           }}
         >
-          <Typography variant="h6" sx={{ color: "#e2e8f0", fontWeight: 600 }}>
+          <Typography
+            variant="h6"
+            component="span"
+            sx={{ color: "#e2e8f0", fontWeight: 600 }}
+          >
             Escolha uma foto
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -166,14 +170,47 @@ export default function PhotoGrid({
 
         <DialogContent sx={{ pt: 3 }}>
           {loadingUrls ? (
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                py: 4,
-              }}
-            >
-              <CircularProgress size={32} sx={{ color: "#7c3aed" }} />
+            <Box>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  color: "rgba(255,255,255,0.5)",
+                  mb: 1.5,
+                  fontWeight: 600,
+                }}
+              >
+                Carregando {photos.length} fotos...
+              </Typography>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                  gap: 2,
+                }}
+              >
+                {Array.from({ length: Math.min(photos.length, 12) }).map(
+                  (_, i) => (
+                    <Box
+                      key={i}
+                      sx={{
+                        borderRadius: 2,
+                        height: 160,
+                        backgroundColor: "rgba(255,255,255,0.03)",
+                        animation: "pulse 1.5s ease-in-out infinite",
+                        "@keyframes pulse": {
+                          "0%, 100%": {
+                            opacity: 0.4,
+                          },
+                          "50%": {
+                            opacity: 0.8,
+                          },
+                        },
+                        animationDelay: `${i * 0.1}s`,
+                      }}
+                    />
+                  )
+                )}
+              </Box>
             </Box>
           ) : (
             <>
