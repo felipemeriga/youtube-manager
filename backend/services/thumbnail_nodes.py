@@ -167,28 +167,19 @@ async def generate_background_node(state: ThumbnailState) -> dict:
     prompt_topic = f"{topic}\n\nAdditional feedback: {feedback}" if feedback else topic
 
     prompt = (
-        "CRITICAL RULES — YOU MUST FOLLOW ALL OF THESE:\n"
-        "1. Generate ONLY the background scene and the channel logo.\n"
-        "2. ABSOLUTELY NO TEXT of any kind — no title, no words, no letters, no numbers as text. "
-        "The text will be added in a LATER step. If you add text now, the final result will have duplicate text.\n"
-        "3. ABSOLUTELY NO person, face, or human figure — the person will be composited in a LATER step.\n"
-        "4. Leave empty space where the person and text will go (refer to reference layout).\n\n"
+        "Generate ONLY the background + logo. NO text, NO people.\n"
+        "Text and person are added in later steps — including them now causes duplicates.\n"
+        "Leave space for where the person and text will go.\n\n"
         f"Topic: {prompt_topic}\n"
-        "The background MUST visually represent this topic. "
-        "Use imagery, colors, and elements directly related to it.\n"
+        "Use imagery, colors, and elements that represent this topic.\n"
     )
     if style_memories:
-        prompt += "\nUser's style preferences from past thumbnails:\n"
+        prompt += "\nStyle preferences:\n"
         for mem in style_memories:
             prompt += f"- {mem}\n"
     if topic_research:
-        prompt += f"\nVisual elements to include in the background:\n{topic_research}\n"
-    prompt += (
-        "\nUse the reference thumbnails ONLY for layout and composition guidance. "
-        "The actual visual content and colors must come from the topic, NOT from the references. "
-        "Place the logo in the same position as the references.\n\n"
-        "REMINDER: Output an image with ZERO text and ZERO people. Only background + logo."
-    )
+        prompt += f"\nVisual elements for the background:\n{topic_research}\n"
+    prompt += "\nMatch logo placement from references. Colors/content must come from the topic."
 
     # When feedback (not restart), download previous backgrounds for context
     previous_bgs: dict[str, bytes] = {}

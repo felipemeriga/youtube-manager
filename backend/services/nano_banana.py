@@ -86,16 +86,9 @@ async def generate_background(
 
     if reference_images:
         contents.append(
-            "Here are reference thumbnails. Use them ONLY to understand the "
-            "general layout, logo placement, and composition style (where elements go). "
-            "Do NOT copy their colors, visual effects, or subject matter. "
-            "The background you generate must be about the TOPIC described below — "
-            "use visuals, colors, and imagery that represent THAT topic specifically.\n\n"
-            "IMPORTANT: The reference thumbnails contain text and people — IGNORE those. "
-            "You are generating ONLY the background layer. "
-            "Do NOT include ANY text, titles, words, or letters. "
-            "Do NOT include ANY person, face, or human figure. "
-            "These will be added in separate steps later."
+            "Reference thumbnails — use ONLY for layout and logo placement. "
+            "Ignore their text and people (those are added in later steps). "
+            "Generate visuals based on the TOPIC below, not the references."
         )
         for img_bytes in reference_images:
             contents.append(
@@ -114,11 +107,7 @@ async def generate_background(
 
     if previous_image:
         contents.append(
-            "This is the CURRENT background image that the user already reviewed. "
-            "They liked the overall direction but want specific changes. "
-            "Use this image as the starting point — keep everything the user "
-            "did NOT mention changing, and ONLY modify what they ask for in "
-            "the feedback below:"
+            "Current background (user wants changes). Keep everything unchanged except what they asked for:"
         )
         contents.append(
             types.Part.from_bytes(data=previous_image, mime_type="image/png")
@@ -161,12 +150,10 @@ async def composite_with_effects(
 
     contents = []
 
-    # Show references so Gemini sees the person effects/glow/editing style
     if reference_images:
         contents.append(
-            "Here are reference YouTube thumbnails. Study how the PERSON is composited "
-            "into the background — the position, size, glow, lighting effects, color grading, "
-            "edge blending, and any visual effects. You must replicate the SAME style."
+            "Reference thumbnails — study how the person is composited: "
+            "position, size, glow, lighting, color grading, edge effects. Replicate this style."
         )
         for img_bytes in reference_images:
             contents.append(
@@ -175,44 +162,29 @@ async def composite_with_effects(
 
     if previous_image:
         contents.append(
-            "This is the CURRENT composite image that the user already reviewed. "
-            "They liked the overall result but want specific changes. "
-            "Use this as your starting point — keep everything the user did NOT "
-            "mention changing, and ONLY modify what they ask for in the instructions below:"
+            "Current composite (user wants changes). Keep everything unchanged except what they asked for:"
         )
         contents.append(
             types.Part.from_bytes(data=previous_image, mime_type="image/png")
         )
 
-    # Provide the background
-    contents.append(
-        "This is the FINAL background image. It already contains the logo and all "
-        "visual elements. You MUST use this EXACT image as the base layer — do NOT "
-        "regenerate, redraw, or modify the background, logo, or any element in it. "
-        "The ONLY change you make is placing the person on top:"
-    )
+    contents.append("Background image (use as-is, do NOT modify):")
     contents.append(types.Part.from_bytes(data=background_bytes, mime_type="image/png"))
 
-    # Provide the person photo
     contents.append(
-        "This is the person photo. Remove its original background and place "
-        "the person onto the background image above:"
+        "Person photo (remove its background, place onto the background above):"
     )
     contents.append(types.Part.from_bytes(data=person_bytes, mime_type="image/png"))
 
     instructions = (
-        "Instructions:\n"
-        "1. PRESERVE the person's face and body EXACTLY — do NOT redraw, alter, or distort them\n"
-        "2. Remove the person's original background completely\n"
-        "3. Apply the SAME visual effects as the reference thumbnails — glow, lighting, "
-        "color grading, edge effects, rim lighting, etc. to the person ONLY\n"
-        "4. Position and size the person the SAME way as in the reference thumbnails\n"
-        "5. Do NOT add any text\n"
-        "6. CRITICAL: The background, logo, and all existing elements must remain "
-        "PIXEL-PERFECT identical. Only the person is added on top."
+        "1. Preserve the person's face/body exactly — no redrawing or distortion\n"
+        "2. Remove the person's original background\n"
+        "3. Apply reference-style effects (glow, lighting, color grading) to the person\n"
+        "4. Position/size the person as in references\n"
+        "5. No text. Background must remain pixel-perfect."
     )
     if extra_instructions:
-        instructions += f"\n7. Additional request from user: {extra_instructions}"
+        instructions += f"\n6. User request: {extra_instructions}"
     contents.append(instructions)
 
     response = client.models.generate_content(
@@ -252,11 +224,8 @@ async def add_text_with_style(
 
     if reference_images:
         contents.append(
-            "Here are reference YouTube thumbnails. Study the TYPOGRAPHY carefully — "
-            "the font style, font weight, text color, text size, text position, "
-            "text effects (shadow, stroke, glow, gradient), and how the text is "
-            "laid out relative to the person and background. You must replicate "
-            "the SAME text style on the image below."
+            "Reference thumbnails — replicate the SAME typography: "
+            "font style, weight, color, size, position, effects (shadow, stroke, glow)."
         )
         for img_bytes in reference_images:
             contents.append(
@@ -265,33 +234,22 @@ async def add_text_with_style(
 
     if previous_image:
         contents.append(
-            "This is the PREVIOUS final thumbnail that the user already reviewed. "
-            "They want changes to the text. Use this as reference for what was "
-            "already done — keep everything else identical and ONLY change what "
-            "the user asked for:"
+            "Previous version (user wants changes). Keep everything except what they asked for:"
         )
         contents.append(
             types.Part.from_bytes(data=previous_image, mime_type="image/png")
         )
 
-    contents.append(
-        "This is the current thumbnail (background + person already composited). "
-        "Add text to it WITHOUT changing anything else — keep the background, "
-        "person, logo, and all effects EXACTLY as they are:"
-    )
+    contents.append("Current thumbnail (add text only, change nothing else):")
     contents.append(types.Part.from_bytes(data=composite_bytes, mime_type="image/png"))
 
     text_prompt = (
-        f'Add the following text to the thumbnail: "{text}"\n\n'
-        f"Requirements:\n"
-        f"1. Use the SAME font style, size, color, and effects as the reference thumbnails\n"
-        f"2. Place the text in the same position/area as in the references\n"
-        f"3. Make the text clearly readable and impactful\n"
-        f"4. Do NOT change the background, person, logo, or any other element\n"
-        f"5. The text should look like it belongs in this thumbnail series"
+        f'Add this text: "{text}"\n'
+        f"Match reference typography style. Make it readable and impactful.\n"
+        f"Do NOT change background, person, logo, or any other element."
     )
     if extra_instructions:
-        text_prompt += f"\n\nAdditional user instructions: {extra_instructions}"
+        text_prompt += f"\nUser request: {extra_instructions}"
     contents.append(text_prompt)
 
     response = client.models.generate_content(
