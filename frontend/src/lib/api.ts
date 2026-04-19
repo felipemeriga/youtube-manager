@@ -74,8 +74,7 @@ export async function streamChat(
   type: string,
   callbacks: StreamCallbacks,
   imageUrl?: string,
-  platforms?: string[],
-  qualityTier?: string
+  platforms?: string[]
 ): Promise<void> {
   const headers = await getAuthHeaders();
 
@@ -86,7 +85,6 @@ export async function streamChat(
   };
   if (imageUrl) body.image_url = imageUrl;
   if (platforms) body.platforms = platforms;
-  if (qualityTier) body.quality_tier = qualityTier;
 
   const response = await fetch("/api/chat", {
     method: "POST",

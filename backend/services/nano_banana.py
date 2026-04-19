@@ -196,11 +196,18 @@ async def composite_with_effects(
     reference_images: list[bytes],
     extra_instructions: str | None = None,
     previous_image: bytes | None = None,
+    composite_mode: str = "natural",
+    transform_prompt: str | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
     model: str = "gemini-3-pro-image-preview",
 ) -> bytes:
-    """Use Gemini to composite person onto background with effects matching references."""
+    """Use Gemini to composite person onto background with effects matching references.
+
+    Modes:
+    - "natural": preserve person exactly, just composite onto background
+    - "transform": keep face but allow body/outfit changes based on transform_prompt
+    """
     client = genai.Client(api_key=settings.gemini_api_key)
 
     contents = []
@@ -232,22 +239,31 @@ async def composite_with_effects(
         )
     )
 
-    contents.append(
-        "Person photo (remove its background, place onto the background above):"
-    )
+    contents.append("Person photo (this is the person to place in the thumbnail):")
     contents.append(
         types.Part.from_bytes(data=person_bytes, mime_type=_detect_mime(person_bytes))
     )
 
-    instructions = (
-        "1. Preserve the person's face/body exactly — no redrawing or distortion\n"
-        "2. Remove the person's original background\n"
-        "3. Apply reference-style effects (glow, lighting, color grading) to the person\n"
-        "4. Position/size the person as in references\n"
-        "5. No text. Background must remain pixel-perfect."
-    )
+    if composite_mode == "transform" and transform_prompt:
+        instructions = (
+            f"TRANSFORM MODE: {transform_prompt}\n"
+            "1. Keep the person's FACE exactly as it is — same face, same features, recognizable\n"
+            "2. Transform their body/outfit/appearance as described above\n"
+            "3. Remove the person's original background\n"
+            "4. Apply reference-style effects (glow, lighting, color grading)\n"
+            "5. Position/size the person as in references\n"
+            "6. No text. Background must remain pixel-perfect."
+        )
+    else:
+        instructions = (
+            "1. Preserve the person's face/body exactly — no redrawing or distortion\n"
+            "2. Remove the person's original background\n"
+            "3. Apply reference-style effects (glow, lighting, color grading) to the person\n"
+            "4. Position/size the person as in references\n"
+            "5. No text. Background must remain pixel-perfect."
+        )
     if extra_instructions:
-        instructions += f"\n6. User request: {extra_instructions}"
+        instructions += f"\nAdditional request: {extra_instructions}"
     contents.append(instructions)
 
     return _generate_image(client, model, contents, aspect_ratio, image_size)

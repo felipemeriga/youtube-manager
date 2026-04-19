@@ -19,7 +19,7 @@ from services.thumbnail_memory import get_relevant_memories, extract_and_store_m
 from services.thumbnail_state import (
     PLATFORM_CONFIGS,
     DEFAULT_PLATFORMS,
-    QUALITY_TIERS,
+    QUALITY_TIER,
     ThumbnailState,
 )
 
@@ -63,8 +63,11 @@ async def _research_topic(topic: str) -> str:
         return ""
 
 
-async def _fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
-    """Fetch all assets from a bucket with in-process caching."""
+async def _fetch_all_assets(_sb_unused, user_id: str, bucket: str) -> list[bytes]:
+    """Fetch all assets from a bucket with in-process caching.
+
+    Uses fresh Supabase clients to avoid HTTP/2 connection pool exhaustion.
+    """
     cache_key = (user_id, bucket)
     cached = _asset_cache.get(cache_key)
     if cached:
@@ -75,14 +78,35 @@ async def _fetch_all_assets(sb, user_id: str, bucket: str) -> list[bytes]:
             )
             return data
 
-    files = await sb.storage.from_(bucket).list(path=user_id)
+    # Fresh client for listing
+    for attempt in range(3):
+        try:
+            list_sb = await _get_supabase()
+            files = await list_sb.storage.from_(bucket).list(path=user_id)
+            break
+        except Exception:
+            if attempt == 2:
+                logger.warning("Failed to list %s after 3 attempts", bucket)
+                return []
+            await asyncio.sleep(1)
+
     names = [f["name"] for f in files if f.get("name")]
+    if not names:
+        return []
 
-    async def _download(name: str) -> bytes:
-        return await sb.storage.from_(bucket).download(f"{user_id}/{name}")
-
-    results = await asyncio.gather(*[_download(n) for n in names])
-    data = list(results)
+    # Download sequentially with fresh clients to avoid connection pool issues
+    data = []
+    for name in names:
+        for attempt in range(3):
+            try:
+                dl_sb = await _get_supabase()
+                result = await dl_sb.storage.from_(bucket).download(f"{user_id}/{name}")
+                data.append(result)
+                break
+            except Exception:
+                if attempt == 2:
+                    logger.warning("Failed to download %s/%s", bucket, name)
+                await asyncio.sleep(0.5)
 
     _asset_cache[cache_key] = (time.time(), data)
     logger.info(
@@ -197,9 +221,7 @@ async def generate_background_node(state: ThumbnailState) -> dict:
         )
         previous_bgs = dict(prev_results)
 
-    tier = QUALITY_TIERS.get(
-        state.get("quality_tier") or "balanced", QUALITY_TIERS["balanced"]
-    )
+    tier = QUALITY_TIER
 
     # Generate for all platforms concurrently, then upload sequentially
     async def _gen_bg(platform: str) -> tuple[str, bytes]:
@@ -267,6 +289,8 @@ async def composite_node(state: ThumbnailState) -> dict:
     )
     ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
     extra = state.get("extra_instructions")
+    composite_mode = state.get("composite_mode") or "natural"
+    transform_prompt = state.get("transform_prompt")
 
     # When feedback, download previous composites for context
     previous_comps: dict[str, bytes] = {}
@@ -287,9 +311,7 @@ async def composite_node(state: ThumbnailState) -> dict:
         )
         previous_comps = dict(prev_results)
 
-    tier = QUALITY_TIERS.get(
-        state.get("quality_tier") or "balanced", QUALITY_TIERS["balanced"]
-    )
+    tier = QUALITY_TIER
 
     async def _gen_comp(platform: str) -> tuple[str, bytes]:
         bg_paths = background_urls.get(platform)
@@ -305,6 +327,8 @@ async def composite_node(state: ThumbnailState) -> dict:
             ref_thumbs,
             extra_instructions=extra,
             previous_image=previous_comps.get(platform),
+            composite_mode=composite_mode,
+            transform_prompt=transform_prompt,
             aspect_ratio=cfg["aspect_ratio"],
             image_size=tier["image_size"],
             model=tier["model"],
@@ -356,9 +380,7 @@ async def add_text_node(state: ThumbnailState) -> dict:
         )
         previous_finals = dict(prev_results)
 
-    tier = QUALITY_TIERS.get(
-        state.get("quality_tier") or "balanced", QUALITY_TIERS["balanced"]
-    )
+    tier = QUALITY_TIER
 
     async def _gen_text(platform: str) -> tuple[str, bytes]:
         comp_paths = composite_urls.get(platform)

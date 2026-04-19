@@ -31,7 +31,6 @@ class ChatRequest(BaseModel):
     type: str = "text"
     image_url: str | None = None  # Storage path of uploaded image
     platforms: list[str] | None = None  # e.g. ["youtube", "instagram_post"]
-    quality_tier: str | None = None
 
 
 def sse_event(data: dict) -> str:
@@ -119,7 +118,6 @@ async def thumbnail_stream(
     user_id: str,
     image_url: str | None = None,
     platforms: list[str] | None = None,
-    quality_tier: str | None = None,
 ):
     """Run the thumbnail graph and stream SSE events."""
     graph = await get_thumbnail_graph()
@@ -167,11 +165,6 @@ async def thumbnail_stream(
                     "feedback": resume_value if resume_value else None,
                 }
 
-            # Embed quality_tier in resume value so graph nodes can read it
-            # (aupdate_state forks the checkpoint and breaks interrupt flow)
-            if quality_tier and isinstance(resume_value, dict):
-                resume_value["quality_tier"] = quality_tier
-
             result = await graph.ainvoke(Command(resume=resume_value), config)
         else:
             # Fresh start — save user message and set title
@@ -200,7 +193,8 @@ async def thumbnail_stream(
                     "extra_instructions": None,
                     "photo_list": [],
                     "uploaded_image_url": image_url,
-                    "quality_tier": quality_tier or "balanced",
+                    "composite_mode": "natural",
+                    "transform_prompt": None,
                     "clarify_question": None,
                 },
                 config,
@@ -502,7 +496,6 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
             user_id=user_id,
             image_url=request.image_url,
             platforms=request.platforms,
-            quality_tier=request.quality_tier,
         )
 
     return StreamingResponse(stream, media_type="text/event-stream")

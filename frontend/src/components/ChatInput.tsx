@@ -15,15 +15,10 @@ import {
   Tabs,
   Tab,
 } from "@mui/material";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import SendIcon from "@mui/icons-material/Send";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import CloseIcon from "@mui/icons-material/Close";
-import BoltIcon from "@mui/icons-material/Bolt";
-import BalanceIcon from "@mui/icons-material/Balance";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { uploadAsset, listAssets, getBatchSignedUrls } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
@@ -38,9 +33,6 @@ interface ChatInputProps {
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (model: string) => void;
-  qualityTier?: string;
-  onQualityTierChange?: (tier: string) => void;
-  showQualityTier?: boolean;
 }
 
 interface StorageFile {
@@ -61,9 +53,6 @@ export default function ChatInput({
   models,
   selectedModel,
   onModelChange,
-  qualityTier,
-  onQualityTierChange,
-  showQualityTier,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [attachedImage, setAttachedImage] = useState<{
@@ -170,54 +159,6 @@ export default function ChatInput({
               ))}
             </Select>
           </FormControl>
-        </Box>
-      )}
-
-      {showQualityTier && onQualityTierChange && (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-          <ToggleButtonGroup
-            value={qualityTier || "balanced"}
-            exclusive
-            onChange={(_, val) => val && onQualityTierChange(val)}
-            size="small"
-            sx={{
-              "& .MuiToggleButton-root": {
-                fontSize: "0.7rem",
-                py: 0.25,
-                px: 1.5,
-                color: "rgba(255,255,255,0.5)",
-                borderColor: "rgba(255,255,255,0.1)",
-                textTransform: "none",
-                "&.Mui-selected": {
-                  color: "#a78bfa",
-                  backgroundColor: "rgba(124,58,237,0.15)",
-                  borderColor: "rgba(124,58,237,0.3)",
-                },
-              },
-            }}
-          >
-            <ToggleButton value="fast">
-              <Tooltip title="Gemini Flash · 1K">
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <BoltIcon sx={{ fontSize: 14 }} /> Rápido
-                </Box>
-              </Tooltip>
-            </ToggleButton>
-            <ToggleButton value="balanced">
-              <Tooltip title="Gemini Pro · 1K">
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <BalanceIcon sx={{ fontSize: 14 }} /> Balanceado
-                </Box>
-              </Tooltip>
-            </ToggleButton>
-            <ToggleButton value="quality">
-              <Tooltip title="Gemini Pro · 4K">
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <AutoAwesomeIcon sx={{ fontSize: 14 }} /> Qualidade
-                </Box>
-              </Tooltip>
-            </ToggleButton>
-          </ToggleButtonGroup>
         </Box>
       )}
 

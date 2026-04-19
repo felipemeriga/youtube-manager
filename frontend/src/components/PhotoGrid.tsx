@@ -10,10 +10,14 @@ import {
   Button,
   CircularProgress,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import StarIcon from "@mui/icons-material/Star";
 import CloseIcon from "@mui/icons-material/Close";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
+import PersonIcon from "@mui/icons-material/Person";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import { getBatchThumbnails } from "../lib/api";
 
 interface Photo {
@@ -24,7 +28,7 @@ interface Photo {
 
 interface PhotoGridProps {
   photos: Photo[];
-  onSelect: (name: string, instructions?: string) => void;
+  onSelect: (name: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => void;
   onSkip?: () => void;
   disabled?: boolean;
 }
@@ -38,6 +42,8 @@ export default function PhotoGrid({
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [instructions, setInstructions] = useState("");
+  const [compositeMode, setCompositeMode] = useState<string>("natural");
+  const [transformPrompt, setTransformPrompt] = useState("");
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [loadingUrls, setLoadingUrls] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -82,7 +88,12 @@ export default function PhotoGrid({
 
   const handleConfirm = () => {
     if (selected) {
-      onSelect(selected, instructions.trim() || undefined);
+      onSelect(
+        selected,
+        instructions.trim() || undefined,
+        compositeMode,
+        compositeMode === "transform" ? transformPrompt.trim() || undefined : undefined,
+      );
       abortRef.current?.abort();
       setOpen(false);
     }
@@ -306,7 +317,7 @@ export default function PhotoGrid({
             </>
           )}
 
-          {/* Optional instructions */}
+          {/* Mode selection and instructions */}
           {selected && (
             <Box
               sx={{
@@ -317,14 +328,99 @@ export default function PhotoGrid({
             >
               <Typography
                 variant="subtitle2"
+                sx={{ color: "rgba(255,255,255,0.5)", mb: 1.5 }}
+              >
+                Como usar esta foto?
+              </Typography>
+              <ToggleButtonGroup
+                value={compositeMode}
+                exclusive
+                onChange={(_, val) => val && setCompositeMode(val)}
+                size="small"
+                sx={{
+                  mb: 2,
+                  "& .MuiToggleButton-root": {
+                    fontSize: "0.8rem",
+                    py: 0.75,
+                    px: 2.5,
+                    color: "rgba(255,255,255,0.5)",
+                    borderColor: "rgba(255,255,255,0.1)",
+                    textTransform: "none",
+                    "&.Mui-selected": {
+                      color: "#a78bfa",
+                      backgroundColor: "rgba(124,58,237,0.15)",
+                      borderColor: "rgba(124,58,237,0.3)",
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="natural">
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                    <PersonIcon sx={{ fontSize: 16 }} /> Natural
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="transform">
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                    <AutoFixHighIcon sx={{ fontSize: 16 }} /> Transformar
+                  </Box>
+                </ToggleButton>
+              </ToggleButtonGroup>
+
+              {compositeMode === "transform" && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ color: "#a78bfa", mb: 1, fontWeight: 600 }}
+                  >
+                    Descreva a transformação:
+                  </Typography>
+                  <TextField
+                    value={transformPrompt}
+                    onChange={(e) => setTransformPrompt(e.target.value)}
+                    placeholder='ex: "astronauta no espaço", "super-herói com capa", "chef de cozinha"'
+                    size="small"
+                    fullWidth
+                    multiline
+                    maxRows={3}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleConfirm();
+                      }
+                    }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        color: "#e2e8f0",
+                        backgroundColor: "rgba(0,0,0,0.2)",
+                        borderRadius: 2,
+                        "& fieldset": {
+                          borderColor: "rgba(124,58,237,0.3)",
+                        },
+                        "&:hover fieldset": {
+                          borderColor: "rgba(124,58,237,0.5)",
+                        },
+                        "&.Mui-focused fieldset": {
+                          borderColor: "#7c3aed",
+                        },
+                      },
+                      "& .MuiInputBase-input::placeholder": {
+                        color: "rgba(255,255,255,0.3)",
+                      },
+                    }}
+                  />
+                </Box>
+              )}
+
+              <Typography
+                variant="subtitle2"
                 sx={{ color: "rgba(255,255,255,0.5)", mb: 1 }}
               >
-                Alguma alteração na foto? (opcional)
+                Instruções adicionais (opcional)
               </Typography>
               <TextField
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                placeholder='ex: "adicionar um boné", "expressão séria", "mais zoom"'
+                placeholder='ex: "mais zoom", "expressão séria"'
                 size="small"
                 fullWidth
                 onKeyDown={(e) => {

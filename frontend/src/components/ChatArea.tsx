@@ -37,16 +37,13 @@ interface ChatAreaProps {
   onApprove: () => void;
   onReject: () => void;
   onTopicSelect?: (index: number) => void;
-  onPhotoSelect?: (name: string, instructions?: string) => void;
+  onPhotoSelect?: (name: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => void;
   onSkipPhoto?: () => void;
   onSubmitText?: (text: string) => void;
   conversationMode?: string;
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (model: string) => void;
-  qualityTier?: string;
-  onQualityTierChange?: (tier: string) => void;
-  showQualityTier?: boolean;
 }
 
 export default function ChatArea({
@@ -65,9 +62,6 @@ export default function ChatArea({
   models,
   selectedModel,
   onModelChange,
-  qualityTier,
-  onQualityTierChange,
-  showQualityTier,
 }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -167,9 +161,6 @@ export default function ChatArea({
         models={models}
         selectedModel={selectedModel}
         onModelChange={onModelChange}
-        qualityTier={qualityTier}
-        onQualityTierChange={onQualityTierChange}
-        showQualityTier={showQualityTier}
       />
     </Box>
   );

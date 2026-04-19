@@ -62,7 +62,6 @@ export default function ChatPage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([
     "youtube",
   ]);
-  const [qualityTier, setQualityTier] = useState("balanced");
   const pendingMessageRef = useRef<{
     content: string;
     type: string;
@@ -208,8 +207,7 @@ export default function ChatPage() {
         content,
         type,
         imageUrl,
-        mode === "thumbnail" ? platforms : undefined,
-        mode === "thumbnail" ? qualityTier : undefined
+        mode === "thumbnail" ? platforms : undefined
       );
     }
   };
@@ -234,14 +232,7 @@ export default function ChatPage() {
       setShowModeDialog(true);
       return;
     }
-    await doStream(
-      selectedId,
-      content,
-      type,
-      imageUrl,
-      platforms,
-      conversationMode === "thumbnail" ? qualityTier : undefined
-    );
+    await doStream(selectedId, content, type, imageUrl, platforms);
   };
 
   const doStream = async (
@@ -249,8 +240,7 @@ export default function ChatPage() {
     content: string,
     type: string,
     imageUrl?: string,
-    platforms?: string[],
-    tier?: string
+    platforms?: string[]
   ) => {
     // Add user message to UI immediately with readable label
     if (type === "text") {
@@ -363,8 +353,7 @@ export default function ChatPage() {
           },
         },
         imageUrl,
-        platforms,
-        tier
+        platforms
       );
     } catch {
       setMessages((prev) => [
@@ -406,54 +395,35 @@ export default function ChatPage() {
     }
   };
 
-  const handlePhotoSelect = (photoName: string, instructions?: string) => {
+  const handlePhotoSelect = (photoName: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => {
     if (!selectedId) return;
     const payload = JSON.stringify({
       action: "select_photo",
       photo_name: photoName,
       feedback: instructions || null,
+      composite_mode: compositeMode || "natural",
+      transform_prompt: transformPrompt || null,
     });
-    const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
-    doStream(selectedId, payload, "text", undefined, undefined, tier);
+    doStream(selectedId, payload, "text");
   };
 
   const handleSkipPhoto = () => {
     if (!selectedId) return;
-    const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
-    doStream(
-      selectedId,
-      JSON.stringify({ action: "skip_photo" }),
-      "text",
-      undefined,
-      undefined,
-      tier
-    );
+    doStream(selectedId, JSON.stringify({ action: "skip_photo" }), "text");
   };
 
   const handleSubmitText = (text: string) => {
     if (!selectedId) return;
-    const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
     doStream(
       selectedId,
       JSON.stringify({ action: "provide_text", text }),
-      "text",
-      undefined,
-      undefined,
-      tier
+      "text"
     );
   };
 
   const handleApprove = () => {
     if (!selectedId) return;
-    const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
-    doStream(
-      selectedId,
-      JSON.stringify({ action: "approve" }),
-      "text",
-      undefined,
-      undefined,
-      tier
-    );
+    doStream(selectedId, JSON.stringify({ action: "approve" }), "text");
   };
 
   const handleReject = () => {
@@ -462,15 +432,7 @@ export default function ChatPage() {
     if (lastMsg?.type === "script") {
       sendMessage("Reescreva o roteiro com melhorias");
     } else {
-      const tier = conversationMode === "thumbnail" ? qualityTier : undefined;
-      doStream(
-        selectedId,
-        JSON.stringify({ action: "feedback" }),
-        "text",
-        undefined,
-        undefined,
-        tier
-      );
+      doStream(selectedId, JSON.stringify({ action: "feedback" }), "text");
     }
   };
 
@@ -513,9 +475,6 @@ export default function ChatPage() {
             ? handleModelChange
             : undefined
         }
-        qualityTier={qualityTier}
-        onQualityTierChange={setQualityTier}
-        showQualityTier={conversationMode === "thumbnail"}
       />
       <Dialog
         open={showModeDialog}

@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def _cmd(goto: str, user_response=None, **updates) -> Command:
-    """Build a Command, injecting quality_tier from resume value if present."""
-    if isinstance(user_response, dict) and user_response.get("quality_tier"):
-        updates["quality_tier"] = user_response["quality_tier"]
+    """Build a Command with optional state updates."""
     if updates:
         return Command(update=updates, goto=goto)
     return Command(goto=goto)
@@ -144,11 +142,14 @@ async def review_photo(
             kw["topic"] = intent["feedback"]
         return _cmd("generate_background", r, **kw)
     if action == "select_photo" and intent.get("photo_name"):
+        mode = intent.get("composite_mode", "natural")
         return _cmd(
             "composite",
             r,
             photo_name=intent["photo_name"],
             extra_instructions=intent.get("feedback"),
+            composite_mode=mode,
+            transform_prompt=intent.get("transform_prompt"),
         )
     else:
         return _cmd("show_photos", r)
@@ -333,15 +334,41 @@ _graph_instance = None
 _checkpointer_cm = None
 
 
-async def get_thumbnail_graph():
-    """Get or create the compiled graph with AsyncPostgresSaver."""
-    global _graph_instance, _checkpointer_cm
-    if _graph_instance is None:
-        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-        from config import settings
+async def _create_checkpointer():
+    """Create a fresh AsyncPostgresSaver checkpointer."""
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from config import settings
 
-        _checkpointer_cm = AsyncPostgresSaver.from_conn_string(settings.database_url)
-        checkpointer = await _checkpointer_cm.__aenter__()
-        await checkpointer.setup()
+    cm = AsyncPostgresSaver.from_conn_string(settings.database_url)
+    checkpointer = await cm.__aenter__()
+    await checkpointer.setup()
+    return cm, checkpointer
+
+
+async def get_thumbnail_graph():
+    """Get or create the compiled graph with AsyncPostgresSaver.
+
+    Automatically reconnects if the Postgres connection was dropped.
+    """
+    global _graph_instance, _checkpointer_cm
+
+    if _graph_instance is not None:
+        # Test the connection — if stale, rebuild
+        try:
+            checkpointer = _graph_instance.checkpointer
+            async with checkpointer._cursor() as cur:
+                await cur.execute("SELECT 1")
+        except Exception:
+            logger.warning("Checkpointer connection lost, reconnecting...")
+            try:
+                await _checkpointer_cm.__aexit__(None, None, None)
+            except Exception:
+                pass
+            _graph_instance = None
+            _checkpointer_cm = None
+
+    if _graph_instance is None:
+        _checkpointer_cm, checkpointer = await _create_checkpointer()
         _graph_instance = build_thumbnail_graph().compile(checkpointer=checkpointer)
+
     return _graph_instance

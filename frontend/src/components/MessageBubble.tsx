@@ -46,7 +46,7 @@ interface MessageBubbleProps {
   onApprove?: () => void;
   onReject?: () => void;
   onTopicSelect?: (index: number) => void;
-  onPhotoSelect?: (name: string, instructions?: string) => void;
+  onPhotoSelect?: (name: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => void;
   onSkipPhoto?: () => void;
   onSubmitText?: (text: string) => void;
   isLatest?: boolean;
