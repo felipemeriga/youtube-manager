@@ -1,4 +1,4 @@
-from services.thumbnail_state import QUALITY_TIERS, ThumbnailState, UserIntent
+from services.thumbnail_state import QUALITY_TIER, ThumbnailState, UserIntent
 
 
 def test_thumbnail_state_has_required_fields():
@@ -18,7 +18,8 @@ def test_thumbnail_state_has_required_fields():
         extra_instructions=None,
         photo_list=[],
         uploaded_image_url=None,
-        quality_tier="balanced",
+        composite_mode="natural",
+        transform_prompt=None,
     )
     assert state["conversation_id"] == "conv-1"
     assert state["user_id"] == "user-1"
@@ -35,14 +36,13 @@ def test_user_intent_structure():
     assert intent["action"] == "approve"
 
 
-def test_quality_tiers_config():
-    assert set(QUALITY_TIERS.keys()) == {"fast", "balanced", "quality"}
-    for tier, config in QUALITY_TIERS.items():
-        assert "model" in config, f"Tier '{tier}' missing 'model' key"
-        assert "image_size" in config, f"Tier '{tier}' missing 'image_size' key"
+def test_quality_tier_config():
+    assert "model" in QUALITY_TIER
+    assert "image_size" in QUALITY_TIER
+    assert QUALITY_TIER["image_size"] == "4K"
 
 
-def test_state_has_quality_tier():
+def test_state_has_composite_mode():
     state = ThumbnailState(
         conversation_id="conv-1",
         user_id="user-1",
@@ -59,6 +59,8 @@ def test_state_has_quality_tier():
         extra_instructions=None,
         photo_list=[],
         uploaded_image_url=None,
-        quality_tier="fast",
+        composite_mode="transform",
+        transform_prompt="astronaut in space",
     )
-    assert state["quality_tier"] == "fast"
+    assert state["composite_mode"] == "transform"
+    assert state["transform_prompt"] == "astronaut in space"

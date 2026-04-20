@@ -38,7 +38,8 @@ def make_initial_state(topic: str = "Test topic") -> dict:
         "extra_instructions": None,
         "photo_list": [],
         "uploaded_image_url": None,
-        "quality_tier": "balanced",
+        "composite_mode": "natural",
+        "transform_prompt": None,
     }
 
 

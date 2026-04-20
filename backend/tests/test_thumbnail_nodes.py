@@ -21,7 +21,8 @@ def make_base_state(**overrides) -> ThumbnailState:
         extra_instructions=None,
         photo_list=[],
         uploaded_image_url=None,
-        quality_tier="balanced",
+        composite_mode="natural",
+        transform_prompt=None,
     )
     defaults.update(overrides)
     return defaults
@@ -159,10 +160,10 @@ async def test_add_text_node_returns_url():
 
 
 @pytest.mark.asyncio
-async def test_generate_background_uses_quality_tier_model():
+async def test_generate_background_uses_4k_quality():
     from services.thumbnail_nodes import generate_background_node
 
-    state = make_base_state(topic="Test topic", quality_tier="fast")
+    state = make_base_state(topic="Test topic")
     fake_image = b"\x89PNG\r\n\x1a\nfake"
 
     with patch(
@@ -194,8 +195,8 @@ async def test_generate_background_uses_quality_tier_model():
                         await generate_background_node(state)
 
     call_kwargs = mock_gen.call_args[1]
-    assert call_kwargs["model"] == "gemini-3.1-flash-image-preview"
-    assert call_kwargs["image_size"] == "1K"
+    assert call_kwargs["model"] == "gemini-3-pro-image-preview"
+    assert call_kwargs["image_size"] == "4K"
 
 
 @pytest.mark.asyncio
