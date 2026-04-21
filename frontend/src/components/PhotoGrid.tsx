@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   IconButton,
   Button,
   CircularProgress,
@@ -179,26 +180,9 @@ export default function PhotoGrid({
           >
             Escolha uma foto
           </Typography>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            {selected && (
-              <Button
-                variant="contained"
-                onClick={handleConfirm}
-                sx={{
-                  backgroundColor: "#7c3aed",
-                  textTransform: "none",
-                  fontWeight: 600,
-                  px: 3,
-                  "&:hover": { backgroundColor: "#6d28d9" },
-                }}
-              >
-                Usar esta foto
-              </Button>
-            )}
-            <IconButton onClick={handleClose} sx={{ color: "#94a3b8" }}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
+          <IconButton onClick={handleClose} sx={{ color: "#94a3b8" }}>
+            <CloseIcon />
+          </IconButton>
         </DialogTitle>
 
         <DialogContent sx={{ pt: 3 }}>
@@ -317,32 +301,32 @@ export default function PhotoGrid({
             </>
           )}
 
-          {/* Mode selection and instructions */}
-          {selected && (
-            <Box
-              sx={{
-                mt: 3,
-                pt: 2,
-                borderTop: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <Typography
-                variant="subtitle2"
-                sx={{ color: "rgba(255,255,255,0.5)", mb: 1.5 }}
-              >
-                Como usar esta foto?
-              </Typography>
+        </DialogContent>
+
+        {/* Sticky bottom bar — visible when a photo is selected */}
+        {selected && (
+          <DialogActions
+            sx={{
+              flexDirection: "column",
+              alignItems: "stretch",
+              px: 3,
+              py: 2,
+              borderTop: "1px solid rgba(255,255,255,0.08)",
+              backgroundColor: "#1a1a2e",
+              gap: 1.5,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <ToggleButtonGroup
                 value={compositeMode}
                 exclusive
                 onChange={(_, val) => val && setCompositeMode(val)}
                 size="small"
                 sx={{
-                  mb: 2,
                   "& .MuiToggleButton-root": {
                     fontSize: "0.8rem",
-                    py: 0.75,
-                    px: 2.5,
+                    py: 0.5,
+                    px: 2,
                     color: "rgba(255,255,255,0.5)",
                     borderColor: "rgba(255,255,255,0.1)",
                     textTransform: "none",
@@ -366,61 +350,18 @@ export default function PhotoGrid({
                 </ToggleButton>
               </ToggleButtonGroup>
 
-              {compositeMode === "transform" && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{ color: "#a78bfa", mb: 1, fontWeight: 600 }}
-                  >
-                    Descreva a transformação:
-                  </Typography>
-                  <TextField
-                    value={transformPrompt}
-                    onChange={(e) => setTransformPrompt(e.target.value)}
-                    placeholder='ex: "astronauta no espaço", "super-herói com capa", "chef de cozinha"'
-                    size="small"
-                    fullWidth
-                    multiline
-                    maxRows={3}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleConfirm();
-                      }
-                    }}
-                    sx={{
-                      "& .MuiOutlinedInput-root": {
-                        color: "#e2e8f0",
-                        backgroundColor: "rgba(0,0,0,0.2)",
-                        borderRadius: 2,
-                        "& fieldset": {
-                          borderColor: "rgba(124,58,237,0.3)",
-                        },
-                        "&:hover fieldset": {
-                          borderColor: "rgba(124,58,237,0.5)",
-                        },
-                        "&.Mui-focused fieldset": {
-                          borderColor: "#7c3aed",
-                        },
-                      },
-                      "& .MuiInputBase-input::placeholder": {
-                        color: "rgba(255,255,255,0.3)",
-                      },
-                    }}
-                  />
-                </Box>
-              )}
-
-              <Typography
-                variant="subtitle2"
-                sx={{ color: "rgba(255,255,255,0.5)", mb: 1 }}
-              >
-                Instruções adicionais (opcional)
-              </Typography>
               <TextField
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                placeholder='ex: "mais zoom", "expressão séria"'
+                value={compositeMode === "transform" ? transformPrompt : instructions}
+                onChange={(e) =>
+                  compositeMode === "transform"
+                    ? setTransformPrompt(e.target.value)
+                    : setInstructions(e.target.value)
+                }
+                placeholder={
+                  compositeMode === "transform"
+                    ? 'ex: "astronauta no espaço", "super-herói com capa"'
+                    : 'ex: "chapéu de cowboy", "óculos escuros" (opcional)'
+                }
                 size="small"
                 fullWidth
                 onKeyDown={(e) => {
@@ -449,9 +390,24 @@ export default function PhotoGrid({
                   },
                 }}
               />
+
+              <Button
+                variant="contained"
+                onClick={handleConfirm}
+                sx={{
+                  backgroundColor: "#7c3aed",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  px: 3,
+                  whiteSpace: "nowrap",
+                  "&:hover": { backgroundColor: "#6d28d9" },
+                }}
+              >
+                Usar foto
+              </Button>
             </Box>
-          )}
-        </DialogContent>
+          </DialogActions>
+        )}
       </Dialog>
     </Box>
   );
