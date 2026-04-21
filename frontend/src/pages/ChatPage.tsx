@@ -7,6 +7,8 @@ import {
   Button,
   Stack,
   Typography,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
@@ -16,6 +18,7 @@ import {
   listConversations,
   createConversation,
   getConversation,
+  getConversationStatus,
   deleteConversation,
   streamChat,
   updateConversation,
@@ -29,6 +32,15 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
+  images?: Record<
+    string,
+    {
+      preview_base64?: string;
+      preview_url?: string;
+      url?: string;
+      base64?: string;
+    }
+  >;
 }
 
 interface Conversation {
@@ -47,13 +59,26 @@ export default function ChatPage() {
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
   const [conversationModel, setConversationModel] = useState<string>("");
   const [showModeDialog, setShowModeDialog] = useState(false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([
+    "youtube",
+  ]);
   const pendingMessageRef = useRef<{
     content: string;
     type: string;
     imageUrl?: string;
+    platforms?: string[];
   } | null>(null);
   const streamingRef = useRef("");
   const imageRef = useRef<{ base64: string; url: string } | null>(null);
+  const imagesRef = useRef<Record<
+    string,
+    {
+      preview_base64?: string;
+      preview_url?: string;
+      url?: string;
+      base64?: string;
+    }
+  > | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -91,12 +116,65 @@ export default function ChatPage() {
         mode?: string;
         model?: string;
       };
-      const msgs = convData.messages || [];
+      let msgs = convData.messages || [];
       const mode = convData.mode || "thumbnail";
       const model = convData.model || "";
-      setMessages(msgs);
       setConversationMode(mode);
       setConversationModel(model);
+
+      // If the last message is from the user (no assistant response yet),
+      // check the backend graph state — the generation may have completed
+      // while the user was away (SSE stream was abandoned).
+      if (
+        mode === "thumbnail" &&
+        msgs.length > 0 &&
+        msgs[msgs.length - 1].role === "user"
+      ) {
+        try {
+          const statusData = (await getConversationStatus(id)) as Record<
+            string,
+            unknown
+          >;
+          if (statusData.status === "waiting") {
+            // Graph finished and is at an interrupt — build the message
+            // from the interrupt data returned by the status endpoint.
+            const msgType = (statusData.type as string) || "text";
+            const assistantMsg: Message = {
+              role: "assistant",
+              content: "",
+              type: msgType,
+            };
+
+            if (statusData.images) {
+              assistantMsg.images = statusData.images as Message["images"];
+              const firstImg = Object.values(assistantMsg.images!)[0];
+              if (firstImg) {
+                assistantMsg.image_base64 =
+                  firstImg.preview_base64 || firstImg.base64;
+                assistantMsg.image_url = firstImg.url;
+              }
+            } else if (msgType === "photo_grid") {
+              assistantMsg.content = JSON.stringify(statusData.photos || []);
+            } else if (msgType === "text_prompt") {
+              assistantMsg.content = "Qual texto você quer na thumbnail?";
+            }
+
+            msgs = [...msgs, assistantMsg];
+          } else if (statusData.status === "idle") {
+            // Graph completed — reload messages from DB
+            const refreshed = await getConversation(id);
+            const refreshedMsgs =
+              (refreshed as { messages: Message[] }).messages || [];
+            if (refreshedMsgs.length > msgs.length) {
+              msgs = refreshedMsgs;
+            }
+          }
+        } catch {
+          // Ignore — proceed with whatever messages we have
+        }
+      }
+
+      setMessages(msgs);
     } catch {
       setMessages([]);
       setCurrentStage(null);
@@ -122,9 +200,15 @@ export default function ChatPage() {
     setConversationMode(mode);
 
     if (pendingMessageRef.current) {
-      const { content, type, imageUrl } = pendingMessageRef.current;
+      const { content, type, imageUrl, platforms } = pendingMessageRef.current;
       pendingMessageRef.current = null;
-      await doStream(newConv.id, content, type, imageUrl);
+      await doStream(
+        newConv.id,
+        content,
+        type,
+        imageUrl,
+        mode === "thumbnail" ? platforms : undefined
+      );
     }
   };
 
@@ -141,13 +225,14 @@ export default function ChatPage() {
     content: string,
     type: string = "text",
     imageUrl?: string,
+    platforms?: string[]
   ) => {
     if (!selectedId) {
-      pendingMessageRef.current = { content, type, imageUrl };
+      pendingMessageRef.current = { content, type, imageUrl, platforms };
       setShowModeDialog(true);
       return;
     }
-    await doStream(selectedId, content, type, imageUrl);
+    await doStream(selectedId, content, type, imageUrl, platforms);
   };
 
   const doStream = async (
@@ -155,6 +240,7 @@ export default function ChatPage() {
     content: string,
     type: string,
     imageUrl?: string,
+    platforms?: string[]
   ) => {
     // Add user message to UI immediately with readable label
     if (type === "text") {
@@ -189,59 +275,86 @@ export default function ChatPage() {
     setStreamingContent("");
     streamingRef.current = "";
     imageRef.current = null;
+    imagesRef.current = null;
 
     setCurrentStage("generating");
 
     try {
-      await streamChat(conversationId, content, type, {
-        onToken: (token) => {
-          streamingRef.current += token;
-          setStreamingContent(streamingRef.current);
+      await streamChat(
+        conversationId,
+        content,
+        type,
+        {
+          onToken: (token) => {
+            streamingRef.current += token;
+            setStreamingContent(streamingRef.current);
+          },
+          onStage: (stage) => {
+            setCurrentStage(stage);
+          },
+          onImage: (base64, url) => {
+            imageRef.current = { base64, url };
+          },
+          onImages: (imgs) => {
+            imagesRef.current = imgs;
+          },
+          onError: (error) => {
+            const content = error.toLowerCase().includes("persona")
+              ? `${error} [Ir para Configurações](/settings)`
+              : `Error: ${error}`;
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", content, type: "text" },
+            ]);
+            setStreamingContent("");
+            setIsStreaming(false);
+            setCurrentStage(null);
+          },
+          onDone: (data) => {
+            const messageType = (data.message_type as string) || "text";
+            const newMessage: Message = {
+              role: "assistant",
+              content: streamingRef.current || (data.content as string) || "",
+              type: messageType,
+            };
+            if (imagesRef.current) {
+              newMessage.images = imagesRef.current;
+              const firstImg = Object.values(imagesRef.current)[0];
+              if (firstImg) {
+                newMessage.image_base64 =
+                  firstImg.preview_base64 || firstImg.base64;
+                newMessage.image_url = firstImg.url;
+              }
+            } else if (imageRef.current) {
+              newMessage.image_base64 = imageRef.current.base64;
+              newMessage.image_url = imageRef.current.url;
+            }
+            if (data.saved) {
+              const savedLabel =
+                conversationMode === "script" ? "Script" : "Thumbnail";
+              newMessage.content =
+                (data.content as string) ||
+                `${savedLabel} saved to ${(data.path as string) || "storage"}!`;
+              newMessage.type = "text";
+            }
+            const newMessages: Message[] = [newMessage];
+            if (data.clarify_question) {
+              newMessages.push({
+                role: "assistant",
+                content: data.clarify_question as string,
+                type: "text",
+              });
+            }
+            setMessages((prev) => [...prev, ...newMessages]);
+            setStreamingContent("");
+            setIsStreaming(false);
+            setCurrentStage(null);
+            loadConversations();
+          },
         },
-        onStage: (stage) => {
-          setCurrentStage(stage);
-        },
-        onImage: (base64, url) => {
-          imageRef.current = { base64, url };
-        },
-        onError: (error) => {
-          const content = error.toLowerCase().includes("persona")
-            ? `${error} [Ir para Configurações](/settings)`
-            : `Error: ${error}`;
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content, type: "text" },
-          ]);
-          setStreamingContent("");
-          setIsStreaming(false);
-          setCurrentStage(null);
-        },
-        onDone: (data) => {
-          const messageType = (data.message_type as string) || "text";
-          const newMessage: Message = {
-            role: "assistant",
-            content: streamingRef.current || (data.content as string) || "",
-            type: messageType,
-          };
-          if (imageRef.current) {
-            newMessage.image_base64 = imageRef.current.base64;
-            newMessage.image_url = imageRef.current.url;
-          }
-          if (data.saved) {
-            const savedLabel =
-              conversationMode === "script" ? "Script" : "Thumbnail";
-            newMessage.content =
-              (data.content as string) ||
-              `${savedLabel} saved to ${(data.path as string) || "storage"}!`;
-            newMessage.type = "text";
-          }
-          setMessages((prev) => [...prev, newMessage]);
-          setStreamingContent("");
-          setIsStreaming(false);
-          setCurrentStage(null);
-          loadConversations();
-        },
-      }, imageUrl);
+        imageUrl,
+        platforms
+      );
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -258,7 +371,12 @@ export default function ChatPage() {
   };
 
   const handleSend = (content: string, imageUrl?: string) =>
-    sendMessage(content, "text", imageUrl);
+    sendMessage(
+      content,
+      "text",
+      imageUrl,
+      conversationMode === "thumbnail" ? selectedPlatforms : undefined
+    );
 
   const handleTopicSelect = (index: number) => {
     if (!selectedId) return;
@@ -277,14 +395,21 @@ export default function ChatPage() {
     }
   };
 
-  const handlePhotoSelect = (photoName: string, instructions?: string) => {
+  const handlePhotoSelect = (photoName: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => {
     if (!selectedId) return;
     const payload = JSON.stringify({
       action: "select_photo",
       photo_name: photoName,
       feedback: instructions || null,
+      composite_mode: compositeMode || "natural",
+      transform_prompt: transformPrompt || null,
     });
     doStream(selectedId, payload, "text");
+  };
+
+  const handleSkipPhoto = () => {
+    if (!selectedId) return;
+    doStream(selectedId, JSON.stringify({ action: "skip_photo" }), "text");
   };
 
   const handleSubmitText = (text: string) => {
@@ -336,6 +461,7 @@ export default function ChatPage() {
         onReject={handleReject}
         onTopicSelect={handleTopicSelect}
         onPhotoSelect={handlePhotoSelect}
+        onSkipPhoto={handleSkipPhoto}
         onSubmitText={handleSubmitText}
         conversationMode={conversationMode}
         models={
@@ -368,23 +494,62 @@ export default function ChatPage() {
             O que você quer criar?
           </Typography>
           <Stack spacing={1.5}>
-            <Button
-              variant="outlined"
-              startIcon={<ImageIcon />}
-              onClick={() => handleModeSelect("thumbnail")}
-              sx={{
-                justifyContent: "flex-start",
-                borderColor: "rgba(255,255,255,0.15)",
-                color: "text.primary",
-                py: 1.5,
-                "&:hover": {
-                  borderColor: "#7c3aed",
-                  backgroundColor: "rgba(124,58,237,0.08)",
-                },
-              }}
-            >
-              Thumbnail
-            </Button>
+            <Box>
+              <Button
+                variant="outlined"
+                startIcon={<ImageIcon />}
+                onClick={() => handleModeSelect("thumbnail")}
+                sx={{
+                  justifyContent: "flex-start",
+                  borderColor: "rgba(255,255,255,0.15)",
+                  color: "text.primary",
+                  py: 1.5,
+                  width: "100%",
+                  "&:hover": {
+                    borderColor: "#7c3aed",
+                    backgroundColor: "rgba(124,58,237,0.08)",
+                  },
+                }}
+              >
+                Thumbnail
+              </Button>
+              <Box sx={{ ml: 4, mt: 1 }}>
+                {[
+                  { key: "youtube", label: "YouTube (16:9)" },
+                  { key: "instagram_post", label: "Instagram Post (1:1)" },
+                  { key: "instagram_story", label: "Instagram Story (9:16)" },
+                ].map((p) => (
+                  <FormControlLabel
+                    key={p.key}
+                    control={
+                      <Checkbox
+                        checked={selectedPlatforms.includes(p.key)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPlatforms((prev) => [...prev, p.key]);
+                          } else {
+                            setSelectedPlatforms((prev) =>
+                              prev.filter((k) => k !== p.key)
+                            );
+                          }
+                        }}
+                        size="small"
+                        sx={{
+                          color: "#7c3aed",
+                          "&.Mui-checked": { color: "#7c3aed" },
+                        }}
+                      />
+                    }
+                    label={p.label}
+                    sx={{
+                      color: "rgba(255,255,255,0.7)",
+                      display: "flex",
+                      "& .MuiTypography-root": { fontSize: 13 },
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
             <Button
               variant="outlined"
               startIcon={<DescriptionIcon />}

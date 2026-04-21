@@ -22,16 +22,20 @@ def _initial_state():
         "conversation_id": "conv-1",
         "user_id": "user-1",
         "topic": "AI tutorial",
-        "user_input": "",
+        "user_input": "crie uma thumb sobre AI",
         "topic_research": "",
-        "background_url": None,
+        "platforms": ["youtube"],
+        "background_urls": {},
         "photo_name": None,
-        "composite_url": None,
-        "final_url": None,
+        "composite_urls": {},
+        "final_urls": {},
         "thumb_text": None,
         "user_intent": None,
         "extra_instructions": None,
         "photo_list": [],
+        "uploaded_image_url": None,
+        "composite_mode": "natural",
+        "transform_prompt": None,
     }
 
 
@@ -100,18 +104,27 @@ async def test_graph_starts_and_interrupts_at_background(mock_supabase):
             return_value="",
         ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
+                "services.thumbnail_nodes.get_relevant_memories",
                 new_callable=AsyncMock,
-                return_value=fake_image,
+                return_value=[],
             ):
-                graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                config = {"configurable": {"thread_id": "test-1"}}
+                with patch(
+                    "services.thumbnail_nodes.generate_background",
+                    new_callable=AsyncMock,
+                    return_value=fake_image,
+                ):
+                    with patch(
+                        "services.thumbnail_nodes._make_preview",
+                        return_value=b"preview-jpg",
+                    ):
+                        graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                        config = {"configurable": {"thread_id": "test-1"}}
 
-                result = await graph.ainvoke(_initial_state(), config)
+                        result = await graph.ainvoke(_initial_state(), config)
 
-    # Should have background_url set and be interrupted
-    assert result.get("background_url") is not None
-    assert result["background_url"].startswith("user-1/bg_")
+    # Should have background_urls set and be interrupted
+    assert result.get("background_urls") is not None
+    assert result["background_urls"]["youtube"]["url"].startswith("user-1/bg_")
 
 
 @_requires_py311
@@ -135,26 +148,35 @@ async def test_graph_approve_background_shows_photos(mock_supabase):
             return_value="",
         ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
+                "services.thumbnail_nodes.get_relevant_memories",
                 new_callable=AsyncMock,
-                return_value=fake_image,
+                return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.find_best_photos",
+                    "services.thumbnail_nodes.generate_background",
                     new_callable=AsyncMock,
-                    return_value=["photo1.jpg"],
+                    return_value=fake_image,
                 ):
-                    graph = build_thumbnail_graph(use_memory_checkpointer=True)
-                    config = {"configurable": {"thread_id": "test-2"}}
+                    with patch(
+                        "services.thumbnail_nodes.find_best_photos",
+                        new_callable=AsyncMock,
+                        return_value=["photo1.jpg"],
+                    ):
+                        with patch(
+                            "services.thumbnail_nodes._make_preview",
+                            return_value=b"preview-jpg",
+                        ):
+                            graph = build_thumbnail_graph(use_memory_checkpointer=True)
+                            config = {"configurable": {"thread_id": "test-2"}}
 
-                    # Start — generates background, interrupts
-                    await graph.ainvoke(_initial_state(), config)
+                            # Start — generates background, interrupts
+                            await graph.ainvoke(_initial_state(), config)
 
-                    # Resume with approval
-                    result = await graph.ainvoke(
-                        Command(resume={"action": "approve"}),
-                        config,
-                    )
+                            # Resume with approval
+                            result = await graph.ainvoke(
+                                Command(resume={"action": "approve"}),
+                                config,
+                            )
 
     # Should have photo_list populated
     assert len(result.get("photo_list", [])) > 0
@@ -227,6 +249,35 @@ async def test_review_photo_select_routes_to_composite():
 
 
 @pytest.mark.asyncio
+async def test_review_photo_skip_routes_to_ask_text():
+    """review_photo with skip_photo should route to ask_text with background as composite."""
+    from services.thumbnail_graph import review_photo
+
+    state = {
+        **_initial_state(),
+        "background_urls": {"youtube": {"url": "user-1/bg.png", "preview_url": ""}},
+        "photo_list": [
+            {
+                "name": "photo1.jpg",
+                "url": "/api/assets/personal-photos/photo1.jpg",
+                "recommended": True,
+            }
+        ],
+    }
+
+    with patch(
+        "services.thumbnail_graph.interrupt",
+        return_value={"action": "skip_photo"},
+    ):
+        result = await review_photo(state)
+
+    assert isinstance(result, Command)
+    assert result.goto == "ask_text"
+    assert result.update["composite_urls"] == state["background_urls"]
+    assert result.update["photo_name"] is None
+
+
+@pytest.mark.asyncio
 async def test_review_composite_approve_routes_to_ask_text():
     """review_composite should route to ask_text on approve."""
     from services.thumbnail_graph import review_composite
@@ -269,6 +320,41 @@ async def test_review_composite_restart_routes_to_generate_background():
 
     with patch(
         "services.thumbnail_graph.interrupt", return_value={"action": "restart"}
+    ):
+        result = await review_composite(state)
+
+    assert isinstance(result, Command)
+    assert result.goto == "generate_background"
+
+
+@pytest.mark.asyncio
+async def test_review_composite_change_photo_routes_to_show_photos():
+    """review_composite with change_photo should route to show_photos."""
+    from services.thumbnail_graph import review_composite
+
+    state = {**_initial_state(), "composite_url": "user-1/comp_abc.png"}
+
+    with patch(
+        "services.thumbnail_graph.interrupt",
+        return_value={"action": "change_photo", "feedback": "on the right side"},
+    ):
+        result = await review_composite(state)
+
+    assert isinstance(result, Command)
+    assert result.goto == "show_photos"
+    assert result.update["extra_instructions"] == "on the right side"
+
+
+@pytest.mark.asyncio
+async def test_review_composite_change_background_routes_to_generate():
+    """review_composite with change_background should route to generate_background."""
+    from services.thumbnail_graph import review_composite
+
+    state = {**_initial_state(), "composite_url": "user-1/comp_abc.png"}
+
+    with patch(
+        "services.thumbnail_graph.interrupt",
+        return_value={"action": "change_background"},
     ):
         result = await review_composite(state)
 
@@ -324,21 +410,90 @@ async def test_review_final_save_routes_to_save():
 
 
 @pytest.mark.asyncio
-async def test_review_final_feedback_with_text_routes_to_add_text():
-    """review_final with feedback text should route to add_text."""
+async def test_review_final_feedback_routes_to_add_text():
+    """review_final with feedback (visual tweak) should route to add_text keeping same text."""
     from services.thumbnail_graph import review_final
 
     state = {**_initial_state(), "final_url": "user-1/thumb_abc.png"}
 
     with patch(
         "services.thumbnail_graph.interrupt",
-        return_value={"action": "feedback", "text": "Bigger font"},
+        return_value={"action": "feedback", "feedback": "Bigger font"},
     ):
         result = await review_final(state)
 
     assert isinstance(result, Command)
     assert result.goto == "add_text"
-    assert result.update["thumb_text"] == "Bigger font"
+    assert result.update["user_intent"]["feedback"] == "Bigger font"
+
+
+@pytest.mark.asyncio
+async def test_review_final_provide_text_routes_to_add_text():
+    """review_final with provide_text should route to add_text with new text."""
+    from services.thumbnail_graph import review_final
+
+    state = {**_initial_state(), "final_url": "user-1/thumb_abc.png"}
+
+    with patch(
+        "services.thumbnail_graph.interrupt",
+        return_value={"action": "provide_text", "text": "New Title"},
+    ):
+        result = await review_final(state)
+
+    assert isinstance(result, Command)
+    assert result.goto == "add_text"
+    assert result.update["thumb_text"] == "New Title"
+
+
+@pytest.mark.asyncio
+async def test_review_final_change_photo_routes_to_show_photos():
+    """review_final with change_photo should route to show_photos."""
+    from services.thumbnail_graph import review_final
+
+    state = {**_initial_state(), "final_url": "user-1/thumb_abc.png"}
+
+    with patch(
+        "services.thumbnail_graph.interrupt",
+        return_value={"action": "change_photo", "feedback": "use a different pose"},
+    ):
+        result = await review_final(state)
+
+    assert isinstance(result, Command)
+    assert result.goto == "show_photos"
+
+
+@pytest.mark.asyncio
+async def test_review_final_change_text_routes_to_ask_text():
+    """review_final with change_text should route to ask_text."""
+    from services.thumbnail_graph import review_final
+
+    state = {**_initial_state(), "final_url": "user-1/thumb_abc.png"}
+
+    with patch(
+        "services.thumbnail_graph.interrupt",
+        return_value={"action": "change_text"},
+    ):
+        result = await review_final(state)
+
+    assert isinstance(result, Command)
+    assert result.goto == "ask_text"
+
+
+@pytest.mark.asyncio
+async def test_review_final_change_background_routes_to_generate():
+    """review_final with change_background should route to generate_background."""
+    from services.thumbnail_graph import review_final
+
+    state = {**_initial_state(), "final_url": "user-1/thumb_abc.png"}
+
+    with patch(
+        "services.thumbnail_graph.interrupt",
+        return_value={"action": "change_background"},
+    ):
+        result = await review_final(state)
+
+    assert isinstance(result, Command)
+    assert result.goto == "generate_background"
 
 
 @pytest.mark.asyncio

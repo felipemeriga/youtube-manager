@@ -204,14 +204,108 @@ async def get_batch_signed_urls(
     return result
 
 
+# In-memory cache for batch thumbnails: (user_id, bucket, name, w) -> data_uri
+_thumb_cache: dict[tuple[str, str, str, int], str] = {}
+_THUMB_CACHE_MAX = 500
+
+
+@router.post("/api/assets/batch-thumbnails")
+async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current_user)):
+    """Download, resize and return multiple images as base64 in a single request.
+
+    Body: {"bucket": "personal-photos", "filenames": ["a.jpg", "b.jpg"], "w": 200}
+    Returns: {"a.jpg": "data:image/jpeg;base64,...", "b.jpg": "..."}
+    """
+    import base64
+    import io
+
+    from PIL import Image
+
+    bucket = request.get("bucket", "")
+    filenames = request.get("filenames", [])
+    w = request.get("w", 200)
+    validate_bucket(bucket)
+
+    # Return cached thumbnails immediately, only fetch missing ones
+    result: dict[str, str] = {}
+    to_fetch: list[str] = []
+    for name in filenames:
+        cache_key = (user_id, bucket, name, w)
+        cached = _thumb_cache.get(cache_key)
+        if cached:
+            result[name] = cached
+        else:
+            to_fetch.append(name)
+
+    if not to_fetch:
+        return result
+
+    # Single shared client for all downloads (avoid 50 TCP connections)
+    sb = await create_async_client(settings.supabase_url, settings.supabase_service_key)
+    sem = asyncio.Semaphore(20)
+
+    async def _resize_one(name: str) -> tuple[str, str]:
+        async with sem:
+            try:
+                data = await sb.storage.from_(bucket).download(f"{user_id}/{name}")
+                img = Image.open(io.BytesIO(data))
+                # BILINEAR is much faster than LANCZOS; at 200px the quality
+                # difference is imperceptible
+                img.thumbnail((w, w), Image.BILINEAR)
+                buf = io.BytesIO()
+                img.convert("RGB").save(buf, format="JPEG", quality=75)
+                b64 = base64.b64encode(buf.getvalue()).decode()
+                data_uri = f"data:image/jpeg;base64,{b64}"
+
+                # Cache for next time
+                cache_key = (user_id, bucket, name, w)
+                if len(_thumb_cache) < _THUMB_CACHE_MAX:
+                    _thumb_cache[cache_key] = data_uri
+
+                return name, data_uri
+            except Exception:
+                logger.warning("batch-thumbnails: failed to resize %s", name)
+                return name, ""
+
+    fetched = await asyncio.gather(*[_resize_one(n) for n in to_fetch])
+    for name, data_uri in fetched:
+        if data_uri:
+            result[name] = data_uri
+
+    return result
+
+
 @router.get("/api/assets/{bucket}/{filename}")
 async def download_asset(
-    bucket: str, filename: str, user_id: str = Depends(get_current_user)
+    bucket: str,
+    filename: str,
+    user_id: str = Depends(get_current_user),
+    w: int | None = None,
 ):
     validate_bucket(bucket)
     sb = get_supabase()
     storage_path = f"{user_id}/{filename}"
     data = sb.storage.from_(bucket).download(storage_path)
+
+    # Optional resize: ?w=200 returns a JPEG thumbnail
+    if w and 0 < w <= 1024:
+        import io
+
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(data))
+        img.thumbnail((w, w), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=80)
+        data = buf.getvalue()
+        from fastapi.responses import Response
+
+        return Response(
+            content=data,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
     from fastapi.responses import Response
 
     return Response(

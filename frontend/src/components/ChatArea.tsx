@@ -12,6 +12,15 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
+  images?: Record<
+    string,
+    {
+      preview_base64?: string;
+      preview_url?: string;
+      url?: string;
+      base64?: string;
+    }
+  >;
 }
 
 interface ModelOption {
@@ -28,7 +37,8 @@ interface ChatAreaProps {
   onApprove: () => void;
   onReject: () => void;
   onTopicSelect?: (index: number) => void;
-  onPhotoSelect?: (name: string, instructions?: string) => void;
+  onPhotoSelect?: (name: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => void;
+  onSkipPhoto?: () => void;
   onSubmitText?: (text: string) => void;
   conversationMode?: string;
   models?: ModelOption[];
@@ -46,6 +56,7 @@ export default function ChatArea({
   onReject,
   onTopicSelect,
   onPhotoSelect,
+  onSkipPhoto,
   onSubmitText,
   conversationMode,
   models,
@@ -62,7 +73,6 @@ export default function ChatArea({
   }, [messages, streamingContent]);
 
   const isEmpty = messages.length === 0 && !isStreaming;
-
 
   return (
     <Box
@@ -125,6 +135,7 @@ export default function ChatArea({
             onReject={onReject}
             onTopicSelect={onTopicSelect}
             onPhotoSelect={onPhotoSelect}
+            onSkipPhoto={onSkipPhoto}
             onSubmitText={onSubmitText}
             conversationMode={conversationMode}
           />

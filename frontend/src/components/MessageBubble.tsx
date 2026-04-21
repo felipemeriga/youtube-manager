@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
-import { Box, TextField, Button, CircularProgress } from "@mui/material";
+import {
+  Box,
+  TextField,
+  Button,
+  CircularProgress,
+  Typography,
+  IconButton,
+} from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
+import DownloadIcon from "@mui/icons-material/Download";
 import ReactMarkdown from "react-markdown";
 import ApprovalButtons from "./ApprovalButtons";
 import PhotoGrid from "./PhotoGrid";
@@ -16,14 +24,30 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
+  images?: Record<
+    string,
+    {
+      preview_base64?: string;
+      preview_url?: string;
+      url?: string;
+      base64?: string;
+    }
+  >;
 }
+
+const platformLabels: Record<string, string> = {
+  youtube: "YouTube",
+  instagram_post: "Instagram Post",
+  instagram_story: "Instagram Story",
+};
 
 interface MessageBubbleProps {
   message: Message;
   onApprove?: () => void;
   onReject?: () => void;
   onTopicSelect?: (index: number) => void;
-  onPhotoSelect?: (name: string, instructions?: string) => void;
+  onPhotoSelect?: (name: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => void;
+  onSkipPhoto?: () => void;
   onSubmitText?: (text: string) => void;
   isLatest?: boolean;
   isStreaming?: boolean;
@@ -143,6 +167,7 @@ export default function MessageBubble({
   onReject,
   onTopicSelect,
   onPhotoSelect,
+  onSkipPhoto,
   onSubmitText,
   isLatest,
   isStreaming,
@@ -200,11 +225,46 @@ export default function MessageBubble({
           transition: "all 0.2s ease",
         }}
       >
-        {(message.image_base64 || message.image_url) && (
-          <AuthOutputImage
-            base64={message.image_base64}
-            storagePath={message.image_url || ""}
-          />
+        {message.images && Object.keys(message.images).length > 1 ? (
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
+            {Object.entries(message.images).map(([platform, img]) => (
+              <Box key={platform} sx={{ flex: "1 1 0", minWidth: 150 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "#a78bfa", mb: 0.5, display: "block" }}
+                >
+                  {platformLabels[platform] || platform}
+                </Typography>
+                <AuthOutputImage
+                  previewBase64={img.preview_base64}
+                  previewUrl={img.preview_url}
+                  originalUrl={img.url}
+                  base64={img.base64}
+                  storagePath={img.url || ""}
+                />
+              </Box>
+            ))}
+          </Box>
+        ) : message.images && Object.keys(message.images).length === 1 ? (
+          (() => {
+            const singleImg = Object.values(message.images)[0];
+            return (
+              <AuthOutputImage
+                previewBase64={singleImg?.preview_base64}
+                previewUrl={singleImg?.preview_url}
+                originalUrl={singleImg?.url}
+                base64={singleImg?.base64}
+                storagePath={singleImg?.url || ""}
+              />
+            );
+          })()
+        ) : (
+          (message.image_base64 || message.image_url) && (
+            <AuthOutputImage
+              base64={message.image_base64}
+              storagePath={message.image_url || ""}
+            />
+          )
         )}
 
         {message.type === "photo_grid" &&
@@ -215,6 +275,7 @@ export default function MessageBubble({
                 <PhotoGrid
                   photos={photos}
                   onSelect={onPhotoSelect || (() => {})}
+                  onSkip={isLatest && !isStreaming ? onSkipPhoto : undefined}
                   disabled={!isLatest || isStreaming}
                 />
               );
@@ -227,15 +288,14 @@ export default function MessageBubble({
             }
           })()}
 
-        {message.type === "text_prompt" && (
-          isLatest && !isStreaming && onSubmitText ? (
+        {message.type === "text_prompt" &&
+          (isLatest && !isStreaming && onSubmitText ? (
             <TextPromptInput onSubmit={onSubmitText} />
           ) : (
             <Box sx={{ fontSize: 14, color: "rgba(255,255,255,0.5)" }}>
               {message.content}
             </Box>
-          )
-        )}
+          ))}
 
         {message.type === "topics" &&
           (() => {
@@ -299,52 +359,112 @@ export default function MessageBubble({
 }
 
 function AuthOutputImage({
+  previewBase64,
+  previewUrl,
+  originalUrl,
   base64,
   storagePath,
 }: {
+  previewBase64?: string;
+  previewUrl?: string;
+  originalUrl?: string;
   base64?: string;
-  storagePath: string;
+  storagePath?: string;
 }) {
-  const [src, setSrc] = useState<string | null>(
-    base64 ? `data:image/png;base64,${base64}` : null
-  );
-  const [loading, setLoading] = useState(!base64);
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
+  // Convert base64 to blob URL immediately to avoid keeping large data URIs in DOM
   useEffect(() => {
-    if (base64 || !storagePath) return;
+    const revokeList: string[] = [];
 
-    let revoke: string | null = null;
-    const fetchImage = async () => {
+    const resolve = async () => {
+      // 1. Try fetching from API (preferred — avoids holding base64 in memory)
+      const fetchPath = previewUrl || storagePath;
+      if (fetchPath && !(base64 && !previewBase64)) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session) {
+            const filename = fetchPath.includes("/")
+              ? fetchPath.split("/").pop()!
+              : fetchPath;
+            const res = await fetch(`/api/assets/outputs/${filename}`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (res.ok) {
+              const blob = await res.blob();
+              const objUrl = URL.createObjectURL(blob);
+              revokeList.push(objUrl);
+              setSrc(objUrl);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // fall through to base64
+        }
+      }
+
+      // 2. Convert base64 to blob URL instead of using data URI
+      const raw = previewBase64 || base64;
+      if (raw) {
+        try {
+          const mime = previewBase64 ? "image/jpeg" : "image/png";
+          const byteChars = atob(raw);
+          const byteArray = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) {
+            byteArray[i] = byteChars.charCodeAt(i);
+          }
+          const blob = new Blob([byteArray], { type: mime });
+          const objUrl = URL.createObjectURL(blob);
+          revokeList.push(objUrl);
+          setSrc(objUrl);
+        } catch {
+          // last resort: inline data URI
+          const mime = previewBase64 ? "image/jpeg" : "image/png";
+          setSrc(`data:${mime};base64,${raw}`);
+        }
+      }
+      setLoading(false);
+    };
+
+    resolve();
+
+    return () => {
+      revokeList.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [previewUrl, storagePath, base64, previewBase64]);
+
+  const handleDownload = async () => {
+    const dlPath = originalUrl || storagePath;
+    if (!dlPath) return;
+    setDownloading(true);
+    try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) return;
-
-      // Extract filename from storage path (user-id/filename.png → filename.png)
-      const filename = storagePath.includes("/")
-        ? storagePath.split("/").pop()!
-        : storagePath;
-
-      try {
-        const res = await fetch(`/api/assets/outputs/${filename}`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (res.ok) {
-          const blob = await res.blob();
-          revoke = URL.createObjectURL(blob);
-          setSrc(revoke);
-        }
-      } catch {
-        // Network error — image unavailable
+      const filename = dlPath.includes("/") ? dlPath.split("/").pop()! : dlPath;
+      const res = await fetch(`/api/assets/outputs/${filename}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
       }
-      setLoading(false);
-    };
-    fetchImage();
-
-    return () => {
-      if (revoke) URL.revokeObjectURL(revoke);
-    };
-  }, [base64, storagePath]);
+    } catch {
+      // silent fail
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -369,18 +489,37 @@ function AuthOutputImage({
   if (!src) return null;
 
   return (
-    <Box
-      component="img"
-      src={src}
-      alt="Thumbnail"
-      sx={{
-        width: "100%",
-        maxWidth: 512,
-        borderRadius: 1,
-        mb: 1,
-        display: "block",
-      }}
-    />
+    <Box sx={{ position: "relative", display: "inline-block", mb: 1 }}>
+      <Box
+        component="img"
+        src={src}
+        alt="Thumbnail"
+        sx={{ width: "100%", maxWidth: 512, borderRadius: 1, display: "block" }}
+      />
+      {(originalUrl || storagePath) && (
+        <IconButton
+          onClick={handleDownload}
+          disabled={downloading}
+          size="small"
+          sx={{
+            position: "absolute",
+            bottom: 8,
+            right: 8,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            color: "#fff",
+            "&:hover": { backgroundColor: "rgba(0,0,0,0.8)" },
+            width: 32,
+            height: 32,
+          }}
+        >
+          {downloading ? (
+            <CircularProgress size={16} sx={{ color: "#fff" }} />
+          ) : (
+            <DownloadIcon sx={{ fontSize: 18 }} />
+          )}
+        </IconButton>
+      )}
+    </Box>
   );
 }
 

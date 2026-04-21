@@ -154,3 +154,41 @@ BEGIN
     LIMIT match_count;
 END;
 $$;
+
+-- thumbnail_memories (cross-session style memory)
+CREATE TABLE thumbnail_memories (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    topic       TEXT NOT NULL DEFAULT '',
+    content     TEXT NOT NULL,
+    embedding   vector(1024),
+    created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_thumbnail_memories_user_id ON thumbnail_memories(user_id);
+
+-- RPC function for thumbnail memory similarity search
+CREATE OR REPLACE FUNCTION match_thumbnail_memories(
+    query_embedding vector(1024),
+    match_user_id UUID,
+    match_count INT DEFAULT 3
+)
+RETURNS TABLE (
+    topic TEXT,
+    content TEXT,
+    similarity FLOAT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        tm.topic,
+        tm.content,
+        1 - (tm.embedding <=> query_embedding) AS similarity
+    FROM thumbnail_memories tm
+    WHERE tm.user_id = match_user_id
+    ORDER BY tm.embedding <=> query_embedding
+    LIMIT match_count;
+END;
+$$;

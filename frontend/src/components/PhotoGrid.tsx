@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -10,11 +10,15 @@ import {
   Button,
   CircularProgress,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import StarIcon from "@mui/icons-material/Star";
 import CloseIcon from "@mui/icons-material/Close";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
-import { supabase } from "../lib/supabase";
+import PersonIcon from "@mui/icons-material/Person";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import { getBatchThumbnails } from "../lib/api";
 
 interface Photo {
   name: string;
@@ -24,95 +28,58 @@ interface Photo {
 
 interface PhotoGridProps {
   photos: Photo[];
-  onSelect: (name: string, instructions?: string) => void;
+  onSelect: (name: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => void;
+  onSkip?: () => void;
   disabled?: boolean;
-}
-
-/**
- * Fetch an image through the authenticated backend proxy
- * and return a local blob URL.
- */
-async function fetchAuthImage(apiPath: string): Promise<string> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) throw new Error("Not authenticated");
-
-  const res = await fetch(apiPath, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-  if (!res.ok) throw new Error(`${res.status}`);
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
-}
-
-function AuthImage({
-  apiPath,
-  alt,
-  height,
-}: {
-  apiPath: string;
-  alt: string;
-  height: number;
-}) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let revoke: string | null = null;
-    fetchAuthImage(apiPath)
-      .then((url) => {
-        revoke = url;
-        setSrc(url);
-      })
-      .catch(() => setError(true));
-
-    return () => {
-      if (revoke) URL.revokeObjectURL(revoke);
-    };
-  }, [apiPath]);
-
-  if (error) return null;
-  if (!src) {
-    return (
-      <Box
-        sx={{
-          width: "100%",
-          height,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(255,255,255,0.03)",
-        }}
-      >
-        <CircularProgress size={24} sx={{ color: "#7c3aed" }} />
-      </Box>
-    );
-  }
-
-  return (
-    <Box
-      component="img"
-      src={src}
-      alt={alt}
-      sx={{
-        width: "100%",
-        height,
-        objectFit: "cover",
-        display: "block",
-      }}
-    />
-  );
 }
 
 export default function PhotoGrid({
   photos,
   onSelect,
+  onSkip,
   disabled,
 }: PhotoGridProps) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [instructions, setInstructions] = useState("");
+  const [compositeMode, setCompositeMode] = useState<string>("natural");
+  const [transformPrompt, setTransformPrompt] = useState("");
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [loadingUrls, setLoadingUrls] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Fetch all signed URLs in one batch when dialog opens
+  useEffect(() => {
+    if (!open || photos.length === 0) return;
+
+    // Abort any previous batch
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoadingUrls(true);
+    const filenames = photos.map((p) => p.name);
+
+    getBatchThumbnails("personal-photos", filenames, 400)
+      .then((urlMap) => {
+        if (controller.signal.aborted) return;
+        setSignedUrls(urlMap);
+      })
+      .catch(() => {
+        // ignore
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingUrls(false);
+      });
+
+    return () => controller.abort();
+  }, [open, photos]);
+
+  // Abort all image loading when dialog closes
+  const handleClose = () => {
+    abortRef.current?.abort();
+    setOpen(false);
+  };
 
   const handleSelect = (name: string) => {
     if (disabled) return;
@@ -121,7 +88,13 @@ export default function PhotoGrid({
 
   const handleConfirm = () => {
     if (selected) {
-      onSelect(selected, instructions.trim() || undefined);
+      onSelect(
+        selected,
+        instructions.trim() || undefined,
+        compositeMode,
+        compositeMode === "transform" ? transformPrompt.trim() || undefined : undefined,
+      );
+      abortRef.current?.abort();
       setOpen(false);
     }
   };
@@ -135,30 +108,50 @@ export default function PhotoGrid({
         Selecione uma foto para a thumbnail:
       </Typography>
 
-      <Button
-        variant="outlined"
-        startIcon={<PhotoLibraryIcon />}
-        onClick={() => setOpen(true)}
-        disabled={disabled}
-        sx={{
-          borderColor: "#7c3aed",
-          color: "#c4b5fd",
-          textTransform: "none",
-          fontSize: 14,
-          px: 3,
-          py: 1.2,
-          "&:hover": {
-            borderColor: "#a78bfa",
-            backgroundColor: "rgba(124,58,237,0.1)",
-          },
-        }}
-      >
-        Ver fotos ({photos.length})
-      </Button>
+      <Box sx={{ display: "flex", gap: 1.5 }}>
+        <Button
+          variant="outlined"
+          startIcon={<PhotoLibraryIcon />}
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+          sx={{
+            borderColor: "#7c3aed",
+            color: "#c4b5fd",
+            textTransform: "none",
+            fontSize: 14,
+            px: 3,
+            py: 1.2,
+            "&:hover": {
+              borderColor: "#a78bfa",
+              backgroundColor: "rgba(124,58,237,0.1)",
+            },
+          }}
+        >
+          Ver fotos ({photos.length})
+        </Button>
+        {onSkip && (
+          <Button
+            variant="text"
+            onClick={onSkip}
+            disabled={disabled}
+            sx={{
+              color: "rgba(255,255,255,0.4)",
+              textTransform: "none",
+              fontSize: 13,
+              "&:hover": {
+                color: "rgba(255,255,255,0.7)",
+                backgroundColor: "rgba(255,255,255,0.05)",
+              },
+            }}
+          >
+            Pular foto
+          </Button>
+        )}
+      </Box>
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={handleClose}
         maxWidth="lg"
         fullWidth
         PaperProps={{
@@ -179,7 +172,11 @@ export default function PhotoGrid({
             pb: 1.5,
           }}
         >
-          <Typography variant="h6" sx={{ color: "#e2e8f0", fontWeight: 600 }}>
+          <Typography
+            variant="h6"
+            component="span"
+            sx={{ color: "#e2e8f0", fontWeight: 600 }}
+          >
             Escolha uma foto
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -198,50 +195,15 @@ export default function PhotoGrid({
                 Usar esta foto
               </Button>
             )}
-            <IconButton
-              onClick={() => setOpen(false)}
-              sx={{ color: "#94a3b8" }}
-            >
+            <IconButton onClick={handleClose} sx={{ color: "#94a3b8" }}>
               <CloseIcon />
             </IconButton>
           </Box>
         </DialogTitle>
 
         <DialogContent sx={{ pt: 3 }}>
-          {/* Recommended section */}
-          {photos.some((p) => p.recommended) && (
-            <Box sx={{ mb: 3 }}>
-              <Typography
-                variant="subtitle2"
-                sx={{ color: "#a78bfa", mb: 1.5, fontWeight: 600 }}
-              >
-                Recomendadas para este tema
-              </Typography>
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fill, minmax(200px, 1fr))",
-                  gap: 2,
-                }}
-              >
-                {photos
-                  .filter((p) => p.recommended)
-                  .map((photo) => (
-                    <PhotoCard
-                      key={photo.name}
-                      photo={photo}
-                      selected={selected === photo.name}
-                      onSelect={handleSelect}
-                    />
-                  ))}
-              </Box>
-            </Box>
-          )}
-
-          {/* All photos */}
-          <Box>
-            {photos.some((p) => p.recommended) && (
+          {loadingUrls ? (
+            <Box>
               <Typography
                 variant="subtitle2"
                 sx={{
@@ -250,43 +212,215 @@ export default function PhotoGrid({
                   fontWeight: 600,
                 }}
               >
-                Todas as fotos
+                Carregando {photos.length} fotos...
               </Typography>
-            )}
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                  gap: 2,
+                }}
+              >
+                {Array.from({ length: Math.min(photos.length, 12) }).map(
+                  (_, i) => (
+                    <Box
+                      key={i}
+                      sx={{
+                        borderRadius: 2,
+                        height: 160,
+                        backgroundColor: "rgba(255,255,255,0.03)",
+                        animation: "pulse 1.5s ease-in-out infinite",
+                        "@keyframes pulse": {
+                          "0%, 100%": {
+                            opacity: 0.4,
+                          },
+                          "50%": {
+                            opacity: 0.8,
+                          },
+                        },
+                        animationDelay: `${i * 0.1}s`,
+                      }}
+                    />
+                  )
+                )}
+              </Box>
+            </Box>
+          ) : (
+            <>
+              {/* Recommended section */}
+              {photos.some((p) => p.recommended) && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ color: "#a78bfa", mb: 1.5, fontWeight: 600 }}
+                  >
+                    Recomendadas para este tema
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(200px, 1fr))",
+                      gap: 2,
+                    }}
+                  >
+                    {photos
+                      .filter((p) => p.recommended)
+                      .map((photo) => (
+                        <PhotoCard
+                          key={photo.name}
+                          photo={photo}
+                          signedUrl={signedUrls[photo.name]}
+                          selected={selected === photo.name}
+                          onSelect={handleSelect}
+                        />
+                      ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* All photos */}
+              <Box>
+                {photos.some((p) => p.recommended) && (
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      color: "rgba(255,255,255,0.5)",
+                      mb: 1.5,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Todas as fotos
+                  </Typography>
+                )}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: 2,
+                  }}
+                >
+                  {photos
+                    .filter((p) => !p.recommended)
+                    .map((photo) => (
+                      <PhotoCard
+                        key={photo.name}
+                        photo={photo}
+                        signedUrl={signedUrls[photo.name]}
+                        selected={selected === photo.name}
+                        onSelect={handleSelect}
+                      />
+                    ))}
+                </Box>
+              </Box>
+            </>
+          )}
+
+          {/* Mode selection and instructions */}
+          {selected && (
             <Box
               sx={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fill, minmax(200px, 1fr))",
-                gap: 2,
+                mt: 3,
+                pt: 2,
+                borderTop: "1px solid rgba(255,255,255,0.08)",
               }}
             >
-              {photos
-                .filter((p) => !p.recommended)
-                .map((photo) => (
-                  <PhotoCard
-                    key={photo.name}
-                    photo={photo}
-                    selected={selected === photo.name}
-                    onSelect={handleSelect}
-                  />
-                ))}
-            </Box>
-          </Box>
+              <Typography
+                variant="subtitle2"
+                sx={{ color: "rgba(255,255,255,0.5)", mb: 1.5 }}
+              >
+                Como usar esta foto?
+              </Typography>
+              <ToggleButtonGroup
+                value={compositeMode}
+                exclusive
+                onChange={(_, val) => val && setCompositeMode(val)}
+                size="small"
+                sx={{
+                  mb: 2,
+                  "& .MuiToggleButton-root": {
+                    fontSize: "0.8rem",
+                    py: 0.75,
+                    px: 2.5,
+                    color: "rgba(255,255,255,0.5)",
+                    borderColor: "rgba(255,255,255,0.1)",
+                    textTransform: "none",
+                    "&.Mui-selected": {
+                      color: "#a78bfa",
+                      backgroundColor: "rgba(124,58,237,0.15)",
+                      borderColor: "rgba(124,58,237,0.3)",
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="natural">
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                    <PersonIcon sx={{ fontSize: 16 }} /> Natural
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="transform">
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                    <AutoFixHighIcon sx={{ fontSize: 16 }} /> Transformar
+                  </Box>
+                </ToggleButton>
+              </ToggleButtonGroup>
 
-          {/* Optional instructions */}
-          {selected && (
-            <Box sx={{ mt: 3, pt: 2, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+              {compositeMode === "transform" && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ color: "#a78bfa", mb: 1, fontWeight: 600 }}
+                  >
+                    Descreva a transformação:
+                  </Typography>
+                  <TextField
+                    value={transformPrompt}
+                    onChange={(e) => setTransformPrompt(e.target.value)}
+                    placeholder='ex: "astronauta no espaço", "super-herói com capa", "chef de cozinha"'
+                    size="small"
+                    fullWidth
+                    multiline
+                    maxRows={3}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleConfirm();
+                      }
+                    }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        color: "#e2e8f0",
+                        backgroundColor: "rgba(0,0,0,0.2)",
+                        borderRadius: 2,
+                        "& fieldset": {
+                          borderColor: "rgba(124,58,237,0.3)",
+                        },
+                        "&:hover fieldset": {
+                          borderColor: "rgba(124,58,237,0.5)",
+                        },
+                        "&.Mui-focused fieldset": {
+                          borderColor: "#7c3aed",
+                        },
+                      },
+                      "& .MuiInputBase-input::placeholder": {
+                        color: "rgba(255,255,255,0.3)",
+                      },
+                    }}
+                  />
+                </Box>
+              )}
+
               <Typography
                 variant="subtitle2"
                 sx={{ color: "rgba(255,255,255,0.5)", mb: 1 }}
               >
-                Alguma alteração na foto? (opcional)
+                Instruções adicionais (opcional)
               </Typography>
               <TextField
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                placeholder='ex: "adicionar um boné", "expressão séria", "mais zoom"'
+                placeholder='ex: "mais zoom", "expressão séria"'
                 size="small"
                 fullWidth
                 onKeyDown={(e) => {
@@ -325,10 +459,12 @@ export default function PhotoGrid({
 
 function PhotoCard({
   photo,
+  signedUrl,
   selected,
   onSelect,
 }: {
   photo: Photo;
+  signedUrl?: string;
   selected: boolean;
   onSelect: (name: string) => void;
 }) {
@@ -349,7 +485,33 @@ function PhotoCard({
         },
       }}
     >
-      <AuthImage apiPath={photo.url} alt={photo.name} height={240} />
+      {signedUrl ? (
+        <Box
+          component="img"
+          src={signedUrl}
+          alt={photo.name}
+          loading="lazy"
+          sx={{
+            width: "100%",
+            height: 160,
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
+      ) : (
+        <Box
+          sx={{
+            width: "100%",
+            height: 160,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(255,255,255,0.03)",
+          }}
+        >
+          <CircularProgress size={20} sx={{ color: "#7c3aed" }} />
+        </Box>
+      )}
       {photo.recommended && (
         <Chip
           icon={<StarIcon sx={{ fontSize: 14 }} />}

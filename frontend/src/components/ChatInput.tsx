@@ -100,7 +100,7 @@ export default function ChatInput({
 
   const handleBrowserSelect = (
     bucket: string,
-    file: StorageFile & { signedUrl?: string },
+    file: StorageFile & { signedUrl?: string }
   ) => {
     const fullPath = `${bucket}/${file.name}`;
     const preview =
@@ -387,7 +387,7 @@ function StorageBrowserDialog({
 }) {
   const [tab, setTab] = useState(0);
   const [files, setFiles] = useState<(StorageFile & { signedUrl?: string })[]>(
-    [],
+    []
   );
   const [loading, setLoading] = useState(false);
 
@@ -400,19 +400,16 @@ function StorageBrowserDialog({
     const loadFiles = async () => {
       try {
         const data = (await listAssets(
-          currentBucket.key,
+          currentBucket.key
         )) as unknown as StorageFile[];
         const imageFiles = data.filter(
-          (f) => f.name && /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name),
+          (f) => f.name && /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name)
         );
 
         // Get signed URLs in one batch request
         if (imageFiles.length > 0) {
           const filenames = imageFiles.map((f) => f.name);
-          const signed = await getBatchSignedUrls(
-            currentBucket.key,
-            filenames,
-          );
+          const signed = await getBatchSignedUrls(currentBucket.key, filenames);
           const urlMap = new Map<string, string>();
           for (const s of signed) {
             if (s.signedURL && s.path) {
@@ -424,7 +421,7 @@ function StorageBrowserDialog({
             imageFiles.map((f) => ({
               ...f,
               signedUrl: urlMap.get(f.name),
-            })),
+            }))
           );
         } else {
           setFiles([]);
@@ -555,10 +552,7 @@ function StorageBrowserDialog({
                         backgroundColor: "rgba(255,255,255,0.03)",
                       }}
                     >
-                      <CircularProgress
-                        size={16}
-                        sx={{ color: "#7c3aed" }}
-                      />
+                      <CircularProgress size={16} sx={{ color: "#7c3aed" }} />
                     </Box>
                   )}
                   <Box sx={{ px: 0.5, py: 0.25 }}>
@@ -585,4 +579,3 @@ function StorageBrowserDialog({
     </Dialog>
   );
 }
-

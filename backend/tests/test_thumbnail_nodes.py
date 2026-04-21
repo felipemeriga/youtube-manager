@@ -10,15 +10,19 @@ def make_base_state(**overrides) -> ThumbnailState:
         user_id="user-1",
         topic="",
         topic_research="",
-        background_url=None,
+        platforms=["youtube"],
+        background_urls={},
         photo_name=None,
-        composite_url=None,
-        final_url=None,
+        composite_urls={},
+        final_urls={},
         thumb_text=None,
         user_input="",
         user_intent=None,
         extra_instructions=None,
         photo_list=[],
+        uploaded_image_url=None,
+        composite_mode="natural",
+        transform_prompt=None,
     )
     defaults.update(overrides)
     return defaults
@@ -37,21 +41,30 @@ async def test_generate_background_returns_url():
         return_value="",
     ):
         with patch(
-            "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
-        ) as mock_sb:
-            sb = MagicMock()
-            mock_sb.return_value = sb
-            sb.storage.from_.return_value.list = AsyncMock(return_value=[])
-            sb.storage.from_.return_value.upload = AsyncMock()
+            "services.thumbnail_nodes.get_relevant_memories",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
             with patch(
-                "services.thumbnail_nodes.generate_background",
-                new_callable=AsyncMock,
-                return_value=fake_image,
-            ):
-                result = await generate_background_node(state)
+                "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+            ) as mock_sb:
+                sb = MagicMock()
+                mock_sb.return_value = sb
+                sb.storage.from_.return_value.list = AsyncMock(return_value=[])
+                sb.storage.from_.return_value.upload = AsyncMock()
+                with patch(
+                    "services.thumbnail_nodes.generate_background",
+                    new_callable=AsyncMock,
+                    return_value=fake_image,
+                ):
+                    with patch(
+                        "services.thumbnail_nodes._make_preview",
+                        return_value=b"preview-jpg",
+                    ):
+                        result = await generate_background_node(state)
 
-    assert result["background_url"] is not None
-    assert result["background_url"].startswith("user-1/bg_")
+    assert result["background_urls"] is not None
+    assert result["background_urls"]["youtube"]["url"].startswith("user-1/bg_youtube_")
 
 
 @pytest.mark.asyncio
@@ -87,7 +100,7 @@ async def test_composite_node_returns_url():
     from services.thumbnail_nodes import composite_node
 
     state = make_base_state(
-        background_url="user-1/bg_abc.png",
+        background_urls={"youtube": {"url": "user-1/bg_abc.png", "preview_url": ""}},
         photo_name="photo1.jpg",
     )
     fake_image = b"\x89PNG\r\n\x1a\ncomposite"
@@ -105,9 +118,13 @@ async def test_composite_node_returns_url():
             new_callable=AsyncMock,
             return_value=fake_image,
         ):
-            result = await composite_node(state)
+            with patch(
+                "services.thumbnail_nodes._make_preview",
+                return_value=b"preview-jpg",
+            ):
+                result = await composite_node(state)
 
-    assert result["composite_url"].startswith("user-1/comp_")
+    assert result["composite_urls"]["youtube"]["url"].startswith("user-1/comp_")
 
 
 @pytest.mark.asyncio
@@ -115,7 +132,7 @@ async def test_add_text_node_returns_url():
     from services.thumbnail_nodes import add_text_node
 
     state = make_base_state(
-        composite_url="user-1/comp_abc.png",
+        composite_urls={"youtube": {"url": "user-1/comp_abc.png", "preview_url": ""}},
         thumb_text="Guerra do Ira",
     )
     fake_image = b"\x89PNG\r\n\x1a\nfinal"
@@ -133,16 +150,62 @@ async def test_add_text_node_returns_url():
             new_callable=AsyncMock,
             return_value=fake_image,
         ):
-            result = await add_text_node(state)
+            with patch(
+                "services.thumbnail_nodes._make_preview",
+                return_value=b"preview-jpg",
+            ):
+                result = await add_text_node(state)
 
-    assert result["final_url"].startswith("user-1/thumb_")
+    assert result["final_urls"]["youtube"]["url"].startswith("user-1/thumb_")
+
+
+@pytest.mark.asyncio
+async def test_generate_background_uses_4k_quality():
+    from services.thumbnail_nodes import generate_background_node
+
+    state = make_base_state(topic="Test topic")
+    fake_image = b"\x89PNG\r\n\x1a\nfake"
+
+    with patch(
+        "services.thumbnail_nodes._research_topic",
+        new_callable=AsyncMock,
+        return_value="",
+    ):
+        with patch(
+            "services.thumbnail_nodes.get_relevant_memories",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            with patch(
+                "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+            ) as mock_sb:
+                sb = MagicMock()
+                mock_sb.return_value = sb
+                sb.storage.from_.return_value.list = AsyncMock(return_value=[])
+                sb.storage.from_.return_value.upload = AsyncMock()
+                with patch(
+                    "services.thumbnail_nodes.generate_background",
+                    new_callable=AsyncMock,
+                    return_value=fake_image,
+                ) as mock_gen:
+                    with patch(
+                        "services.thumbnail_nodes._make_preview",
+                        return_value=b"preview-jpg",
+                    ):
+                        await generate_background_node(state)
+
+    call_kwargs = mock_gen.call_args[1]
+    assert call_kwargs["model"] == "gemini-3-pro-image-preview"
+    assert call_kwargs["image_size"] == "4K"
 
 
 @pytest.mark.asyncio
 async def test_save_node_returns_final_url():
     from services.thumbnail_nodes import save_node
 
-    state = make_base_state(final_url="user-1/thumb_abc.png")
+    state = make_base_state(
+        final_urls={"youtube": {"url": "user-1/thumb_abc.png", "preview_url": ""}}
+    )
 
     with patch(
         "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
@@ -154,4 +217,30 @@ async def test_save_node_returns_final_url():
         sb.storage.from_.return_value.remove = AsyncMock()
         result = await save_node(state)
 
-    assert result["final_url"].startswith("user-1/thumbnail_")
+    assert result["final_urls"]["youtube"]["url"].startswith("user-1/thumbnail_")
+
+
+@pytest.mark.asyncio
+async def test_upload_image_with_preview():
+    from services.thumbnail_nodes import _upload_image_with_preview
+
+    fake_image = b"\x89PNG\r\n\x1a\nfake"
+
+    with patch(
+        "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+    ) as mock_sb:
+        sb = MagicMock()
+        mock_sb.return_value = sb
+        sb.storage.from_.return_value.upload = AsyncMock()
+        with patch(
+            "services.thumbnail_nodes._make_preview", return_value=b"preview-jpg"
+        ):
+            original_path, preview_path = await _upload_image_with_preview(
+                "user-1", "bg_youtube", fake_image
+            )
+
+    assert original_path.startswith("user-1/bg_youtube_")
+    assert original_path.endswith(".png")
+    assert preview_path.startswith("user-1/preview_bg_youtube_")
+    assert preview_path.endswith(".jpg")
+    assert sb.storage.from_.return_value.upload.call_count == 2

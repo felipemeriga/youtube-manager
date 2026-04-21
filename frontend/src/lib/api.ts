@@ -52,6 +52,17 @@ interface StreamCallbacks {
   onToken: (token: string) => void;
   onStage: (stage: string) => void;
   onImage: (base64: string, url: string) => void;
+  onImages?: (
+    images: Record<
+      string,
+      {
+        preview_base64?: string;
+        preview_url?: string;
+        url?: string;
+        base64?: string;
+      }
+    >
+  ) => void;
   onDone: (data: Record<string, unknown>) => void;
   onError?: (error: string) => void;
   onTopics?: (content: string) => void;
@@ -63,6 +74,7 @@ export async function streamChat(
   type: string,
   callbacks: StreamCallbacks,
   imageUrl?: string,
+  platforms?: string[]
 ): Promise<void> {
   const headers = await getAuthHeaders();
 
@@ -72,6 +84,7 @@ export async function streamChat(
     type,
   };
   if (imageUrl) body.image_url = imageUrl;
+  if (platforms) body.platforms = platforms;
 
   const response = await fetch("/api/chat", {
     method: "POST",
@@ -116,6 +129,18 @@ export async function streamChat(
         }
         if (data.image_base64)
           callbacks.onImage(data.image_base64, data.image_url || "");
+        if (data.images && callbacks.onImages)
+          callbacks.onImages(
+            data.images as Record<
+              string,
+              {
+                preview_base64?: string;
+                preview_url?: string;
+                url?: string;
+                base64?: string;
+              }
+            >
+          );
         if (data.error && callbacks.onError) {
           callbacks.onError(data.error as string);
         }
@@ -154,6 +179,10 @@ export const updateConversation = (id: string, data: { model?: string }) =>
     method: "PATCH",
     body: JSON.stringify(data),
   });
+export const getConversationStatus = (id: string) =>
+  apiFetch<{ status: string; type?: string }>(
+    `/api/conversations/${id}/status`
+  );
 
 export const listAssets = (bucket: string) =>
   apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`);
@@ -164,8 +193,18 @@ export const getBatchSignedUrls = (bucket: string, filenames: string[]) =>
     {
       method: "POST",
       body: JSON.stringify({ bucket, filenames }),
-    },
+    }
   );
+export const getBatchThumbnails = (
+  bucket: string,
+  filenames: string[],
+  w: number = 200
+) =>
+  apiFetch<Record<string, string>>("/api/assets/batch-thumbnails", {
+    method: "POST",
+    body: JSON.stringify({ bucket, filenames, w }),
+  });
+
 export const deleteAsset = (bucket: string, name: string) =>
   apiFetch<void>(`/api/assets/${bucket}/${name}`, { method: "DELETE" });
 export const uploadAsset = (bucket: string, file: File) =>
