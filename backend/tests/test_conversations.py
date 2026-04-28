@@ -271,12 +271,13 @@ def test_get_conversation_with_multiple_messages():
     user_id = "test-user-id"
     client = create_app(user_id)
 
+    # Messages come from DB in desc order; code reverses them to chronological
     mock_sb = _make_sb_for_get_conv(
         conv_data={"id": "conv-1", "title": "Test", "user_id": user_id},
         msg_data=[
-            {"id": "msg-1", "role": "user", "content": "hello", "type": "text"},
-            {"id": "msg-2", "role": "assistant", "content": "plan", "type": "plan"},
             {"id": "msg-3", "role": "user", "content": "APPROVED", "type": "approval"},
+            {"id": "msg-2", "role": "assistant", "content": "plan", "type": "plan"},
+            {"id": "msg-1", "role": "user", "content": "hello", "type": "text"},
         ],
     )
 
@@ -356,3 +357,44 @@ def test_list_conversations_preserves_order():
     assert len(data) == 2
     assert data[0]["id"] == "conv-2"
     assert data[1]["id"] == "conv-1"
+
+
+def test_get_conversation_has_more_flag():
+    """When message count equals limit, has_more should be True."""
+    user_id = "test-user-id"
+    client = create_app(user_id)
+
+    # Return exactly 2 messages (matching limit=2)
+    mock_sb = _make_sb_for_get_conv(
+        conv_data={"id": "conv-1", "title": "Test", "user_id": user_id},
+        msg_data=[
+            {"id": "msg-2", "role": "assistant", "content": "hi", "type": "text"},
+            {"id": "msg-1", "role": "user", "content": "hello", "type": "text"},
+        ],
+    )
+
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
+        response = client.get("/api/conversations/conv-1?limit=2")
+
+    data = response.json()
+    assert data["has_more"] is True
+    assert len(data["messages"]) == 2
+
+
+def test_get_conversation_has_more_false_when_fewer():
+    """When message count is less than limit, has_more should be False."""
+    user_id = "test-user-id"
+    client = create_app(user_id)
+
+    mock_sb = _make_sb_for_get_conv(
+        conv_data={"id": "conv-1", "title": "Test", "user_id": user_id},
+        msg_data=[
+            {"id": "msg-1", "role": "user", "content": "hello", "type": "text"},
+        ],
+    )
+
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
+        response = client.get("/api/conversations/conv-1?limit=50")
+
+    data = response.json()
+    assert data["has_more"] is False

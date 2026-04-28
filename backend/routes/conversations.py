@@ -1,10 +1,12 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from auth import get_current_user
 from services.supabase_pool import get_sync_client
+
+DEFAULT_MESSAGE_LIMIT = 50
 
 
 class CreateConversationRequest(BaseModel):
@@ -46,7 +48,10 @@ async def create_conversation(
 
 @router.get("/api/conversations/{conversation_id}")
 async def get_conversation(
-    conversation_id: str, user_id: str = Depends(get_current_user)
+    conversation_id: str,
+    user_id: str = Depends(get_current_user),
+    limit: int = Query(DEFAULT_MESSAGE_LIMIT, ge=1, le=200),
+    before: str | None = Query(None),
 ):
     sb = get_sync_client()
     conv = (
@@ -60,14 +65,21 @@ async def get_conversation(
     if not conv.data:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    messages = (
+    query = (
         sb.table("messages")
         .select("*")
         .eq("conversation_id", conversation_id)
-        .order("created_at")
-        .execute()
+        .order("created_at", desc=True)
+        .limit(limit)
     )
-    return {**conv.data, "messages": messages.data}
+    if before:
+        query = query.lt("created_at", before)
+    messages_result = query.execute()
+    # Reverse so messages are in chronological order
+    messages = list(reversed(messages_result.data))
+    has_more = len(messages_result.data) == limit
+
+    return {**conv.data, "messages": messages, "has_more": has_more}
 
 
 @router.patch("/api/conversations/{conversation_id}")

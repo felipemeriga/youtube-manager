@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import MessageBubble from "./MessageBubble";
 import AssistantLogo from "./AssistantLogo";
 import ChatInput from "./ChatInput";
@@ -44,6 +44,9 @@ interface ChatAreaProps {
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (model: string) => void;
+  hasMoreMessages?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 export default function ChatArea({
@@ -62,6 +65,9 @@ export default function ChatArea({
   models,
   selectedModel,
   onModelChange,
+  hasMoreMessages,
+  loadingMore,
+  onLoadMore,
 }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -122,6 +128,27 @@ export default function ChatArea({
                 ? "Conte sobre o tema ou peça sugestões de tendências..."
                 : "Inclua o título do vídeo e preferências de estilo. O agente vai analisar suas referências e criar um plano."}
             </Typography>
+          </Box>
+        )}
+
+        {hasMoreMessages && onLoadMore && (
+          <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+            <Button
+              variant="text"
+              onClick={onLoadMore}
+              disabled={loadingMore}
+              size="small"
+              sx={{
+                color: "#c4b5fd",
+                textTransform: "none",
+                fontSize: 13,
+              }}
+            >
+              {loadingMore ? (
+                <CircularProgress size={14} sx={{ color: "#7c3aed", mr: 1 }} />
+              ) : null}
+              Carregar mensagens anteriores
+            </Button>
           </Box>
         )}
 
