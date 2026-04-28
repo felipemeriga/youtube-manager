@@ -29,7 +29,7 @@ def test_get_persona_returns_404_when_not_found():
     mock_sb = mock_supabase()
     mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with patch("routes.personas.get_sync_client", return_value=mock_sb):
         response = client.get("/api/personas")
 
     assert response.status_code == 404
@@ -48,7 +48,7 @@ def test_get_persona_returns_data_when_exists():
         "persona_text": "Friendly tech educator",
     }
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with patch("routes.personas.get_sync_client", return_value=mock_sb):
         response = client.get("/api/personas")
 
     assert response.status_code == 200
@@ -79,7 +79,7 @@ def test_put_persona_upserts_and_returns_data():
         "persona_text": "Canal de tecnologia",
     }
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with patch("routes.personas.get_sync_client", return_value=mock_sb):
         response = client.put("/api/personas", json=payload)
 
     assert response.status_code == 200
@@ -109,7 +109,7 @@ def test_delete_persona_returns_204():
         {"user_id": user_id}
     ]
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with patch("routes.personas.get_sync_client", return_value=mock_sb):
         response = client.delete("/api/personas")
 
     assert response.status_code == 204
@@ -129,7 +129,7 @@ def test_get_persona_includes_default_template_when_null():
         "script_template": None,
     }
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with patch("routes.personas.get_sync_client", return_value=mock_sb):
         response = client.get("/api/personas")
 
     assert response.status_code == 200
@@ -156,7 +156,7 @@ def test_get_persona_returns_custom_template():
         "script_template": custom_template,
     }
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with patch("routes.personas.get_sync_client", return_value=mock_sb):
         response = client.get("/api/personas")
 
     assert response.status_code == 200
@@ -183,7 +183,7 @@ def test_put_persona_with_script_template():
         }
     ]
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with patch("routes.personas.get_sync_client", return_value=mock_sb):
         response = client.put(
             "/api/personas",
             json={

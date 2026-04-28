@@ -6,23 +6,17 @@ import logging
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from supabase import create_client
-from supabase._async.client import create_client as create_async_client
 from langgraph.types import Command
 
 from auth import get_current_user
-from config import settings
 from services.script_pipeline import handle_script_chat_message
+from services.supabase_pool import get_sync_client, get_async_client
 from services.thumbnail_graph import get_thumbnail_graph
 from services.thumbnail_nodes import _make_preview
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_key)
 
 
 class ChatRequest(BaseModel):
@@ -38,9 +32,7 @@ def sse_event(data: dict) -> str:
 
 
 async def _get_async_supabase():
-    return await create_async_client(
-        settings.supabase_url, settings.supabase_service_key
-    )
+    return await get_async_client()
 
 
 async def _save_message(sb, conversation_id, role, content, msg_type, image_url=None):
@@ -470,7 +462,7 @@ async def conversation_status(
 
 @router.post("/api/chat")
 async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
-    sb = get_supabase()
+    sb = get_sync_client()
     conv = (
         sb.table("conversations")
         .select("mode, model")

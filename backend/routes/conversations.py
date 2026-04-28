@@ -2,10 +2,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from supabase import create_client
 
 from auth import get_current_user
-from config import settings
+from services.supabase_pool import get_sync_client
 
 
 class CreateConversationRequest(BaseModel):
@@ -19,13 +18,9 @@ class UpdateConversationRequest(BaseModel):
 router = APIRouter()
 
 
-def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_key)
-
-
 @router.get("/api/conversations")
 async def list_conversations(user_id: str = Depends(get_current_user)):
-    sb = get_supabase()
+    sb = get_sync_client()
     result = (
         sb.table("conversations")
         .select("*")
@@ -41,7 +36,7 @@ async def create_conversation(
     request: Optional[CreateConversationRequest] = None,
     user_id: str = Depends(get_current_user),
 ):
-    sb = get_supabase()
+    sb = get_sync_client()
     mode = request.mode if request else "thumbnail"
     result = (
         sb.table("conversations").insert({"user_id": user_id, "mode": mode}).execute()
@@ -53,7 +48,7 @@ async def create_conversation(
 async def get_conversation(
     conversation_id: str, user_id: str = Depends(get_current_user)
 ):
-    sb = get_supabase()
+    sb = get_sync_client()
     conv = (
         sb.table("conversations")
         .select("*")
@@ -81,7 +76,7 @@ async def update_conversation(
     request: UpdateConversationRequest,
     user_id: str = Depends(get_current_user),
 ):
-    sb = get_supabase()
+    sb = get_sync_client()
     updates = {}
     if request.model is not None:
         updates["model"] = request.model
@@ -103,7 +98,7 @@ async def update_conversation(
 async def delete_conversation(
     conversation_id: str, user_id: str = Depends(get_current_user)
 ):
-    sb = get_supabase()
+    sb = get_sync_client()
     result = (
         sb.table("conversations")
         .delete()

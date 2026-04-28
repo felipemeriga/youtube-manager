@@ -2,10 +2,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
-from supabase import create_client
-
 from auth import get_current_user
-from config import settings
+from services.supabase_pool import get_sync_client
 
 DEFAULT_SCRIPT_SECTIONS = [
     {
@@ -57,13 +55,9 @@ class PersonaRequest(BaseModel):
 router = APIRouter()
 
 
-def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_key)
-
-
 @router.get("/api/personas")
 async def get_persona(user_id: str = Depends(get_current_user)):
-    sb = get_supabase()
+    sb = get_sync_client()
     result = (
         sb.table("channel_personas")
         .select("*")
@@ -84,7 +78,7 @@ async def upsert_persona(
     request: PersonaRequest,
     user_id: str = Depends(get_current_user),
 ):
-    sb = get_supabase()
+    sb = get_sync_client()
     payload = {
         "user_id": user_id,
         "channel_name": request.channel_name,
@@ -101,6 +95,6 @@ async def upsert_persona(
 
 @router.delete("/api/personas", status_code=204)
 async def delete_persona(user_id: str = Depends(get_current_user)):
-    sb = get_supabase()
+    sb = get_sync_client()
     sb.table("channel_personas").delete().eq("user_id", user_id).execute()
     return Response(status_code=204)

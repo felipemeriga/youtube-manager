@@ -5,9 +5,8 @@ import time
 import uuid
 
 from PIL import Image
-from supabase._async.client import create_client as create_async_client
-
 from config import settings
+from services.supabase_pool import get_async_client
 from services.llm import ask_llm
 from services.nano_banana import (
     generate_background,
@@ -42,9 +41,7 @@ TOPIC_RESEARCH_SYSTEM = (
 
 
 async def _get_supabase():
-    return await create_async_client(
-        settings.supabase_url, settings.supabase_service_key
-    )
+    return await get_async_client()
 
 
 async def _research_topic(topic: str) -> str:

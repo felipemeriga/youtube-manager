@@ -43,7 +43,7 @@ def test_list_memories_returns_data():
     mock_sb = mock_supabase()
     mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = memories
 
-    with patch("routes.memories.get_supabase", return_value=mock_sb):
+    with patch("routes.memories.get_sync_client", return_value=mock_sb):
         response = client.get("/api/memories")
 
     assert response.status_code == 200
@@ -61,7 +61,7 @@ def test_list_memories_returns_empty_list():
     mock_sb = mock_supabase()
     mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = []
 
-    with patch("routes.memories.get_supabase", return_value=mock_sb):
+    with patch("routes.memories.get_sync_client", return_value=mock_sb):
         response = client.get("/api/memories")
 
     assert response.status_code == 200
@@ -79,7 +79,7 @@ def test_delete_memory_returns_204():
     delete_chain.execute.return_value = MagicMock(data=[])
     mock_sb.table.return_value.delete.return_value = delete_chain
 
-    with patch("routes.memories.get_supabase", return_value=mock_sb):
+    with patch("routes.memories.get_sync_client", return_value=mock_sb):
         response = client.delete(f"/api/memories/{memory_id}")
 
     assert response.status_code == 204
