@@ -98,13 +98,18 @@ async def upload_asset(
     return {"name": unique_name, "bucket": bucket, "path": storage_path}
 
 
+# Limit concurrent photo indexing to avoid API quota exhaustion
+_INDEX_SEMAPHORE = asyncio.Semaphore(3)
+
+
 async def _index_uploaded_photo(
     user_id: str, filename: str, image_bytes: bytes
 ) -> None:
     from services.photo_indexer import index_photo
 
-    sb = await get_async_client()
-    await index_photo(sb, user_id, filename, image_bytes)
+    async with _INDEX_SEMAPHORE:
+        sb = await get_async_client()
+        await index_photo(sb, user_id, filename, image_bytes)
 
 
 @router.post("/api/assets/personal-photos/reindex")
