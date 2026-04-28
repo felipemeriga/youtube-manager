@@ -207,16 +207,14 @@ async def thumbnail_stream(
             if msg_type in ("background", "composite", "image"):
                 image_urls = interrupt_value.get("image_urls") or {}
                 if image_urls:
-                    images_payload = {}
-                    for platform, paths in image_urls.items():
+
+                    async def _build_preview(platform, paths):
                         url = paths.get("url", "") if isinstance(paths, dict) else paths
                         preview_url = (
                             paths.get("preview_url", "")
                             if isinstance(paths, dict)
                             else ""
                         )
-
-                        # Download preview (or original as fallback) for tiny base64
                         preview_data = None
                         for attempt in range(3):
                             try:
@@ -228,22 +226,25 @@ async def thumbnail_stream(
                             except Exception:
                                 if attempt < 2:
                                     await asyncio.sleep(1)
-
                         if not preview_data:
-                            continue
-
-                        # Generate tiny ~200px placeholder for SSE
+                            return None
                         try:
                             tiny_bytes = _make_preview(preview_data, max_edge=200)
                             tiny_b64 = base64.b64encode(tiny_bytes).decode()
                         except Exception:
                             tiny_b64 = base64.b64encode(preview_data).decode()
-
-                        images_payload[platform] = {
+                        return platform, {
                             "preview_base64": tiny_b64,
                             "preview_url": preview_url,
                             "url": url,
                         }
+
+                    preview_results = await asyncio.gather(
+                        *[_build_preview(p, paths) for p, paths in image_urls.items()]
+                    )
+                    images_payload = {
+                        r[0]: r[1] for r in preview_results if r is not None
+                    }
 
                     if not images_payload:
                         yield sse_event(
@@ -386,8 +387,8 @@ async def conversation_status(
                         image_urls = interrupt_value.get("image_urls") or {}
                         if image_urls:
                             sb = await _get_async_supabase()
-                            images_payload: dict = {}
-                            for platform, paths in image_urls.items():
+
+                            async def _status_preview(platform, paths):
                                 url = (
                                     paths.get("url", "")
                                     if isinstance(paths, dict)
@@ -409,11 +410,19 @@ async def conversation_status(
                                     tiny_b64 = base64.b64encode(tiny_bytes).decode()
                                 except Exception:
                                     tiny_b64 = ""
-                                images_payload[platform] = {
+                                return platform, {
                                     "preview_base64": tiny_b64,
                                     "preview_url": preview_url,
                                     "url": url,
                                 }
+
+                            status_results = await asyncio.gather(
+                                *[
+                                    _status_preview(p, paths)
+                                    for p, paths in image_urls.items()
+                                ]
+                            )
+                            images_payload: dict = dict(status_results)
                             if images_payload:
                                 result["images"] = images_payload
 
