@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import json
 import logging
 
@@ -12,7 +11,6 @@ from auth import get_current_user
 from services.script_pipeline import handle_script_chat_message
 from services.supabase_pool import get_sync_client, get_async_client
 from services.thumbnail_graph import get_thumbnail_graph
-from services.thumbnail_nodes import _make_preview
 
 logger = logging.getLogger(__name__)
 
@@ -208,43 +206,19 @@ async def thumbnail_stream(
                 image_urls = interrupt_value.get("image_urls") or {}
                 if image_urls:
 
-                    async def _build_preview(platform, paths):
+                    images_payload = {}
+                    for platform, paths in image_urls.items():
                         url = paths.get("url", "") if isinstance(paths, dict) else paths
                         preview_url = (
                             paths.get("preview_url", "")
                             if isinstance(paths, dict)
                             else ""
                         )
-                        preview_data = None
-                        for attempt in range(3):
-                            try:
-                                dl_path = preview_url or url
-                                preview_data = await sb.storage.from_(
-                                    "outputs"
-                                ).download(dl_path)
-                                break
-                            except Exception:
-                                if attempt < 2:
-                                    await asyncio.sleep(1)
-                        if not preview_data:
-                            return None
-                        try:
-                            tiny_bytes = _make_preview(preview_data, max_edge=200)
-                            tiny_b64 = base64.b64encode(tiny_bytes).decode()
-                        except Exception:
-                            tiny_b64 = base64.b64encode(preview_data).decode()
-                        return platform, {
-                            "preview_base64": tiny_b64,
+                        images_payload[platform] = {
+                            "preview_base64": "",
                             "preview_url": preview_url,
                             "url": url,
                         }
-
-                    preview_results = await asyncio.gather(
-                        *[_build_preview(p, paths) for p, paths in image_urls.items()]
-                    )
-                    images_payload = {
-                        r[0]: r[1] for r in preview_results if r is not None
-                    }
 
                     if not images_payload:
                         yield sse_event(
@@ -386,9 +360,8 @@ async def conversation_status(
                     if msg_type in ("background", "composite", "image"):
                         image_urls = interrupt_value.get("image_urls") or {}
                         if image_urls:
-                            sb = await _get_async_supabase()
-
-                            async def _status_preview(platform, paths):
+                            images_payload: dict = {}
+                            for platform, paths in image_urls.items():
                                 url = (
                                     paths.get("url", "")
                                     if isinstance(paths, dict)
@@ -399,30 +372,11 @@ async def conversation_status(
                                     if isinstance(paths, dict)
                                     else ""
                                 )
-                                try:
-                                    dl_path = preview_url or url
-                                    preview_data = await sb.storage.from_(
-                                        "outputs"
-                                    ).download(dl_path)
-                                    tiny_bytes = _make_preview(
-                                        preview_data, max_edge=200
-                                    )
-                                    tiny_b64 = base64.b64encode(tiny_bytes).decode()
-                                except Exception:
-                                    tiny_b64 = ""
-                                return platform, {
-                                    "preview_base64": tiny_b64,
+                                images_payload[platform] = {
+                                    "preview_base64": "",
                                     "preview_url": preview_url,
                                     "url": url,
                                 }
-
-                            status_results = await asyncio.gather(
-                                *[
-                                    _status_preview(p, paths)
-                                    for p, paths in image_urls.items()
-                                ]
-                            )
-                            images_payload: dict = dict(status_results)
                             if images_payload:
                                 result["images"] = images_payload
 
