@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -19,6 +19,8 @@ import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import PersonIcon from "@mui/icons-material/Person";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import { getBatchThumbnails } from "../lib/api";
+
+const PAGE_SIZE = 20;
 
 interface Photo {
   name: string;
@@ -46,34 +48,77 @@ export default function PhotoGrid({
   const [transformPrompt, setTransformPrompt] = useState("");
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [loadingUrls, setLoadingUrls] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Fetch all signed URLs in one batch when dialog opens
+  // Separate recommended from non-recommended for pagination
+  const recommended = photos.filter((p) => p.recommended);
+  const nonRecommended = photos.filter((p) => !p.recommended);
+  const visibleNonRec = nonRecommended.slice(0, visibleCount);
+  const hasMore = visibleCount < nonRecommended.length;
+
+  // Fetch thumbnails for currently visible photos only
+  const fetchThumbnails = useCallback(
+    (filenames: string[], controller: AbortController) => {
+      const missing = filenames.filter((n) => !signedUrls[n]);
+      if (missing.length === 0) return Promise.resolve();
+
+      return getBatchThumbnails("personal-photos", missing, 400)
+        .then((urlMap) => {
+          if (controller.signal.aborted) return;
+          setSignedUrls((prev) => ({ ...prev, ...urlMap }));
+        })
+        .catch(() => {});
+    },
+    [signedUrls]
+  );
+
+  // Load initial page when dialog opens
   useEffect(() => {
     if (!open || photos.length === 0) return;
 
-    // Abort any previous batch
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     setLoadingUrls(true);
-    const filenames = photos.map((p) => p.name);
+    setVisibleCount(PAGE_SIZE);
 
-    getBatchThumbnails("personal-photos", filenames, 400)
+    // Load recommended + first page of non-recommended
+    const initialNames = [
+      ...recommended.map((p) => p.name),
+      ...nonRecommended.slice(0, PAGE_SIZE).map((p) => p.name),
+    ];
+
+    getBatchThumbnails("personal-photos", initialNames, 400)
       .then((urlMap) => {
         if (controller.signal.aborted) return;
         setSignedUrls(urlMap);
       })
-      .catch(() => {
-        // ignore
-      })
+      .catch(() => {})
       .finally(() => {
         if (!controller.signal.aborted) setLoadingUrls(false);
       });
 
     return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, photos]);
+
+  const handleLoadMore = () => {
+    const nextCount = visibleCount + PAGE_SIZE;
+    setVisibleCount(nextCount);
+    setLoadingMore(true);
+
+    const controller = new AbortController();
+    const nextNames = nonRecommended
+      .slice(visibleCount, nextCount)
+      .map((p) => p.name);
+
+    fetchThumbnails(nextNames, controller).finally(() => {
+      if (!controller.signal.aborted) setLoadingMore(false);
+    });
+  };
 
   // Abort all image loading when dialog closes
   const handleClose = () => {
@@ -279,9 +324,9 @@ export default function PhotoGrid({
                 </Box>
               )}
 
-              {/* All photos */}
+              {/* All photos (paginated) */}
               <Box>
-                {photos.some((p) => p.recommended) && (
+                {recommended.length > 0 && (
                   <Typography
                     variant="subtitle2"
                     sx={{
@@ -301,18 +346,39 @@ export default function PhotoGrid({
                     gap: 2,
                   }}
                 >
-                  {photos
-                    .filter((p) => !p.recommended)
-                    .map((photo) => (
-                      <PhotoCard
-                        key={photo.name}
-                        photo={photo}
-                        signedUrl={signedUrls[photo.name]}
-                        selected={selected === photo.name}
-                        onSelect={handleSelect}
-                      />
-                    ))}
+                  {visibleNonRec.map((photo) => (
+                    <PhotoCard
+                      key={photo.name}
+                      photo={photo}
+                      signedUrl={signedUrls[photo.name]}
+                      selected={selected === photo.name}
+                      onSelect={handleSelect}
+                    />
+                  ))}
                 </Box>
+                {hasMore && (
+                  <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      sx={{
+                        borderColor: "rgba(124,58,237,0.3)",
+                        color: "#c4b5fd",
+                        textTransform: "none",
+                        "&:hover": {
+                          borderColor: "#7c3aed",
+                          backgroundColor: "rgba(124,58,237,0.1)",
+                        },
+                      }}
+                    >
+                      {loadingMore ? (
+                        <CircularProgress size={16} sx={{ color: "#7c3aed", mr: 1 }} />
+                      ) : null}
+                      Carregar mais ({nonRecommended.length - visibleCount} restantes)
+                    </Button>
+                  </Box>
+                )}
               </Box>
             </>
           )}
