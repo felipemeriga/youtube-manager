@@ -36,7 +36,7 @@ def test_list_conversations():
         }
     ]
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.get("/api/conversations")
 
     assert response.status_code == 200
@@ -59,7 +59,7 @@ def test_create_conversation():
         }
     ]
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.post("/api/conversations")
 
     assert response.status_code == 200
@@ -110,7 +110,7 @@ def test_get_conversation_with_messages():
         ],
     )
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.get("/api/conversations/conv-1")
 
     assert response.status_code == 200
@@ -127,7 +127,7 @@ def test_delete_conversation():
         {"id": "conv-1"}
     ]
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.delete("/api/conversations/conv-1")
 
     assert response.status_code == 200
@@ -148,7 +148,7 @@ def test_create_conversation_with_title_in_insert():
         }
     ]
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.post("/api/conversations")
 
     assert response.status_code == 200
@@ -164,7 +164,7 @@ def test_get_nonexistent_conversation_returns_404():
 
     mock_sb = _make_sb_for_get_conv(conv_data=None, msg_data=[])
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.get("/api/conversations/nonexistent-id")
 
     assert response.status_code == 404
@@ -178,7 +178,7 @@ def test_delete_nonexistent_conversation_returns_404():
     mock_sb = mock_supabase()
     mock_sb.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.delete("/api/conversations/nonexistent-id")
 
     assert response.status_code == 404
@@ -192,7 +192,7 @@ def test_list_conversations_empty():
     mock_sb = mock_supabase()
     mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = []
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.get("/api/conversations")
 
     assert response.status_code == 200
@@ -215,7 +215,7 @@ def test_get_conversation_response_structure():
         msg_data=[],
     )
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.get("/api/conversations/conv-1")
 
     data = response.json()
@@ -236,7 +236,7 @@ def test_delete_conversation_response_body():
         {"id": "conv-1"}
     ]
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.delete("/api/conversations/conv-1")
 
     assert response.status_code == 200
@@ -257,7 +257,7 @@ def test_create_conversation_returns_first_record():
         }
     ]
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.post("/api/conversations")
 
     data = response.json()
@@ -280,7 +280,7 @@ def test_get_conversation_with_multiple_messages():
         ],
     )
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.get("/api/conversations/conv-1")
 
     data = response.json()
@@ -304,7 +304,7 @@ def test_create_conversation_with_script_mode():
         }
     ]
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.post("/api/conversations", json={"mode": "script"})
 
     assert response.status_code == 200
@@ -329,7 +329,7 @@ def test_create_conversation_default_mode_is_thumbnail():
         }
     ]
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.post("/api/conversations")
 
     assert response.status_code == 200
@@ -349,7 +349,7 @@ def test_list_conversations_preserves_order():
         {"id": "conv-1", "updated_at": "2026-04-03T00:00:00Z"},
     ]
 
-    with patch("routes.conversations.get_supabase", return_value=mock_sb):
+    with patch("routes.conversations.get_sync_client", return_value=mock_sb):
         response = client.get("/api/conversations")
 
     data = response.json()

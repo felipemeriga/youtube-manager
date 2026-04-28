@@ -36,7 +36,7 @@ def test_chat_endpoint_returns_sse_stream():
     mock_sb = mock_supabase_with_mode("thumbnail")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch("routes.chat.get_sync_client", return_value=mock_sb),
         patch("routes.chat.thumbnail_stream", side_effect=fake_stream),
     ):
         response = client.post(
@@ -61,7 +61,7 @@ def test_chat_endpoint_default_type_is_text():
     mock_sb = mock_supabase_with_mode("thumbnail")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch("routes.chat.get_sync_client", return_value=mock_sb),
         patch("routes.chat.thumbnail_stream", side_effect=fake_stream) as mock_thumb,
     ):
         response = client.post(
@@ -116,7 +116,7 @@ def test_chat_endpoint_stream_body_content():
     mock_sb = mock_supabase_with_mode("thumbnail")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch("routes.chat.get_sync_client", return_value=mock_sb),
         patch("routes.chat.thumbnail_stream", side_effect=fake_stream),
     ):
         response = client.post(
@@ -142,7 +142,7 @@ def test_chat_dispatches_to_script_pipeline_for_script_mode():
     mock_sb = mock_supabase_with_mode("script")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch("routes.chat.get_sync_client", return_value=mock_sb),
         patch(
             "routes.chat.handle_script_chat_message", side_effect=fake_stream
         ) as mock_script,
@@ -176,7 +176,7 @@ def test_chat_dispatches_to_thumbnail_stream_for_thumbnail_mode():
     mock_sb = mock_supabase_with_mode("thumbnail")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch("routes.chat.get_sync_client", return_value=mock_sb),
         patch(
             "routes.chat.thumbnail_stream", side_effect=fake_stream
         ) as mock_thumbnail,

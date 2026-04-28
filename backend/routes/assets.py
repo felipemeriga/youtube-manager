@@ -4,11 +4,10 @@ import re
 import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from supabase import create_client
-from supabase._async.client import create_client as create_async_client
 
 from auth import get_current_user
 from config import settings
+from services.supabase_pool import get_sync_client, get_async_client
 
 
 def sanitize_filename(name: str) -> str:
@@ -42,10 +41,6 @@ MAX_FILE_SIZES = {
 }
 
 
-def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_key)
-
-
 def validate_bucket(bucket: str):
     if bucket not in VALID_BUCKETS:
         raise HTTPException(
@@ -57,7 +52,7 @@ def validate_bucket(bucket: str):
 @router.get("/api/assets/{bucket}")
 async def list_assets(bucket: str, user_id: str = Depends(get_current_user)):
     validate_bucket(bucket)
-    sb = get_supabase()
+    sb = get_sync_client()
     files = sb.storage.from_(bucket).list(path=user_id)
     for f in files:
         f["public_url"] = sb.storage.from_(bucket).get_public_url(
@@ -80,7 +75,7 @@ async def upload_asset(
 
     import uuid
 
-    sb = get_supabase()
+    sb = get_sync_client()
     safe_name = sanitize_filename(file.filename or "file")
     # Add unique prefix to avoid 409 Duplicate on re-uploads
     name_parts = safe_name.rsplit(".", 1)
@@ -108,7 +103,7 @@ async def _index_uploaded_photo(
 ) -> None:
     from services.photo_indexer import index_photo
 
-    sb = await create_async_client(settings.supabase_url, settings.supabase_service_key)
+    sb = await get_async_client()
     await index_photo(sb, user_id, filename, image_bytes)
 
 
@@ -121,16 +116,14 @@ async def reindex_photos(user_id: str = Depends(get_current_user)):
             detail="Anthropic and Voyage API keys required for indexing",
         )
 
-    sb_sync = get_supabase()
+    sb_sync = get_sync_client()
     files = sb_sync.storage.from_("personal-photos").list(path=user_id)
     photo_names = [f["name"] for f in files if f.get("name")]
 
     if not photo_names:
         return {"indexed": 0, "total": 0}
 
-    sb_async = await create_async_client(
-        settings.supabase_url, settings.supabase_service_key
-    )
+    sb_async = await get_async_client()
 
     # Check which are already indexed
     existing = (
@@ -167,7 +160,7 @@ async def delete_asset(
     bucket: str, filename: str, user_id: str = Depends(get_current_user)
 ):
     validate_bucket(bucket)
-    sb = get_supabase()
+    sb = get_sync_client()
     storage_path = f"{user_id}/{filename}"
     sb.storage.from_(bucket).remove([storage_path])
     return {"status": "deleted", "name": filename}
@@ -179,7 +172,7 @@ async def get_signed_url(
 ):
     """Get a temporary signed URL for an asset (valid 1 hour)."""
     validate_bucket(bucket)
-    sb = get_supabase()
+    sb = get_sync_client()
     storage_path = f"{user_id}/{filename}"
     result = sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
     if result and result.get("signedURL"):
@@ -198,7 +191,7 @@ async def get_batch_signed_urls(
     bucket = request.get("bucket", "")
     filenames = request.get("filenames", [])
     validate_bucket(bucket)
-    sb = get_supabase()
+    sb = get_sync_client()
     paths = [f"{user_id}/{f}" for f in filenames]
     result = sb.storage.from_(bucket).create_signed_urls(paths, 3600)
     return result
@@ -240,8 +233,8 @@ async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current
     if not to_fetch:
         return result
 
-    # Single shared client for all downloads (avoid 50 TCP connections)
-    sb = await create_async_client(settings.supabase_url, settings.supabase_service_key)
+    # Single shared client for all downloads
+    sb = await get_async_client()
     sem = asyncio.Semaphore(20)
 
     async def _resize_one(name: str) -> tuple[str, str]:
@@ -283,7 +276,7 @@ async def download_asset(
     w: int | None = None,
 ):
     validate_bucket(bucket)
-    sb = get_supabase()
+    sb = get_sync_client()
     storage_path = f"{user_id}/{filename}"
     data = sb.storage.from_(bucket).download(storage_path)
 
