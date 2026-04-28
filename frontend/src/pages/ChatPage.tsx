@@ -32,6 +32,7 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
+  created_at?: string;
   images?: Record<
     string,
     {
@@ -58,6 +59,8 @@ export default function ChatPage() {
   const [currentStage, setCurrentStage] = useState<string | null>(null);
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
   const [conversationModel, setConversationModel] = useState<string>("");
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [showModeDialog, setShowModeDialog] = useState(false);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([
     "youtube",
@@ -115,8 +118,10 @@ export default function ChatPage() {
         messages: Message[];
         mode?: string;
         model?: string;
+        has_more?: boolean;
       };
       let msgs = convData.messages || [];
+      setHasMoreMessages(!!convData.has_more);
       const mode = convData.mode || "thumbnail";
       const model = convData.model || "";
       setConversationMode(mode);
@@ -179,6 +184,33 @@ export default function ChatPage() {
       setMessages([]);
       setCurrentStage(null);
       setIsStreaming(false);
+    }
+  };
+
+  const handleLoadMoreMessages = async () => {
+    if (!selectedId || !hasMoreMessages || loadingMore || messages.length === 0)
+      return;
+    setLoadingMore(true);
+    try {
+      const oldest = messages[0];
+      const data = await getConversation(
+        selectedId,
+        50,
+        oldest.created_at
+      );
+      const convData = data as {
+        messages: Message[];
+        has_more?: boolean;
+      };
+      const olderMsgs = convData.messages || [];
+      setHasMoreMessages(!!convData.has_more);
+      if (olderMsgs.length > 0) {
+        setMessages((prev) => [...olderMsgs, ...prev]);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -475,6 +507,9 @@ export default function ChatPage() {
             ? handleModelChange
             : undefined
         }
+        hasMoreMessages={hasMoreMessages}
+        loadingMore={loadingMore}
+        onLoadMore={handleLoadMoreMessages}
       />
       <Dialog
         open={showModeDialog}

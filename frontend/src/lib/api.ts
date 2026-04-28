@@ -170,8 +170,17 @@ export const createConversation = (mode: string = "thumbnail") =>
     method: "POST",
     body: JSON.stringify({ mode }),
   });
-export const getConversation = (id: string) =>
-  apiFetch<Record<string, unknown>>(`/api/conversations/${id}`);
+export const getConversation = (
+  id: string,
+  limit: number = 50,
+  before?: string
+) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (before) params.set("before", before);
+  return apiFetch<Record<string, unknown> & { has_more?: boolean }>(
+    `/api/conversations/${id}?${params}`
+  );
+};
 export const deleteConversation = (id: string) =>
   apiFetch<void>(`/api/conversations/${id}`, { method: "DELETE" });
 export const updateConversation = (id: string, data: { model?: string }) =>
