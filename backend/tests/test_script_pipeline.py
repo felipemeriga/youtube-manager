@@ -291,4 +291,3 @@ async def test_persona_memories_messages_run_concurrently():
     assert started[:3].count("messages") == 1
     # If sequential, elapsed >= 0.15s; concurrent should be ~0.05s + overhead.
     assert elapsed < 0.12, f"Expected concurrent (<0.12s), got {elapsed:.3f}s"
-
