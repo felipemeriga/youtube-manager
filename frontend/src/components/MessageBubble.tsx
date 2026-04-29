@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import {
   Box,
   TextField,
@@ -161,7 +161,7 @@ const markdownStyles = {
   },
 };
 
-export default function MessageBubble({
+function MessageBubble({
   message,
   onApprove,
   onReject,
@@ -600,3 +600,27 @@ function TextPromptInput({ onSubmit }: { onSubmit: (text: string) => void }) {
     </Box>
   );
 }
+
+// Bypass re-render when only the parent re-rendered (e.g. streaming token tick).
+// We compare just the fields that affect what's rendered. Callback identity is
+// ignored because the relevant interactive buttons live on the latest message,
+// and isLatest/isStreaming changes will force a re-render via this comparator.
+function arePropsEqual(prev: MessageBubbleProps, next: MessageBubbleProps) {
+  if (prev.isLatest !== next.isLatest) return false;
+  if (prev.isStreaming !== next.isStreaming) return false;
+  if (prev.conversationMode !== next.conversationMode) return false;
+  const a = prev.message;
+  const b = next.message;
+  if (a === b) return true;
+  if (a.id !== b.id) return false;
+  if (a.role !== b.role) return false;
+  if (a.type !== b.type) return false;
+  if (a.content !== b.content) return false;
+  if (a.image_url !== b.image_url) return false;
+  if (a.image_base64 !== b.image_base64) return false;
+  // images is a record; cheap reference check is enough for our usage
+  if (a.images !== b.images) return false;
+  return true;
+}
+
+export default memo(MessageBubble, arePropsEqual);
