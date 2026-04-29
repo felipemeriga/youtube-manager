@@ -336,6 +336,85 @@ def test_upload_accepts_woff2_in_fonts_bucket():
     assert response.status_code == 200
 
 
+def test_validate_safe_filename_rejects_traversal_payloads():
+    """validate_safe_filename must raise on path traversal payloads."""
+    from fastapi import HTTPException
+    from routes.assets import validate_safe_filename
+    import pytest as _pytest
+
+    bad = [
+        "",
+        "..",
+        ".",
+        "../foo.jpg",
+        "..\\foo.jpg",
+        "foo/../bar.jpg",
+        "../../etc/passwd",
+        "good\x00name.jpg",
+        "other-user/file.png",
+        "a..b.jpg",  # defense-in-depth: any '..' substring rejected
+    ]
+    for payload in bad:
+        with _pytest.raises(HTTPException) as exc:
+            validate_safe_filename(payload)
+        assert exc.value.status_code == 400
+
+
+def test_validate_safe_filename_accepts_normal_names():
+    """validate_safe_filename must accept ordinary filenames."""
+    from routes.assets import validate_safe_filename
+
+    for name in ["photo.jpg", "logo_abc123.png", "my-file.webp", "thumb.png"]:
+        validate_safe_filename(name)  # should not raise
+
+
+def test_delete_asset_rejects_traversal_via_http():
+    """Traversal payloads in DELETE must not succeed (any 4xx is acceptable)."""
+    client = create_app("test-user")
+    response = client.delete("/api/assets/personal-photos/..%2Fsomeone-else.jpg")
+    assert 400 <= response.status_code < 500
+
+
+def test_signed_url_rejects_traversal_via_http():
+    """Traversal payloads in signed URL must not succeed."""
+    client = create_app("test-user")
+    response = client.get(
+        "/api/assets/reference-thumbs/signed/..%2Fother-user%2Fthumb.png"
+    )
+    assert 400 <= response.status_code < 500
+
+
+def test_download_asset_rejects_traversal_via_http():
+    """Traversal payloads in download must not succeed."""
+    client = create_app("test-user")
+    response = client.get("/api/assets/personal-photos/..%2Fevil.jpg")
+    assert 400 <= response.status_code < 500
+
+
+def test_batch_signed_urls_rejects_traversal():
+    """Batch signed URLs must reject any filename with traversal payload."""
+    client = create_app("test-user")
+    response = client.post(
+        "/api/assets/batch-signed-urls",
+        json={"bucket": "outputs", "filenames": ["good.png", "../evil.png"]},
+    )
+    assert response.status_code == 400
+
+
+def test_batch_thumbnails_rejects_traversal():
+    """Batch thumbnails must reject any filename with traversal payload."""
+    client = create_app("test-user")
+    response = client.post(
+        "/api/assets/batch-thumbnails",
+        json={
+            "bucket": "personal-photos",
+            "filenames": ["good.jpg", "../evil.jpg"],
+            "w": 200,
+        },
+    )
+    assert response.status_code == 400
+
+
 def test_upload_accepts_text_in_scripts_bucket():
     """text/plain should be accepted for scripts bucket."""
     client = create_app("test-user")
