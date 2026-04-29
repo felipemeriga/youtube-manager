@@ -382,10 +382,15 @@ async def download_asset(
         data = buf.getvalue()
         from fastapi.responses import Response
 
+        # Filenames are uuid-suffixed at upload time, so the bytes for a given
+        # ?w= preview never change. `immutable` lets the browser skip revalidation
+        # for the full TTL. `private` (vs public) prevents shared proxies from
+        # caching one user's image and serving it to another — the URL path does
+        # not include user_id, but the response body does.
         return Response(
             content=data,
             media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=3600"},
+            headers={"Cache-Control": "private, max-age=604800, immutable"},
         )
 
     from fastapi.responses import Response
