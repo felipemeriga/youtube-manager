@@ -415,6 +415,21 @@ def test_batch_thumbnails_rejects_traversal():
     assert response.status_code == 400
 
 
+def test_signed_url_returns_cache_control_header():
+    """Signed URL response should be cacheable for slightly less than the TTL."""
+    client = create_app("test-user")
+    mock_sb = MagicMock()
+    mock_sb.storage.from_.return_value.create_signed_url.return_value = {
+        "signedURL": "https://example/signed?token=x"
+    }
+    with patch("routes.assets.get_sync_client", return_value=mock_sb):
+        response = client.get("/api/assets/outputs/signed/foo.png")
+    assert response.status_code == 200
+    cc = response.headers.get("cache-control", "")
+    assert "max-age" in cc
+    assert "private" in cc
+
+
 def test_upload_accepts_text_in_scripts_bucket():
     """text/plain should be accepted for scripts bucket."""
     client = create_app("test-user")
