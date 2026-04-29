@@ -91,3 +91,33 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user)):
         .execute()
     )
     return {**job_res.data, "candidates": cand_res.data}
+
+
+@router.get("/jobs/{job_id}/events")
+async def job_events(job_id: str, request: Request, user_id: str = Depends(get_current_user)):
+    sb = await get_async_client()
+    job_res = await (
+        sb.table("clip_jobs").select("id").eq("id", job_id).eq("user_id", user_id).single().execute()
+    )
+    if not job_res.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    queue = broker.subscribe(job_id)
+
+    async def event_stream():
+        import json
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                    if event.get("type") in ("ready", "error", "render_complete_all"):
+                        break
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"  # SSE comment line keeps connection alive
+        finally:
+            broker.unsubscribe(job_id, queue)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
