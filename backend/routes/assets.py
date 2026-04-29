@@ -353,11 +353,23 @@ async def download_asset(
     user_id: str = Depends(get_current_user),
     w: int | None = None,
 ):
+    import asyncio
+
     validate_bucket(bucket)
     validate_safe_filename(filename)
-    sb = get_sync_client()
     storage_path = f"{user_id}/{filename}"
-    data = sb.storage.from_(bucket).download(storage_path)
+
+    # Retry on transient Supabase errors (502, connection issues)
+    data = None
+    sb = get_sync_client()
+    for attempt in range(3):
+        try:
+            data = sb.storage.from_(bucket).download(storage_path)
+            break
+        except Exception:
+            if attempt == 2:
+                raise
+            await asyncio.sleep(0.5)
 
     # Optional resize: ?w=200 returns a JPEG thumbnail
     if w and 0 < w <= 1024:
