@@ -150,3 +150,30 @@ def test_render_endpoint_marks_selected_and_starts_task(mock_sb):
         )
     assert r.status_code == 202
     mock_create.assert_called_once()
+
+
+def test_get_candidate_signed_url(mock_sb):
+    chain = mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value
+    chain.execute = AsyncMock(return_value=MagicMock(data={
+        "id": "c1",
+        "preview_storage_key": "user-123/j1/previews/c1.mp4",
+        "job_id": "j1",
+    }))
+    with _patch_client(mock_sb), \
+         patch("routes.clips.signed_url", new=AsyncMock(return_value="https://signed/url")):
+        r = client.get("/api/clips/candidates/c1/preview-url")
+    assert r.status_code == 200
+    assert r.json()["url"] == "https://signed/url"
+
+
+def test_cleanup_requires_token():
+    r = client.post("/api/clips/cleanup", headers={"X-Service-Token": "wrong"})
+    assert r.status_code == 401
+
+
+def test_cleanup_with_correct_token(mock_sb, monkeypatch):
+    monkeypatch.setattr("config.settings.clips_cleanup_token", "secret")
+    with patch("routes.clips.sweep_expired", new=AsyncMock(return_value={"jobs_expired": 1, "files_removed": 3})):
+        r = client.post("/api/clips/cleanup", headers={"X-Service-Token": "secret"})
+    assert r.status_code == 200
+    assert r.json() == {"jobs_expired": 1, "files_removed": 3}
