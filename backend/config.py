@@ -10,8 +10,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-haiku-4-5-20251001"
     voyage_api_key: str = ""
+    openai_api_key: str = ""
     cors_origins: str = "http://localhost:5173"
     database_url: str = ""
+    clips_cleanup_token: str = ""    # service token for /api/clips/cleanup
+    clips_tmp_dir: str = "/tmp/clips"
+    clips_bucket: str = "clips"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
