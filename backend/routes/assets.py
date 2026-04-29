@@ -112,9 +112,8 @@ async def list_assets(bucket: str, user_id: str = Depends(get_current_user)):
     sb = await get_async_client()
     bucket_api = sb.storage.from_(bucket)
     files = await bucket_api.list(path=user_id)
-    # get_public_url is sync (URL string construction); no await needed.
     for f in files:
-        f["public_url"] = bucket_api.get_public_url(f"{user_id}/{f['name']}")
+        f["public_url"] = await bucket_api.get_public_url(f"{user_id}/{f['name']}")
     return files
 
 

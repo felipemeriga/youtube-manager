@@ -32,6 +32,9 @@ def test_list_assets():
     mock_sb.storage.from_.return_value.list = AsyncMock(return_value=[
         {"name": "thumb1.png", "metadata": {"size": 12345}}
     ])
+    mock_sb.storage.from_.return_value.get_public_url = AsyncMock(
+        return_value="https://example.com/thumb1.png"
+    )
 
     with _patch_get_client(mock_sb):
         response = client.get("/api/assets/reference-thumbs")
