@@ -29,6 +29,16 @@ async def lifespan(app):
         logger.info("LangGraph thumbnail graph initialized with PostgresSaver")
     else:
         logger.warning("DATABASE_URL not set — thumbnail graph will use fallback")
+
+    # Clip job recovery — mark orphaned in-flight jobs as failed after restart
+    try:
+        from services.clips.job_runner import recover_orphans
+        n = await recover_orphans()
+        if n:
+            logger.info("Recovered %d orphaned clip jobs (marked failed)", n)
+    except Exception:
+        logger.exception("Clip orphan recovery failed (non-fatal)")
+
     yield
 
 
