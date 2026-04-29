@@ -8,7 +8,7 @@ from langgraph.types import Command
 
 from auth import get_current_user
 from services.script_pipeline import handle_script_chat_message
-from services.supabase_pool import get_sync_client, get_async_client
+from services.supabase_pool import get_async_client
 from services.thumbnail_graph import get_thumbnail_graph
 
 logger = logging.getLogger(__name__)
@@ -423,8 +423,8 @@ async def conversation_status(
 
 @router.post("/api/chat")
 async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
-    sb = get_sync_client()
-    conv = (
+    sb = await get_async_client()
+    conv = await (
         sb.table("conversations")
         .select("mode, model")
         .eq("id", request.conversation_id)
@@ -432,8 +432,8 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         .maybe_single()
         .execute()
     )
-    mode = conv.data.get("mode", "thumbnail") if conv.data else "thumbnail"
-    model = conv.data.get("model") if conv.data else None
+    mode = conv.data.get("mode", "thumbnail") if conv and conv.data else "thumbnail"
+    model = conv.data.get("model") if conv and conv.data else None
 
     if mode == "script":
         stream = handle_script_chat_message(
