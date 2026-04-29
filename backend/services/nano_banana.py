@@ -254,6 +254,16 @@ async def composite_with_effects(
             "5. Position/size the person as in references\n"
             "6. No text. Background must remain pixel-perfect."
         )
+    elif extra_instructions:
+        instructions = (
+            f"MODIFY the person as requested: {extra_instructions}\n"
+            "1. Keep the person's FACE recognizable — same face, same features\n"
+            "2. Apply the requested modifications (accessories, props, clothing, etc.)\n"
+            "3. Remove the person's original background\n"
+            "4. Apply reference-style effects (glow, lighting, color grading)\n"
+            "5. Position/size the person as in references\n"
+            "6. No text. Background must remain pixel-perfect."
+        )
     else:
         instructions = (
             "1. Preserve the person's face/body exactly — no redrawing or distortion\n"
@@ -262,8 +272,6 @@ async def composite_with_effects(
             "4. Position/size the person as in references\n"
             "5. No text. Background must remain pixel-perfect."
         )
-    if extra_instructions:
-        instructions += f"\nAdditional request: {extra_instructions}"
     contents.append(instructions)
 
     return _generate_image(client, model, contents, aspect_ratio, image_size)
