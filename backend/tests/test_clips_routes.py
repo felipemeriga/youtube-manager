@@ -120,3 +120,14 @@ def test_sse_events_streams_published_events(mock_sb):
             assert any("progress" in c for c in chunks)
             # Verify SSE framing
             assert any(c.startswith("data: ") for c in chunks)
+
+
+def test_cancel_job(mock_sb):
+    mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute = AsyncMock(
+        return_value=MagicMock(data={"id": "j1", "status": "processing"})
+    )
+    mock_sb.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
+    with _patch_client(mock_sb), patch("routes.clips.cancel_task", return_value=True):
+        r = client.post("/api/clips/jobs/j1/cancel")
+    assert r.status_code == 200
+    assert r.json()["status"] == "cancelled"
