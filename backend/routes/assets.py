@@ -397,5 +397,10 @@ async def download_asset(
     return Response(
         content=data,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # Same reasoning as the ?w= thumbnail above: filenames are uuid-suffixed
+            # at upload, so bytes for a given URL never change.
+            "Cache-Control": "private, max-age=604800, immutable",
+        },
     )
