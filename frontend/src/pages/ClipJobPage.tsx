@@ -22,7 +22,14 @@ export default function ClipJobPage() {
     if (!jobId) return;
     setJob(await clipsApi.getJob(jobId));
   }
-  useEffect(() => { refresh(); }, [jobId]);
+  useEffect(() => {
+    if (!jobId) return;
+    const ctrl = new AbortController();
+    clipsApi.getJob(jobId, ctrl.signal)
+      .then((data) => { if (!ctrl.signal.aborted) setJob(data); })
+      .catch((err) => { if (err?.name !== "AbortError") throw err; });
+    return () => ctrl.abort();
+  }, [jobId]);
 
   useClipJobSSE(jobId ?? null, (e: JobEvent) => {
     if (e.type === "progress") {

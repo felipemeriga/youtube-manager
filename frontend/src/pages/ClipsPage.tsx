@@ -9,10 +9,13 @@ export default function ClipsPage() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<ClipJobSummary[]>([]);
 
-  async function refresh() {
-    setJobs(await clipsApi.listJobs());
-  }
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    clipsApi.listJobs(ctrl.signal)
+      .then((data) => { if (!ctrl.signal.aborted) setJobs(data); })
+      .catch((err) => { if (err?.name !== "AbortError") throw err; });
+    return () => ctrl.abort();
+  }, []);
 
   return (
     <Box sx={{ p: 4, maxWidth: 800, mx: "auto" }}>
