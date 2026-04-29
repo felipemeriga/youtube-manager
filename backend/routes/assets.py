@@ -234,14 +234,23 @@ async def delete_asset(
 async def get_signed_url(
     bucket: str, filename: str, user_id: str = Depends(get_current_user)
 ):
-    """Get a temporary signed URL for an asset (valid 1 hour)."""
+    """Get a temporary signed URL for an asset (valid 1 hour).
+
+    The response is marked cacheable for slightly less than the URL TTL so a
+    refresh of the same view doesn't keep regenerating the URL.
+    """
     validate_bucket(bucket)
     validate_safe_filename(filename)
     sb = get_sync_client()
     storage_path = f"{user_id}/{filename}"
     result = sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
     if result and result.get("signedURL"):
-        return {"signed_url": result["signedURL"]}
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            content={"signed_url": result["signedURL"]},
+            headers={"Cache-Control": "private, max-age=3300"},
+        )
     raise HTTPException(status_code=404, detail="File not found")
 
 
