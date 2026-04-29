@@ -3,6 +3,7 @@ import io
 import logging
 import time
 import uuid
+from collections import OrderedDict
 
 from PIL import Image
 from config import settings
@@ -24,9 +25,12 @@ from services.thumbnail_state import (
 
 logger = logging.getLogger(__name__)
 
-# In-process asset cache: (user_id, bucket) -> (timestamp, data)
-_asset_cache: dict[tuple[str, str], tuple[float, list[bytes]]] = {}
+# In-process asset cache: (user_id, bucket) -> (timestamp, data).
+# Bounded LRU so the worker process can't grow without limit as new
+# user_id/bucket pairs are seen.
+_asset_cache: "OrderedDict[tuple[str, str], tuple[float, list[bytes]]]" = OrderedDict()
 _CACHE_TTL = 600  # 10 minutes
+_CACHE_MAX = 64  # ~ 4 buckets * 16 active users
 
 CREATIVE_BRIEF_MODEL = "claude-haiku-4-5-20251001"
 
@@ -70,10 +74,13 @@ async def _fetch_all_assets(_sb_unused, user_id: str, bucket: str) -> list[bytes
     if cached:
         ts, data = cached
         if time.time() - ts < _CACHE_TTL:
+            _asset_cache.move_to_end(cache_key)
             logger.debug(
                 "asset cache hit for %s/%s (%d items)", user_id, bucket, len(data)
             )
             return data
+        # Expired — drop and refetch
+        _asset_cache.pop(cache_key, None)
 
     sb = await _get_supabase()
 
@@ -108,6 +115,8 @@ async def _fetch_all_assets(_sb_unused, user_id: str, bucket: str) -> list[bytes
     data = [r for r in results if r is not None]
 
     _asset_cache[cache_key] = (time.time(), data)
+    while len(_asset_cache) > _CACHE_MAX:
+        _asset_cache.popitem(last=False)
     logger.info(
         "asset cache miss for %s/%s — downloaded %d items", user_id, bucket, len(data)
     )
