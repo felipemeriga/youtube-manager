@@ -54,3 +54,35 @@ def test_create_job_inserts_and_starts_task(mock_sb):
     assert r.json()["id"] == "job-1"
     mock_create_task.assert_called_once()
     mock_reg.assert_called_once()
+
+
+def test_list_jobs(mock_sb):
+    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=[{"id": "j1"}, {"id": "j2"}])
+    )
+    with _patch_client(mock_sb):
+        r = client.get("/api/clips/jobs")
+    assert r.status_code == 200
+    assert len(r.json()) == 2
+
+
+def test_get_job_returns_with_candidates(mock_sb):
+    job_chain = mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
+    job_chain.execute = AsyncMock(return_value=MagicMock(data={"id": "j1", "user_id": "user-123"}))
+    cand_chain = mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value
+    cand_chain.execute = AsyncMock(return_value=MagicMock(data=[{"id": "c1", "hype_score": 9}]))
+
+    with _patch_client(mock_sb):
+        r = client.get("/api/clips/jobs/j1")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == "j1"
+    assert len(body["candidates"]) == 1
+
+
+def test_get_job_404_when_not_found(mock_sb):
+    job_chain = mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
+    job_chain.execute = AsyncMock(return_value=MagicMock(data=None))
+    with _patch_client(mock_sb):
+        r = client.get("/api/clips/jobs/missing")
+    assert r.status_code == 404
