@@ -161,6 +161,32 @@ export default function ContextPanel({
             Nenhuma conversa encontrada
           </Typography>
         )}
+        {conversations.length === 0 && !query && (
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1,
+              px: 2,
+              py: 4,
+              textAlign: "center",
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{ color: "rgba(255,255,255,0.5)", fontWeight: 600 }}
+            >
+              Nenhuma conversa ainda
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{ color: "rgba(255,255,255,0.35)", lineHeight: 1.4 }}
+            >
+              Clique em + acima para criar sua primeira thumbnail ou roteiro.
+            </Typography>
+          </Box>
+        )}
         {filtered.map((conv) => (
           <ListItemButton
             key={conv.id}
