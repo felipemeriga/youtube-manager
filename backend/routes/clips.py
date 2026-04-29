@@ -180,3 +180,43 @@ async def cancel_job(job_id: str, user_id: str = Depends(get_current_user)):
         .execute()
     )
     return {"status": "cancelled"}
+
+
+@router.get("/candidates/{candidate_id}/preview-url")
+async def get_preview_url(candidate_id: str, user_id: str = Depends(get_current_user)):
+    sb = await get_async_client()
+    # RLS will ensure the candidate belongs to a job owned by user_id
+    res = await (
+        sb.table("clip_candidates")
+        .select("id, preview_storage_key, job_id")
+        .eq("id", candidate_id)
+        .single()
+        .execute()
+    )
+    if not res.data or not res.data.get("preview_storage_key"):
+        raise HTTPException(status_code=404, detail="Preview not available")
+    url = await signed_url(res.data["preview_storage_key"], ttl_seconds=3600)
+    return {"url": url}
+
+
+@router.get("/candidates/{candidate_id}/final-url")
+async def get_final_url(candidate_id: str, user_id: str = Depends(get_current_user)):
+    sb = await get_async_client()
+    res = await (
+        sb.table("clip_candidates")
+        .select("id, final_storage_key")
+        .eq("id", candidate_id)
+        .single()
+        .execute()
+    )
+    if not res.data or not res.data.get("final_storage_key"):
+        raise HTTPException(status_code=404, detail="Final not rendered")
+    url = await signed_url(res.data["final_storage_key"], ttl_seconds=3600)
+    return {"url": url}
+
+
+@router.post("/cleanup")
+async def cleanup_endpoint(x_service_token: str = Header(default="")):
+    if not settings.clips_cleanup_token or x_service_token != settings.clips_cleanup_token:
+        raise HTTPException(status_code=401, detail="Invalid service token")
+    return await sweep_expired()
