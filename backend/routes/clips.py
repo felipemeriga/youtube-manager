@@ -121,3 +121,21 @@ async def job_events(job_id: str, request: Request, user_id: str = Depends(get_c
             broker.unsubscribe(job_id, queue)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str, user_id: str = Depends(get_current_user)):
+    sb = await get_async_client()
+    job_res = await (
+        sb.table("clip_jobs").select("id, status").eq("id", job_id).eq("user_id", user_id).single().execute()
+    )
+    if not job_res.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    cancel_task(job_id)
+    await (
+        sb.table("clip_jobs")
+        .update({"status": "failed", "error_message": "Cancelled by user"})
+        .eq("id", job_id)
+        .execute()
+    )
+    return {"status": "cancelled"}
