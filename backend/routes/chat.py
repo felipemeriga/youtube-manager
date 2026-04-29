@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 
@@ -205,7 +204,6 @@ async def thumbnail_stream(
             if msg_type in ("background", "composite", "image"):
                 image_urls = interrupt_value.get("image_urls") or {}
                 if image_urls:
-
                     images_payload = {}
                     for platform, paths in image_urls.items():
                         url = paths.get("url", "") if isinstance(paths, dict) else paths

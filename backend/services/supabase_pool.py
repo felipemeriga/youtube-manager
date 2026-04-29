@@ -18,7 +18,9 @@ def get_sync_client():
     """Return a shared synchronous Supabase client (singleton)."""
     global _sync_client
     if _sync_client is None:
-        _sync_client = _create_sync(settings.supabase_url, settings.supabase_service_key)
+        _sync_client = _create_sync(
+            settings.supabase_url, settings.supabase_service_key
+        )
     return _sync_client
 
 

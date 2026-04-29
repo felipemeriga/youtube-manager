@@ -2,7 +2,7 @@
 
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from services.thumbnail_state import ThumbnailState
 
@@ -45,10 +45,24 @@ async def test_background_uploads_run_in_parallel():
         upload_times.append(asyncio.get_event_loop().time())
 
     with (
-        patch("services.thumbnail_nodes._research_topic", new_callable=AsyncMock, return_value=""),
-        patch("services.thumbnail_nodes.get_relevant_memories", new_callable=AsyncMock, return_value=[]),
-        patch("services.thumbnail_nodes._get_supabase", new_callable=AsyncMock) as mock_sb,
-        patch("services.thumbnail_nodes.generate_background", new_callable=AsyncMock, return_value=fake_image),
+        patch(
+            "services.thumbnail_nodes._research_topic",
+            new_callable=AsyncMock,
+            return_value="",
+        ),
+        patch(
+            "services.thumbnail_nodes.get_relevant_memories",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+        ) as mock_sb,
+        patch(
+            "services.thumbnail_nodes.generate_background",
+            new_callable=AsyncMock,
+            return_value=fake_image,
+        ),
         patch("services.thumbnail_nodes._make_preview", return_value=b"preview-jpg"),
     ):
         sb = MagicMock()
@@ -80,8 +94,14 @@ async def test_composite_uploads_run_in_parallel():
     fake_image = b"\x89PNG\r\n\x1a\ncomposite"
 
     with (
-        patch("services.thumbnail_nodes._get_supabase", new_callable=AsyncMock) as mock_sb,
-        patch("services.thumbnail_nodes.composite_with_effects", new_callable=AsyncMock, return_value=fake_image),
+        patch(
+            "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+        ) as mock_sb,
+        patch(
+            "services.thumbnail_nodes.composite_with_effects",
+            new_callable=AsyncMock,
+            return_value=fake_image,
+        ),
         patch("services.thumbnail_nodes._make_preview", return_value=b"preview-jpg"),
     ):
         sb = MagicMock()
@@ -113,8 +133,14 @@ async def test_text_node_uploads_run_in_parallel():
     fake_image = b"\x89PNG\r\n\x1a\nfinal"
 
     with (
-        patch("services.thumbnail_nodes._get_supabase", new_callable=AsyncMock) as mock_sb,
-        patch("services.thumbnail_nodes.add_text_with_style", new_callable=AsyncMock, return_value=fake_image),
+        patch(
+            "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+        ) as mock_sb,
+        patch(
+            "services.thumbnail_nodes.add_text_with_style",
+            new_callable=AsyncMock,
+            return_value=fake_image,
+        ),
         patch("services.thumbnail_nodes._make_preview", return_value=b"preview-jpg"),
     ):
         sb = MagicMock()
@@ -138,7 +164,9 @@ async def test_fetch_all_assets_uses_shared_client():
     # Clear cache
     _asset_cache.clear()
 
-    with patch("services.thumbnail_nodes._get_supabase", new_callable=AsyncMock) as mock_sb:
+    with patch(
+        "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+    ) as mock_sb:
         sb = MagicMock()
         mock_sb.return_value = sb
         sb.storage.from_.return_value.list = AsyncMock(
@@ -167,7 +195,9 @@ async def test_save_node_parallel_uploads():
         }
     )
 
-    with patch("services.thumbnail_nodes._get_supabase", new_callable=AsyncMock) as mock_sb:
+    with patch(
+        "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+    ) as mock_sb:
         sb = MagicMock()
         mock_sb.return_value = sb
         sb.storage.from_.return_value.download = AsyncMock(return_value=b"img-data")

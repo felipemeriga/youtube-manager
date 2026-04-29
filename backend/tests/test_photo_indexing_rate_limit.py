@@ -8,7 +8,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 @pytest.mark.asyncio
 async def test_indexing_semaphore_limits_concurrency():
     """Concurrent photo indexing tasks should be limited by the semaphore."""
-    from routes.assets import _index_uploaded_photo, _INDEX_SEMAPHORE
+    from routes.assets import _index_uploaded_photo
 
     active_count = 0
     max_active = 0
