@@ -97,9 +97,7 @@ async def _fetch_all_assets(_sb_unused, user_id: str, bucket: str) -> list[bytes
         async with sem:
             for attempt in range(3):
                 try:
-                    return await sb.storage.from_(bucket).download(
-                        f"{user_id}/{name}"
-                    )
+                    return await sb.storage.from_(bucket).download(f"{user_id}/{name}")
                 except Exception:
                     if attempt == 2:
                         logger.warning("Failed to download %s/%s", bucket, name)
@@ -247,9 +245,7 @@ async def generate_background_node(state: ThumbnailState) -> dict:
         )
         return platform, {"url": original_path, "preview_url": preview_path}
 
-    upload_results = await asyncio.gather(
-        *[_upload_bg(p, b) for p, b in gen_results]
-    )
+    upload_results = await asyncio.gather(*[_upload_bg(p, b) for p, b in gen_results])
     background_urls = dict(upload_results)
 
     return {
@@ -348,9 +344,7 @@ async def composite_node(state: ThumbnailState) -> dict:
         )
         return platform, {"url": original_path, "preview_url": preview_path}
 
-    upload_results = await asyncio.gather(
-        *[_upload_comp(p, b) for p, b in gen_results]
-    )
+    upload_results = await asyncio.gather(*[_upload_comp(p, b) for p, b in gen_results])
     composite_urls = dict(upload_results)
 
     return {"composite_urls": composite_urls, "extra_instructions": None}
@@ -419,9 +413,7 @@ async def add_text_node(state: ThumbnailState) -> dict:
         )
         return platform, {"url": original_path, "preview_url": preview_path}
 
-    upload_results = await asyncio.gather(
-        *[_upload_text(p, b) for p, b in gen_results]
-    )
+    upload_results = await asyncio.gather(*[_upload_text(p, b) for p, b in gen_results])
     final_urls = dict(upload_results)
 
     return {"final_urls": final_urls}
