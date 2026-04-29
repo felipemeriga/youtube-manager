@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from auth import get_current_user
-from services.supabase_pool import get_sync_client
+from services.supabase_pool import get_async_client
 
 DEFAULT_MESSAGE_LIMIT = 50
 
@@ -22,11 +22,11 @@ router = APIRouter()
 
 @router.get("/api/conversations")
 async def list_conversations(user_id: str = Depends(get_current_user)):
-    sb = get_sync_client()
+    sb = await get_async_client()
     # Only fetch fields the sidebar list actually renders. Full conversation
     # details (including the message body and model) come from the detail
     # endpoint when a row is selected.
-    result = (
+    result = await (
         sb.table("conversations")
         .select("id, title, updated_at, created_at, mode")
         .eq("user_id", user_id)
@@ -41,9 +41,9 @@ async def create_conversation(
     request: Optional[CreateConversationRequest] = None,
     user_id: str = Depends(get_current_user),
 ):
-    sb = get_sync_client()
+    sb = await get_async_client()
     mode = request.mode if request else "thumbnail"
-    result = (
+    result = await (
         sb.table("conversations").insert({"user_id": user_id, "mode": mode}).execute()
     )
     return result.data[0]
@@ -56,8 +56,8 @@ async def get_conversation(
     limit: int = Query(DEFAULT_MESSAGE_LIMIT, ge=1, le=200),
     before: str | None = Query(None),
 ):
-    sb = get_sync_client()
-    conv = (
+    sb = await get_async_client()
+    conv = await (
         sb.table("conversations")
         .select("*")
         .eq("id", conversation_id)
@@ -77,7 +77,7 @@ async def get_conversation(
     )
     if before:
         query = query.lt("created_at", before)
-    messages_result = query.execute()
+    messages_result = await query.execute()
     # Reverse so messages are in chronological order
     messages = list(reversed(messages_result.data))
     has_more = len(messages_result.data) == limit
@@ -91,13 +91,13 @@ async def update_conversation(
     request: UpdateConversationRequest,
     user_id: str = Depends(get_current_user),
 ):
-    sb = get_sync_client()
+    sb = await get_async_client()
     updates = {}
     if request.model is not None:
         updates["model"] = request.model
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
-    result = (
+    result = await (
         sb.table("conversations")
         .update(updates)
         .eq("id", conversation_id)
@@ -113,8 +113,8 @@ async def update_conversation(
 async def delete_conversation(
     conversation_id: str, user_id: str = Depends(get_current_user)
 ):
-    sb = get_sync_client()
-    result = (
+    sb = await get_async_client()
+    result = await (
         sb.table("conversations")
         .delete()
         .eq("id", conversation_id)

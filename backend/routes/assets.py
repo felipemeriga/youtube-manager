@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from auth import get_current_user
 from config import settings
-from services.supabase_pool import get_sync_client, get_async_client
+from services.supabase_pool import get_async_client
 
 
 def sanitize_filename(name: str) -> str:
@@ -109,12 +109,12 @@ def validate_content_type(bucket: str, content_type: str | None):
 @router.get("/api/assets/{bucket}")
 async def list_assets(bucket: str, user_id: str = Depends(get_current_user)):
     validate_bucket(bucket)
-    sb = get_sync_client()
-    files = sb.storage.from_(bucket).list(path=user_id)
+    sb = await get_async_client()
+    bucket_api = sb.storage.from_(bucket)
+    files = await bucket_api.list(path=user_id)
+    # get_public_url is sync (URL string construction); no await needed.
     for f in files:
-        f["public_url"] = sb.storage.from_(bucket).get_public_url(
-            f"{user_id}/{f['name']}"
-        )
+        f["public_url"] = bucket_api.get_public_url(f"{user_id}/{f['name']}")
     return files
 
 
@@ -133,7 +133,7 @@ async def upload_asset(
 
     import uuid
 
-    sb = get_sync_client()
+    sb = await get_async_client()
     safe_name = sanitize_filename(file.filename or "file")
     # Add unique prefix to avoid 409 Duplicate on re-uploads
     name_parts = safe_name.rsplit(".", 1)
@@ -142,7 +142,7 @@ async def upload_asset(
     else:
         unique_name = f"{safe_name}_{uuid.uuid4().hex[:6]}"
     storage_path = f"{user_id}/{unique_name}"
-    sb.storage.from_(bucket).upload(
+    await sb.storage.from_(bucket).upload(
         storage_path, content, {"content-type": file.content_type}
     )
 
@@ -179,14 +179,12 @@ async def reindex_photos(user_id: str = Depends(get_current_user)):
             detail="Anthropic and Voyage API keys required for indexing",
         )
 
-    sb_sync = get_sync_client()
-    files = sb_sync.storage.from_("personal-photos").list(path=user_id)
+    sb_async = await get_async_client()
+    files = await sb_async.storage.from_("personal-photos").list(path=user_id)
     photo_names = [f["name"] for f in files if f.get("name")]
 
     if not photo_names:
         return {"indexed": 0, "total": 0}
-
-    sb_async = await get_async_client()
 
     # Check which are already indexed
     existing = (
@@ -224,9 +222,9 @@ async def delete_asset(
 ):
     validate_bucket(bucket)
     validate_safe_filename(filename)
-    sb = get_sync_client()
+    sb = await get_async_client()
     storage_path = f"{user_id}/{filename}"
-    sb.storage.from_(bucket).remove([storage_path])
+    await sb.storage.from_(bucket).remove([storage_path])
     return {"status": "deleted", "name": filename}
 
 
@@ -241,9 +239,9 @@ async def get_signed_url(
     """
     validate_bucket(bucket)
     validate_safe_filename(filename)
-    sb = get_sync_client()
+    sb = await get_async_client()
     storage_path = f"{user_id}/{filename}"
-    result = sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
+    result = await sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
     if result and result.get("signedURL"):
         from fastapi.responses import JSONResponse
 
@@ -267,9 +265,9 @@ async def get_batch_signed_urls(
     validate_bucket(bucket)
     for f in filenames:
         validate_safe_filename(f)
-    sb = get_sync_client()
+    sb = await get_async_client()
     paths = [f"{user_id}/{f}" for f in filenames]
-    result = sb.storage.from_(bucket).create_signed_urls(paths, 3600)
+    result = await sb.storage.from_(bucket).create_signed_urls(paths, 3600)
     return result
 
 
@@ -361,10 +359,10 @@ async def download_asset(
 
     # Retry on transient Supabase errors (502, connection issues)
     data = None
-    sb = get_sync_client()
+    sb = await get_async_client()
     for attempt in range(3):
         try:
-            data = sb.storage.from_(bucket).download(storage_path)
+            data = await sb.storage.from_(bucket).download(storage_path)
             break
         except Exception:
             if attempt == 2:
