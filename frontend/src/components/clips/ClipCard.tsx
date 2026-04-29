@@ -21,11 +21,11 @@ export default function ClipCard({
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    let mounted = true;
-    clipsApi.previewUrl(candidate.id)
-      .then(({ url }) => { if (mounted) setPreviewUrl(url); })
+    const ctrl = new AbortController();
+    clipsApi.previewUrl(candidate.id, ctrl.signal)
+      .then(({ url }) => { if (!ctrl.signal.aborted) setPreviewUrl(url); })
       .catch(() => {});
-    return () => { mounted = false; };
+    return () => ctrl.abort();
   }, [candidate.id]);
 
   return (

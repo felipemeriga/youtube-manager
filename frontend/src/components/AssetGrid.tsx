@@ -366,6 +366,8 @@ export default function AssetGrid({
                   component="img"
                   src={file.public_url || `/api/assets/${bucket}/${file.name}`}
                   alt={file.name}
+                  loading="lazy"
+                  decoding="async"
                   sx={{
                     width: "100%",
                     height: 280,

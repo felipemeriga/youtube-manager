@@ -224,8 +224,8 @@ export const getConversationStatus = (id: string) =>
     `/api/conversations/${id}/status`
   );
 
-export const listAssets = (bucket: string) =>
-  apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`);
+export const listAssets = (bucket: string, signal?: AbortSignal) =>
+  apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`, { signal });
 
 export const getBatchSignedUrls = (bucket: string, filenames: string[]) =>
   apiFetch<Array<{ signedURL: string; path: string; error: string | null }>>(

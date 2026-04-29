@@ -315,8 +315,22 @@ export default function AssetsPage() {
   }, [currentBucket.key]);
 
   useEffect(() => {
-    loadFiles();
-  }, [loadFiles]);
+    const ctrl = new AbortController();
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await listAssets(currentBucket.key, ctrl.signal);
+        if (!ctrl.signal.aborted) {
+          setFiles(data as unknown as AssetFile[]);
+        }
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError") throw err;
+      } finally {
+        if (!ctrl.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => ctrl.abort();
+  }, [currentBucket.key]);
 
   // Clear selection when switching tabs
   useEffect(() => {

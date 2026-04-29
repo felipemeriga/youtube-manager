@@ -18,9 +18,11 @@ export const clipsApi = {
       body: JSON.stringify({ youtube_url }),
     }),
 
-  listJobs: () => apiFetch<ClipJobSummary[]>("/api/clips/jobs"),
+  listJobs: (signal?: AbortSignal) =>
+    apiFetch<ClipJobSummary[]>("/api/clips/jobs", { signal }),
 
-  getJob: (id: string) => apiFetch<ClipJob>(`/api/clips/jobs/${id}`),
+  getJob: (id: string, signal?: AbortSignal) =>
+    apiFetch<ClipJob>(`/api/clips/jobs/${id}`, { signal }),
 
   cancel: (id: string) =>
     apiFetch<{ status: string }>(`/api/clips/jobs/${id}/cancel`, {
@@ -33,9 +35,10 @@ export const clipsApi = {
       body: JSON.stringify({ candidate_ids }),
     }),
 
-  previewUrl: (candidateId: string) =>
+  previewUrl: (candidateId: string, signal?: AbortSignal) =>
     apiFetch<{ url: string }>(
-      `/api/clips/candidates/${candidateId}/preview-url`
+      `/api/clips/candidates/${candidateId}/preview-url`,
+      { signal }
     ),
 
   finalUrl: (candidateId: string) =>
