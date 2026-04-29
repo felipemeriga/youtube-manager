@@ -8,6 +8,7 @@ from langgraph.types import Command
 
 from auth import get_current_user
 from services.script_pipeline import handle_script_chat_message
+from services.conversation_title import derive_title
 from services.supabase_pool import get_async_client
 from services.thumbnail_graph import get_thumbnail_graph
 
@@ -160,7 +161,7 @@ async def thumbnail_stream(
             await _save_message(sb, conversation_id, "user", content, "text")
             await (
                 sb.table("conversations")
-                .update({"title": content[:50]})
+                .update({"title": derive_title(content)})
                 .eq("id", conversation_id)
                 .execute()
             )

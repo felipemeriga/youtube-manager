@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from config import settings
+from services.conversation_title import derive_title
 from services.supabase_pool import get_async_client
 from routes.personas import DEFAULT_SCRIPT_SECTIONS
 from services.llm import ask_llm
@@ -303,7 +304,7 @@ async def handle_script_chat_message(
         if not existing_messages:
             await (
                 sb.table("conversations")
-                .update({"title": content[:50]})
+                .update({"title": derive_title(content)})
                 .eq("id", conversation_id)
                 .execute()
             )
