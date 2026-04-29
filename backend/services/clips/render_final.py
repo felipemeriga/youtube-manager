@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 from .face_detection import detect_face_track
@@ -8,6 +10,29 @@ from .render_preview import _video_dims, build_crop_filter
 from .storage import final_key, upload_file
 
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _subtitles_filter_available() -> bool:
+    """Return True if this ffmpeg build includes the `subtitles` filter (libass).
+
+    Some minimal ffmpeg builds (e.g. recent Homebrew bottles for arm64) ship
+    without libass / libfreetype, which means captions can't be burned in. We
+    detect that once and let the caller skip the filter so the render still
+    succeeds without captions.
+    """
+    try:
+        out = subprocess.check_output(
+            ["ffmpeg", "-hide_banner", "-filters"], stderr=subprocess.DEVNULL
+        ).decode()
+    except Exception:
+        return False
+    for line in out.splitlines():
+        # Filter list rows are formatted: "<flags> <name> <io>  <description>"
+        parts = line.split()
+        if len(parts) >= 2 and parts[1] == "subtitles":
+            return True
+    return False
 
 
 ASS_HEADER = """[Script Info]
@@ -72,7 +97,10 @@ async def _ffmpeg_render_with_subs(
     )
     _, stderr = await proc.communicate()
     if proc.returncode != 0:
-        raise RuntimeError(f"ffmpeg final render failed: {stderr.decode()[:500]}")
+        # Keep the tail of stderr — the actionable error is almost always near
+        # the end (the leading lines are version + input metadata banners).
+        err = stderr.decode(errors="replace")
+        raise RuntimeError(f"ffmpeg final render failed: …{err[-1500:]}")
 
 
 async def render_one_final(
@@ -92,9 +120,19 @@ async def render_one_final(
     width, height = _video_dims(source)
     track = detect_face_track(source, candidate.duration_seconds)
     crop_scale = build_crop_filter(track=track, video_height=height, video_width=width)
-    # ffmpeg subtitles filter takes the .ass path; escape special chars for filter args
-    ass_escaped = str(ass_path).replace(":", "\\:").replace("'", "\\'")
-    vf = f"{crop_scale},subtitles='{ass_escaped}'"
+
+    if _subtitles_filter_available():
+        # ffmpeg subtitles filter: escape `:` and `\` in the path; use the
+        # canonical `filename=` syntax to avoid quote-parsing issues that broke
+        # the legacy `subtitles='...'` form on ffmpeg 8+.
+        ass_escaped = str(ass_path).replace("\\", "\\\\").replace(":", "\\:")
+        vf = f"{crop_scale},subtitles=filename={ass_escaped}"
+    else:
+        logger.warning(
+            "ffmpeg `subtitles` filter unavailable (libass not built in); "
+            "rendering final clip without burned-in captions"
+        )
+        vf = crop_scale
 
     await _ffmpeg_render_with_subs(
         source, candidate.start_seconds, candidate.end_seconds, vf, out_path
