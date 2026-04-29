@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -6,6 +6,13 @@ from auth import get_current_user
 from routes.assets import router
 
 VALID_BUCKETS = ["reference-thumbs", "personal-photos", "logos", "outputs", "scripts"]
+
+
+def _patch_get_client(mock_sb):
+    """Patch routes.assets.get_async_client (itself async) to return mock_sb."""
+    return patch(
+        "routes.assets.get_async_client", new=AsyncMock(return_value=mock_sb)
+    )
 
 
 def create_app(user_id: str) -> TestClient:
@@ -22,11 +29,14 @@ def create_app(user_id: str) -> TestClient:
 def test_list_assets():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.list.return_value = [
+    mock_sb.storage.from_.return_value.list = AsyncMock(return_value=[
         {"name": "thumb1.png", "metadata": {"size": 12345}}
-    ]
+    ])
+    mock_sb.storage.from_.return_value.get_public_url = AsyncMock(
+        return_value="https://example.com/thumb1.png"
+    )
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.get("/api/assets/reference-thumbs")
 
     assert response.status_code == 200
@@ -43,11 +53,11 @@ def test_list_assets_invalid_bucket():
 def test_upload_asset():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.upload.return_value = {
+    mock_sb.storage.from_.return_value.upload = AsyncMock(return_value={
         "Key": "test-user/photo.jpg"
-    }
+    })
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.post(
             "/api/assets/personal-photos/upload",
             files={"file": ("photo.jpg", b"fake-image-data", "image/jpeg")},
@@ -61,9 +71,9 @@ def test_upload_asset():
 def test_delete_asset():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.remove.return_value = [{"name": "photo.jpg"}]
+    mock_sb.storage.from_.return_value.remove = AsyncMock(return_value=[{"name": "photo.jpg"}])
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.delete("/api/assets/personal-photos/photo.jpg")
 
     assert response.status_code == 200
@@ -72,9 +82,9 @@ def test_delete_asset():
 def test_download_asset():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.download.return_value = b"image-binary-data"
+    mock_sb.storage.from_.return_value.download = AsyncMock(return_value=b"image-binary-data")
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.get("/api/assets/reference-thumbs/thumb1.png")
 
     assert response.status_code == 200
@@ -88,7 +98,7 @@ def test_upload_file_too_large():
     # logos bucket has a 5MB limit
     large_content = b"x" * (5 * 1024 * 1024 + 1)
 
-    with patch("routes.assets.get_supabase", return_value=MagicMock()):
+    with _patch_get_client(MagicMock()):
         response = client.post(
             "/api/assets/logos/upload",
             files={"file": ("big-logo.png", large_content, "image/png")},
@@ -122,11 +132,11 @@ def test_delete_asset_invalid_bucket():
 def test_upload_preserves_content_type():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.upload.return_value = {
+    mock_sb.storage.from_.return_value.upload = AsyncMock(return_value={
         "Key": "test-user/image.png"
-    }
+    })
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.post(
             "/api/assets/reference-thumbs/upload",
             files={"file": ("image.png", b"png-data", "image/png")},
@@ -143,9 +153,9 @@ def test_upload_asset_response_structure():
     """Upload should return name, bucket, and path."""
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.upload.return_value = {}
+    mock_sb.storage.from_.return_value.upload = AsyncMock(return_value={})
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.post(
             "/api/assets/logos/upload",
             files={"file": ("logo.png", b"logo-data", "image/png")},
@@ -161,9 +171,9 @@ def test_delete_asset_response_structure():
     """Delete should return status and name."""
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.remove.return_value = []
+    mock_sb.storage.from_.return_value.remove = AsyncMock(return_value=[])
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.delete("/api/assets/outputs/thumb.png")
 
     assert response.json() == {"status": "deleted", "name": "thumb.png"}
@@ -173,10 +183,10 @@ def test_upload_file_exactly_at_max_size():
     """File at exactly the max size should succeed."""
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.upload.return_value = {}
+    mock_sb.storage.from_.return_value.upload = AsyncMock(return_value={})
 
     exact_content = b"x" * (5 * 1024 * 1024)  # exactly 5MB for logos
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.post(
             "/api/assets/logos/upload",
             files={"file": ("logo.png", exact_content, "image/png")},
@@ -190,7 +200,7 @@ def test_upload_file_one_byte_over_max():
     client = create_app("test-user")
     over_content = b"x" * (10 * 1024 * 1024 + 1)  # 10MB + 1 for reference-thumbs
 
-    with patch("routes.assets.get_supabase", return_value=MagicMock()):
+    with _patch_get_client(MagicMock()):
         response = client.post(
             "/api/assets/reference-thumbs/upload",
             files={"file": ("big.png", over_content, "image/png")},
@@ -206,9 +216,9 @@ def test_list_assets_all_valid_buckets():
     for bucket in VALID_BUCKETS:
         client = create_app("test-user")
         mock_sb = MagicMock()
-        mock_sb.storage.from_.return_value.list.return_value = []
+        mock_sb.storage.from_.return_value.list = AsyncMock(return_value=[])
 
-        with patch("routes.assets.get_supabase", return_value=mock_sb):
+        with _patch_get_client(mock_sb):
             response = client.get(f"/api/assets/{bucket}")
 
         assert response.status_code == 200, f"Failed for bucket: {bucket}"
@@ -218,9 +228,9 @@ def test_download_asset_content_disposition_header():
     """Download should set Content-Disposition with correct filename."""
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.download.return_value = b"data"
+    mock_sb.storage.from_.return_value.download = AsyncMock(return_value=b"data")
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.get("/api/assets/outputs/my-thumbnail.png")
 
     assert (
@@ -234,9 +244,9 @@ def test_upload_constructs_correct_storage_path():
     """Upload should prefix filename with user_id."""
     client = create_app("user-123")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.upload.return_value = {}
+    mock_sb.storage.from_.return_value.upload = AsyncMock(return_value={})
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.post(
             "/api/assets/personal-photos/upload",
             files={"file": ("photo.jpg", b"data", "image/jpeg")},
@@ -254,9 +264,9 @@ def test_delete_asset_calls_storage_remove():
     """Delete should call storage remove with correct path."""
     client = create_app("user-456")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.remove.return_value = []
+    mock_sb.storage.from_.return_value.remove = AsyncMock(return_value=[])
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.delete("/api/assets/reference-thumbs/img.png")
 
     assert response.status_code == 200
@@ -279,9 +289,9 @@ def test_list_assets_empty():
     """Listing assets from empty bucket should return empty list."""
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.list.return_value = []
+    mock_sb.storage.from_.return_value.list = AsyncMock(return_value=[])
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.get("/api/assets/logos")
 
     assert response.status_code == 200
@@ -292,9 +302,152 @@ def test_list_scripts_bucket():
     """Scripts bucket should be accepted for listing."""
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.list.return_value = []
+    mock_sb.storage.from_.return_value.list = AsyncMock(return_value=[])
 
-    with patch("routes.assets.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.get("/api/assets/scripts")
 
+    assert response.status_code == 200
+
+
+def test_upload_rejects_disallowed_mime_for_image_bucket():
+    """Uploading a non-image file to an image bucket should return 400."""
+    client = create_app("test-user")
+    with _patch_get_client(MagicMock()):
+        response = client.post(
+            "/api/assets/personal-photos/upload",
+            files={"file": ("evil.exe", b"MZ\x90", "application/x-msdownload")},
+        )
+    assert response.status_code == 400
+    assert "type" in response.json()["detail"].lower()
+
+
+def test_upload_rejects_image_in_fonts_bucket():
+    """An image MIME should not be accepted in the fonts bucket."""
+    client = create_app("test-user")
+    with _patch_get_client(MagicMock()):
+        response = client.post(
+            "/api/assets/fonts/upload",
+            files={"file": ("photo.png", b"png-data", "image/png")},
+        )
+    assert response.status_code == 400
+
+
+def test_upload_accepts_woff2_in_fonts_bucket():
+    """font/woff2 should be accepted for fonts bucket."""
+    client = create_app("test-user")
+    mock_sb = MagicMock()
+    mock_sb.storage.from_.return_value.upload = AsyncMock(return_value={})
+    with _patch_get_client(mock_sb):
+        response = client.post(
+            "/api/assets/fonts/upload",
+            files={"file": ("font.woff2", b"woff2-bytes", "font/woff2")},
+        )
+    assert response.status_code == 200
+
+
+def test_validate_safe_filename_rejects_traversal_payloads():
+    """validate_safe_filename must raise on path traversal payloads."""
+    from fastapi import HTTPException
+    from routes.assets import validate_safe_filename
+    import pytest as _pytest
+
+    bad = [
+        "",
+        "..",
+        ".",
+        "../foo.jpg",
+        "..\\foo.jpg",
+        "foo/../bar.jpg",
+        "../../etc/passwd",
+        "good\x00name.jpg",
+        "other-user/file.png",
+        "a..b.jpg",  # defense-in-depth: any '..' substring rejected
+    ]
+    for payload in bad:
+        with _pytest.raises(HTTPException) as exc:
+            validate_safe_filename(payload)
+        assert exc.value.status_code == 400
+
+
+def test_validate_safe_filename_accepts_normal_names():
+    """validate_safe_filename must accept ordinary filenames."""
+    from routes.assets import validate_safe_filename
+
+    for name in ["photo.jpg", "logo_abc123.png", "my-file.webp", "thumb.png"]:
+        validate_safe_filename(name)  # should not raise
+
+
+def test_delete_asset_rejects_traversal_via_http():
+    """Traversal payloads in DELETE must not succeed (any 4xx is acceptable)."""
+    client = create_app("test-user")
+    response = client.delete("/api/assets/personal-photos/..%2Fsomeone-else.jpg")
+    assert 400 <= response.status_code < 500
+
+
+def test_signed_url_rejects_traversal_via_http():
+    """Traversal payloads in signed URL must not succeed."""
+    client = create_app("test-user")
+    response = client.get(
+        "/api/assets/reference-thumbs/signed/..%2Fother-user%2Fthumb.png"
+    )
+    assert 400 <= response.status_code < 500
+
+
+def test_download_asset_rejects_traversal_via_http():
+    """Traversal payloads in download must not succeed."""
+    client = create_app("test-user")
+    response = client.get("/api/assets/personal-photos/..%2Fevil.jpg")
+    assert 400 <= response.status_code < 500
+
+
+def test_batch_signed_urls_rejects_traversal():
+    """Batch signed URLs must reject any filename with traversal payload."""
+    client = create_app("test-user")
+    response = client.post(
+        "/api/assets/batch-signed-urls",
+        json={"bucket": "outputs", "filenames": ["good.png", "../evil.png"]},
+    )
+    assert response.status_code == 400
+
+
+def test_batch_thumbnails_rejects_traversal():
+    """Batch thumbnails must reject any filename with traversal payload."""
+    client = create_app("test-user")
+    response = client.post(
+        "/api/assets/batch-thumbnails",
+        json={
+            "bucket": "personal-photos",
+            "filenames": ["good.jpg", "../evil.jpg"],
+            "w": 200,
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_signed_url_returns_cache_control_header():
+    """Signed URL response should be cacheable for slightly less than the TTL."""
+    client = create_app("test-user")
+    mock_sb = MagicMock()
+    mock_sb.storage.from_.return_value.create_signed_url = AsyncMock(return_value={
+        "signedURL": "https://example/signed?token=x"
+    })
+    with _patch_get_client(mock_sb):
+        response = client.get("/api/assets/outputs/signed/foo.png")
+    assert response.status_code == 200
+    cc = response.headers.get("cache-control", "")
+    assert "max-age" in cc
+    assert "private" in cc
+
+
+def test_upload_accepts_text_in_scripts_bucket():
+    """text/plain should be accepted for scripts bucket."""
+    client = create_app("test-user")
+    mock_sb = MagicMock()
+    mock_sb.storage.from_.return_value.upload = AsyncMock(return_value={})
+    with _patch_get_client(mock_sb):
+        response = client.post(
+            "/api/assets/scripts/upload",
+            files={"file": ("note.txt", b"hello", "text/plain")},
+        )
     assert response.status_code == 200

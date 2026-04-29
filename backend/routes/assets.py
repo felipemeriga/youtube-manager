@@ -4,11 +4,10 @@ import re
 import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from supabase import create_client
-from supabase._async.client import create_client as create_async_client
 
 from auth import get_current_user
 from config import settings
+from services.supabase_pool import get_async_client
 
 
 def sanitize_filename(name: str) -> str:
@@ -41,9 +40,31 @@ MAX_FILE_SIZES = {
     "fonts": 5 * 1024 * 1024,
 }
 
-
-def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_key)
+# Per-bucket MIME whitelist. Reject anything not in the list to prevent
+# malicious uploads (executables, scripts, etc.) ending up in user storage.
+ALLOWED_MIME_TYPES: dict[str, set[str]] = {
+    "reference-thumbs": {"image/jpeg", "image/png", "image/webp", "image/gif"},
+    "personal-photos": {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+    },
+    "logos": {"image/png", "image/jpeg", "image/svg+xml", "image/webp"},
+    "outputs": {"image/png", "image/jpeg", "image/webp"},
+    "scripts": {"text/plain", "text/markdown", "application/json"},
+    "fonts": {
+        "font/ttf",
+        "font/otf",
+        "font/woff",
+        "font/woff2",
+        "application/font-woff",
+        "application/font-woff2",
+        "application/x-font-ttf",
+        "application/x-font-otf",
+    },
+}
 
 
 def validate_bucket(bucket: str):
@@ -54,15 +75,45 @@ def validate_bucket(bucket: str):
         )
 
 
+def validate_safe_filename(filename: str) -> None:
+    """Reject filenames that could be used for path traversal.
+
+    Storage paths are constructed as ``f"{user_id}/{filename}"``; any path
+    separator or ``..`` token would let a caller escape their own folder.
+    """
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+    if "/" in filename or "\\" in filename or "\x00" in filename:
+        raise HTTPException(
+            status_code=400, detail="Filename must not contain path separators"
+        )
+    if filename in (".", "..") or ".." in filename:
+        raise HTTPException(
+            status_code=400, detail="Filename must not reference parent directories"
+        )
+
+
+def validate_content_type(bucket: str, content_type: str | None):
+    """Reject uploads whose declared content-type isn't whitelisted for the bucket."""
+    allowed = ALLOWED_MIME_TYPES.get(bucket, set())
+    if not content_type or content_type not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid file type '{content_type}' for bucket '{bucket}'. "
+                f"Allowed: {sorted(allowed)}"
+            ),
+        )
+
+
 @router.get("/api/assets/{bucket}")
 async def list_assets(bucket: str, user_id: str = Depends(get_current_user)):
     validate_bucket(bucket)
-    sb = get_supabase()
-    files = sb.storage.from_(bucket).list(path=user_id)
+    sb = await get_async_client()
+    bucket_api = sb.storage.from_(bucket)
+    files = await bucket_api.list(path=user_id)
     for f in files:
-        f["public_url"] = sb.storage.from_(bucket).get_public_url(
-            f"{user_id}/{f['name']}"
-        )
+        f["public_url"] = await bucket_api.get_public_url(f"{user_id}/{f['name']}")
     return files
 
 
@@ -71,6 +122,7 @@ async def upload_asset(
     bucket: str, file: UploadFile = File(...), user_id: str = Depends(get_current_user)
 ):
     validate_bucket(bucket)
+    validate_content_type(bucket, file.content_type)
     content = await file.read()
     max_size = MAX_FILE_SIZES[bucket]
     if len(content) > max_size:
@@ -80,7 +132,7 @@ async def upload_asset(
 
     import uuid
 
-    sb = get_supabase()
+    sb = await get_async_client()
     safe_name = sanitize_filename(file.filename or "file")
     # Add unique prefix to avoid 409 Duplicate on re-uploads
     name_parts = safe_name.rsplit(".", 1)
@@ -89,7 +141,7 @@ async def upload_asset(
     else:
         unique_name = f"{safe_name}_{uuid.uuid4().hex[:6]}"
     storage_path = f"{user_id}/{unique_name}"
-    sb.storage.from_(bucket).upload(
+    await sb.storage.from_(bucket).upload(
         storage_path, content, {"content-type": file.content_type}
     )
 
@@ -103,13 +155,18 @@ async def upload_asset(
     return {"name": unique_name, "bucket": bucket, "path": storage_path}
 
 
+# Limit concurrent photo indexing to avoid API quota exhaustion
+_INDEX_SEMAPHORE = asyncio.Semaphore(3)
+
+
 async def _index_uploaded_photo(
     user_id: str, filename: str, image_bytes: bytes
 ) -> None:
     from services.photo_indexer import index_photo
 
-    sb = await create_async_client(settings.supabase_url, settings.supabase_service_key)
-    await index_photo(sb, user_id, filename, image_bytes)
+    async with _INDEX_SEMAPHORE:
+        sb = await get_async_client()
+        await index_photo(sb, user_id, filename, image_bytes)
 
 
 @router.post("/api/assets/personal-photos/reindex")
@@ -121,16 +178,12 @@ async def reindex_photos(user_id: str = Depends(get_current_user)):
             detail="Anthropic and Voyage API keys required for indexing",
         )
 
-    sb_sync = get_supabase()
-    files = sb_sync.storage.from_("personal-photos").list(path=user_id)
+    sb_async = await get_async_client()
+    files = await sb_async.storage.from_("personal-photos").list(path=user_id)
     photo_names = [f["name"] for f in files if f.get("name")]
 
     if not photo_names:
         return {"indexed": 0, "total": 0}
-
-    sb_async = await create_async_client(
-        settings.supabase_url, settings.supabase_service_key
-    )
 
     # Check which are already indexed
     existing = (
@@ -167,9 +220,10 @@ async def delete_asset(
     bucket: str, filename: str, user_id: str = Depends(get_current_user)
 ):
     validate_bucket(bucket)
-    sb = get_supabase()
+    validate_safe_filename(filename)
+    sb = await get_async_client()
     storage_path = f"{user_id}/{filename}"
-    sb.storage.from_(bucket).remove([storage_path])
+    await sb.storage.from_(bucket).remove([storage_path])
     return {"status": "deleted", "name": filename}
 
 
@@ -177,13 +231,23 @@ async def delete_asset(
 async def get_signed_url(
     bucket: str, filename: str, user_id: str = Depends(get_current_user)
 ):
-    """Get a temporary signed URL for an asset (valid 1 hour)."""
+    """Get a temporary signed URL for an asset (valid 1 hour).
+
+    The response is marked cacheable for slightly less than the URL TTL so a
+    refresh of the same view doesn't keep regenerating the URL.
+    """
     validate_bucket(bucket)
-    sb = get_supabase()
+    validate_safe_filename(filename)
+    sb = await get_async_client()
     storage_path = f"{user_id}/{filename}"
-    result = sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
+    result = await sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
     if result and result.get("signedURL"):
-        return {"signed_url": result["signedURL"]}
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            content={"signed_url": result["signedURL"]},
+            headers={"Cache-Control": "private, max-age=3300"},
+        )
     raise HTTPException(status_code=404, detail="File not found")
 
 
@@ -198,9 +262,11 @@ async def get_batch_signed_urls(
     bucket = request.get("bucket", "")
     filenames = request.get("filenames", [])
     validate_bucket(bucket)
-    sb = get_supabase()
+    for f in filenames:
+        validate_safe_filename(f)
+    sb = await get_async_client()
     paths = [f"{user_id}/{f}" for f in filenames]
-    result = sb.storage.from_(bucket).create_signed_urls(paths, 3600)
+    result = await sb.storage.from_(bucket).create_signed_urls(paths, 3600)
     return result
 
 
@@ -225,6 +291,8 @@ async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current
     filenames = request.get("filenames", [])
     w = request.get("w", 200)
     validate_bucket(bucket)
+    for f in filenames:
+        validate_safe_filename(f)
 
     # Return cached thumbnails immediately, only fetch missing ones
     result: dict[str, str] = {}
@@ -240,8 +308,8 @@ async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current
     if not to_fetch:
         return result
 
-    # Single shared client for all downloads (avoid 50 TCP connections)
-    sb = await create_async_client(settings.supabase_url, settings.supabase_service_key)
+    # Single shared client for all downloads
+    sb = await get_async_client()
     sem = asyncio.Semaphore(20)
 
     async def _resize_one(name: str) -> tuple[str, str]:
@@ -282,10 +350,23 @@ async def download_asset(
     user_id: str = Depends(get_current_user),
     w: int | None = None,
 ):
+    import asyncio
+
     validate_bucket(bucket)
-    sb = get_supabase()
+    validate_safe_filename(filename)
     storage_path = f"{user_id}/{filename}"
-    data = sb.storage.from_(bucket).download(storage_path)
+
+    # Retry on transient Supabase errors (502, connection issues)
+    data = None
+    sb = await get_async_client()
+    for attempt in range(3):
+        try:
+            data = await sb.storage.from_(bucket).download(storage_path)
+            break
+        except Exception:
+            if attempt == 2:
+                raise
+            await asyncio.sleep(0.5)
 
     # Optional resize: ?w=200 returns a JPEG thumbnail
     if w and 0 < w <= 1024:
@@ -300,10 +381,15 @@ async def download_asset(
         data = buf.getvalue()
         from fastapi.responses import Response
 
+        # Filenames are uuid-suffixed at upload time, so the bytes for a given
+        # ?w= preview never change. `immutable` lets the browser skip revalidation
+        # for the full TTL. `private` (vs public) prevents shared proxies from
+        # caching one user's image and serving it to another — the URL path does
+        # not include user_id, but the response body does.
         return Response(
             content=data,
             media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=3600"},
+            headers={"Cache-Control": "private, max-age=604800, immutable"},
         )
 
     from fastapi.responses import Response
@@ -311,5 +397,10 @@ async def download_asset(
     return Response(
         content=data,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # Same reasoning as the ?w= thumbnail above: filenames are uuid-suffixed
+            # at upload, so bytes for a given URL never change.
+            "Cache-Control": "private, max-age=604800, immutable",
+        },
     )

@@ -12,6 +12,21 @@ interface AssetFile {
   created_at?: string;
 }
 
+const EMPTY_HINTS: Record<string, string> = {
+  "reference-thumbs":
+    "Faça upload de 3-5 thumbnails que representam seu estilo — o agente usa elas para definir layout, tipografia e composição.",
+  "personal-photos":
+    "Suba fotos suas em diferentes poses e expressões. O agente vai escolher a foto ideal para cada thumbnail.",
+  logos:
+    "Adicione o logo do canal. Ele será posicionado nas thumbnails seguindo as referências.",
+  outputs:
+    "Suas thumbnails geradas vão aparecer aqui depois de salvas em uma conversa.",
+  scripts:
+    "Os roteiros que você salvar nas conversas vão aparecer aqui.",
+  fonts:
+    "Suba arquivos .ttf, .otf ou .woff para que o agente use suas fontes na tipografia.",
+};
+
 interface AssetGridProps {
   files: AssetFile[];
   bucket: string;
@@ -235,9 +250,21 @@ export default function AssetGrid({
   onSelectAll,
 }: AssetGridProps) {
   if (files.length === 0) {
+    const hint = EMPTY_HINTS[bucket] ?? "Nenhum arquivo aqui ainda.";
     return (
-      <Box sx={{ textAlign: "center", py: 4 }}>
-        <Typography color="text.secondary">Nenhum arquivo</Typography>
+      <Box sx={{ textAlign: "center", py: 6, px: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{ color: "rgba(255,255,255,0.55)", fontWeight: 600, mb: 0.75 }}
+        >
+          Nenhum arquivo aqui ainda
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{ color: "rgba(255,255,255,0.4)", lineHeight: 1.5 }}
+        >
+          {hint}
+        </Typography>
       </Box>
     );
   }
@@ -339,6 +366,8 @@ export default function AssetGrid({
                   component="img"
                   src={file.public_url || `/api/assets/${bucket}/${file.name}`}
                   alt={file.name}
+                  loading="lazy"
+                  decoding="async"
                   sx={{
                     width: "100%",
                     height: 280,

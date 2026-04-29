@@ -3,11 +3,11 @@ import io
 import logging
 import time
 import uuid
+from collections import OrderedDict
 
 from PIL import Image
-from supabase._async.client import create_client as create_async_client
-
 from config import settings
+from services.supabase_pool import get_async_client
 from services.llm import ask_llm
 from services.nano_banana import (
     generate_background,
@@ -25,9 +25,12 @@ from services.thumbnail_state import (
 
 logger = logging.getLogger(__name__)
 
-# In-process asset cache: (user_id, bucket) -> (timestamp, data)
-_asset_cache: dict[tuple[str, str], tuple[float, list[bytes]]] = {}
+# In-process asset cache: (user_id, bucket) -> (timestamp, data).
+# Bounded LRU so the worker process can't grow without limit as new
+# user_id/bucket pairs are seen.
+_asset_cache: "OrderedDict[tuple[str, str], tuple[float, list[bytes]]]" = OrderedDict()
 _CACHE_TTL = 600  # 10 minutes
+_CACHE_MAX = 64  # ~ 4 buckets * 16 active users
 
 CREATIVE_BRIEF_MODEL = "claude-haiku-4-5-20251001"
 
@@ -42,9 +45,7 @@ TOPIC_RESEARCH_SYSTEM = (
 
 
 async def _get_supabase():
-    return await create_async_client(
-        settings.supabase_url, settings.supabase_service_key
-    )
+    return await get_async_client()
 
 
 async def _research_topic(topic: str) -> str:
@@ -66,23 +67,26 @@ async def _research_topic(topic: str) -> str:
 async def _fetch_all_assets(_sb_unused, user_id: str, bucket: str) -> list[bytes]:
     """Fetch all assets from a bucket with in-process caching.
 
-    Uses fresh Supabase clients to avoid HTTP/2 connection pool exhaustion.
+    Uses a single shared client with concurrent downloads via semaphore.
     """
     cache_key = (user_id, bucket)
     cached = _asset_cache.get(cache_key)
     if cached:
         ts, data = cached
         if time.time() - ts < _CACHE_TTL:
+            _asset_cache.move_to_end(cache_key)
             logger.debug(
                 "asset cache hit for %s/%s (%d items)", user_id, bucket, len(data)
             )
             return data
+        # Expired — drop and refetch
+        _asset_cache.pop(cache_key, None)
 
-    # Fresh client for listing
+    sb = await _get_supabase()
+
     for attempt in range(3):
         try:
-            list_sb = await _get_supabase()
-            files = await list_sb.storage.from_(bucket).list(path=user_id)
+            files = await sb.storage.from_(bucket).list(path=user_id)
             break
         except Exception:
             if attempt == 2:
@@ -94,21 +98,25 @@ async def _fetch_all_assets(_sb_unused, user_id: str, bucket: str) -> list[bytes
     if not names:
         return []
 
-    # Download sequentially with fresh clients to avoid connection pool issues
-    data = []
-    for name in names:
-        for attempt in range(3):
-            try:
-                dl_sb = await _get_supabase()
-                result = await dl_sb.storage.from_(bucket).download(f"{user_id}/{name}")
-                data.append(result)
-                break
-            except Exception:
-                if attempt == 2:
-                    logger.warning("Failed to download %s/%s", bucket, name)
-                await asyncio.sleep(0.5)
+    sem = asyncio.Semaphore(10)
+
+    async def _dl(name: str) -> bytes | None:
+        async with sem:
+            for attempt in range(3):
+                try:
+                    return await sb.storage.from_(bucket).download(f"{user_id}/{name}")
+                except Exception:
+                    if attempt == 2:
+                        logger.warning("Failed to download %s/%s", bucket, name)
+                    await asyncio.sleep(0.5)
+            return None
+
+    results = await asyncio.gather(*[_dl(n) for n in names])
+    data = [r for r in results if r is not None]
 
     _asset_cache[cache_key] = (time.time(), data)
+    while len(_asset_cache) > _CACHE_MAX:
+        _asset_cache.popitem(last=False)
     logger.info(
         "asset cache miss for %s/%s — downloaded %d items", user_id, bucket, len(data)
     )
@@ -239,13 +247,15 @@ async def generate_background_node(state: ThumbnailState) -> dict:
 
     gen_results = await asyncio.gather(*[_gen_bg(p) for p in platforms])
 
-    # Upload sequentially to avoid connection pool exhaustion
-    background_urls = {}
-    for platform, bg_bytes in gen_results:
+    # Upload all platforms in parallel (shared singleton client handles pooling)
+    async def _upload_bg(platform: str, bg_bytes: bytes):
         original_path, preview_path = await _upload_image_with_preview(
             user_id, f"bg_{platform}", bg_bytes
         )
-        background_urls[platform] = {"url": original_path, "preview_url": preview_path}
+        return platform, {"url": original_path, "preview_url": preview_path}
+
+    upload_results = await asyncio.gather(*[_upload_bg(p, b) for p, b in gen_results])
+    background_urls = dict(upload_results)
 
     return {
         "background_urls": background_urls,
@@ -337,12 +347,14 @@ async def composite_node(state: ThumbnailState) -> dict:
 
     gen_results = await asyncio.gather(*[_gen_comp(p) for p in platforms])
 
-    composite_urls = {}
-    for platform, comp_bytes in gen_results:
+    async def _upload_comp(platform: str, comp_bytes: bytes):
         original_path, preview_path = await _upload_image_with_preview(
             user_id, f"comp_{platform}", comp_bytes
         )
-        composite_urls[platform] = {"url": original_path, "preview_url": preview_path}
+        return platform, {"url": original_path, "preview_url": preview_path}
+
+    upload_results = await asyncio.gather(*[_upload_comp(p, b) for p, b in gen_results])
+    composite_urls = dict(upload_results)
 
     return {"composite_urls": composite_urls, "extra_instructions": None}
 
@@ -404,12 +416,14 @@ async def add_text_node(state: ThumbnailState) -> dict:
 
     gen_results = await asyncio.gather(*[_gen_text(p) for p in platforms])
 
-    final_urls = {}
-    for platform, final_bytes in gen_results:
+    async def _upload_text(platform: str, final_bytes: bytes):
         original_path, preview_path = await _upload_image_with_preview(
             user_id, f"thumb_{platform}", final_bytes
         )
-        final_urls[platform] = {"url": original_path, "preview_url": preview_path}
+        return platform, {"url": original_path, "preview_url": preview_path}
+
+    upload_results = await asyncio.gather(*[_upload_text(p, b) for p, b in gen_results])
+    final_urls = dict(upload_results)
 
     return {"final_urls": final_urls}
 
@@ -420,8 +434,7 @@ async def save_node(state: ThumbnailState) -> dict:
     user_id = state["user_id"]
     final_urls = state.get("final_urls") or {}
 
-    saved_urls = {}
-    for platform, paths in final_urls.items():
+    async def _save_one(platform: str, paths) -> tuple[str, dict]:
         temp_url = paths["url"] if isinstance(paths, dict) else paths
         image_data = await sb.storage.from_("outputs").download(temp_url)
         final_filename = f"thumbnail_{platform}_{uuid.uuid4().hex[:8]}.png"
@@ -429,7 +442,12 @@ async def save_node(state: ThumbnailState) -> dict:
         await sb.storage.from_("outputs").upload(
             final_path, image_data, {"content-type": "image/png"}
         )
-        saved_urls[platform] = {"url": final_path, "preview_url": ""}
+        return platform, {"url": final_path, "preview_url": ""}
+
+    save_results = await asyncio.gather(
+        *[_save_one(p, paths) for p, paths in final_urls.items()]
+    )
+    saved_urls = dict(save_results)
 
     # Extract style memory in background (don't block the save)
     asyncio.create_task(extract_and_store_memory(sb, user_id, state["conversation_id"]))

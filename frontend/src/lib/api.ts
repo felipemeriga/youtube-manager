@@ -11,6 +11,27 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+async function readErrorMessage(response: Response, fallback: string) {
+  try {
+    const body = await response.json();
+    if (body && typeof body.detail === "string") return body.detail;
+    if (body && typeof body.error === "string") return body.error;
+    if (body && typeof body.message === "string") return body.message;
+  } catch {
+    // Ignore parse failures and use fallback.
+  }
+  return fallback;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
@@ -21,7 +42,11 @@ export async function apiFetch<T>(
     headers: { ...headers, ...options.headers },
   });
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const message = await readErrorMessage(
+      response,
+      `API error: ${response.status}`
+    );
+    throw new ApiError(response.status, message);
   }
   return response.json();
 }
@@ -44,7 +69,13 @@ export async function apiUpload(
     body: formData,
   });
 
-  if (!response.ok) throw new Error(`Upload error: ${response.status}`);
+  if (!response.ok) {
+    const message = await readErrorMessage(
+      response,
+      `Upload error: ${response.status}`
+    );
+    throw new ApiError(response.status, message);
+  }
   return response.json();
 }
 
@@ -170,8 +201,17 @@ export const createConversation = (mode: string = "thumbnail") =>
     method: "POST",
     body: JSON.stringify({ mode }),
   });
-export const getConversation = (id: string) =>
-  apiFetch<Record<string, unknown>>(`/api/conversations/${id}`);
+export const getConversation = (
+  id: string,
+  limit: number = 50,
+  before?: string
+) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (before) params.set("before", before);
+  return apiFetch<Record<string, unknown> & { has_more?: boolean }>(
+    `/api/conversations/${id}?${params}`
+  );
+};
 export const deleteConversation = (id: string) =>
   apiFetch<void>(`/api/conversations/${id}`, { method: "DELETE" });
 export const updateConversation = (id: string, data: { model?: string }) =>
@@ -184,8 +224,8 @@ export const getConversationStatus = (id: string) =>
     `/api/conversations/${id}/status`
   );
 
-export const listAssets = (bucket: string) =>
-  apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`);
+export const listAssets = (bucket: string, signal?: AbortSignal) =>
+  apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`, { signal });
 
 export const getBatchSignedUrls = (bucket: string, filenames: string[]) =>
   apiFetch<Array<{ signedURL: string; path: string; error: string | null }>>(

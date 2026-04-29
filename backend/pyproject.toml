@@ -18,6 +18,9 @@ dependencies = [
     "langgraph>=0.4.0",
     "langgraph-checkpoint-postgres>=2.0.0",
     "psycopg[binary]>=3.2.0",
+    "yt-dlp>=2024.10.0",
+    "mediapipe>=0.10.18",
+    "openai>=1.50.0",
 ]
 
 [dependency-groups]

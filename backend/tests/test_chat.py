@@ -1,5 +1,5 @@
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -19,10 +19,13 @@ def create_app(user_id: str) -> TestClient:
 
 
 def mock_supabase_with_mode(mode: str = "thumbnail"):
+    """Build an async-Supabase mock whose conversation lookup returns ``mode``."""
     mock_sb = MagicMock()
-    mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
-        "mode": mode
-    }
+    conv_result = MagicMock()
+    conv_result.data = {"mode": mode}
+    mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute = AsyncMock(
+        return_value=conv_result
+    )
     return mock_sb
 
 
@@ -36,7 +39,9 @@ def test_chat_endpoint_returns_sse_stream():
     mock_sb = mock_supabase_with_mode("thumbnail")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.get_async_client", new_callable=AsyncMock, return_value=mock_sb
+        ),
         patch("routes.chat.thumbnail_stream", side_effect=fake_stream),
     ):
         response = client.post(
@@ -61,7 +66,9 @@ def test_chat_endpoint_default_type_is_text():
     mock_sb = mock_supabase_with_mode("thumbnail")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.get_async_client", new_callable=AsyncMock, return_value=mock_sb
+        ),
         patch("routes.chat.thumbnail_stream", side_effect=fake_stream) as mock_thumb,
     ):
         response = client.post(
@@ -116,7 +123,9 @@ def test_chat_endpoint_stream_body_content():
     mock_sb = mock_supabase_with_mode("thumbnail")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.get_async_client", new_callable=AsyncMock, return_value=mock_sb
+        ),
         patch("routes.chat.thumbnail_stream", side_effect=fake_stream),
     ):
         response = client.post(
@@ -142,7 +151,9 @@ def test_chat_dispatches_to_script_pipeline_for_script_mode():
     mock_sb = mock_supabase_with_mode("script")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.get_async_client", new_callable=AsyncMock, return_value=mock_sb
+        ),
         patch(
             "routes.chat.handle_script_chat_message", side_effect=fake_stream
         ) as mock_script,
@@ -176,7 +187,9 @@ def test_chat_dispatches_to_thumbnail_stream_for_thumbnail_mode():
     mock_sb = mock_supabase_with_mode("thumbnail")
 
     with (
-        patch("routes.chat.get_supabase", return_value=mock_sb),
+        patch(
+            "routes.chat.get_async_client", new_callable=AsyncMock, return_value=mock_sb
+        ),
         patch(
             "routes.chat.thumbnail_stream", side_effect=fake_stream
         ) as mock_thumbnail,

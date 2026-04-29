@@ -1,28 +1,20 @@
-import asyncio
-import base64
 import json
 import logging
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from supabase import create_client
-from supabase._async.client import create_client as create_async_client
 from langgraph.types import Command
 
 from auth import get_current_user
-from config import settings
 from services.script_pipeline import handle_script_chat_message
+from services.conversation_title import derive_title
+from services.supabase_pool import get_async_client
 from services.thumbnail_graph import get_thumbnail_graph
-from services.thumbnail_nodes import _make_preview
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_key)
 
 
 class ChatRequest(BaseModel):
@@ -38,9 +30,7 @@ def sse_event(data: dict) -> str:
 
 
 async def _get_async_supabase():
-    return await create_async_client(
-        settings.supabase_url, settings.supabase_service_key
-    )
+    return await get_async_client()
 
 
 async def _save_message(sb, conversation_id, role, content, msg_type, image_url=None):
@@ -171,7 +161,7 @@ async def thumbnail_stream(
             await _save_message(sb, conversation_id, "user", content, "text")
             await (
                 sb.table("conversations")
-                .update({"title": content[:50]})
+                .update({"title": derive_title(content)})
                 .eq("id", conversation_id)
                 .execute()
             )
@@ -223,32 +213,8 @@ async def thumbnail_stream(
                             if isinstance(paths, dict)
                             else ""
                         )
-
-                        # Download preview (or original as fallback) for tiny base64
-                        preview_data = None
-                        for attempt in range(3):
-                            try:
-                                dl_path = preview_url or url
-                                preview_data = await sb.storage.from_(
-                                    "outputs"
-                                ).download(dl_path)
-                                break
-                            except Exception:
-                                if attempt < 2:
-                                    await asyncio.sleep(1)
-
-                        if not preview_data:
-                            continue
-
-                        # Generate tiny ~200px placeholder for SSE
-                        try:
-                            tiny_bytes = _make_preview(preview_data, max_edge=200)
-                            tiny_b64 = base64.b64encode(tiny_bytes).decode()
-                        except Exception:
-                            tiny_b64 = base64.b64encode(preview_data).decode()
-
                         images_payload[platform] = {
-                            "preview_base64": tiny_b64,
+                            "preview_base64": "",
                             "preview_url": preview_url,
                             "url": url,
                         }
@@ -393,7 +359,6 @@ async def conversation_status(
                     if msg_type in ("background", "composite", "image"):
                         image_urls = interrupt_value.get("image_urls") or {}
                         if image_urls:
-                            sb = await _get_async_supabase()
                             images_payload: dict = {}
                             for platform, paths in image_urls.items():
                                 url = (
@@ -406,19 +371,8 @@ async def conversation_status(
                                     if isinstance(paths, dict)
                                     else ""
                                 )
-                                try:
-                                    dl_path = preview_url or url
-                                    preview_data = await sb.storage.from_(
-                                        "outputs"
-                                    ).download(dl_path)
-                                    tiny_bytes = _make_preview(
-                                        preview_data, max_edge=200
-                                    )
-                                    tiny_b64 = base64.b64encode(tiny_bytes).decode()
-                                except Exception:
-                                    tiny_b64 = ""
                                 images_payload[platform] = {
-                                    "preview_base64": tiny_b64,
+                                    "preview_base64": "",
                                     "preview_url": preview_url,
                                     "url": url,
                                 }
@@ -470,8 +424,8 @@ async def conversation_status(
 
 @router.post("/api/chat")
 async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
-    sb = get_supabase()
-    conv = (
+    sb = await get_async_client()
+    conv = await (
         sb.table("conversations")
         .select("mode, model")
         .eq("id", request.conversation_id)
@@ -479,8 +433,8 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         .maybe_single()
         .execute()
     )
-    mode = conv.data.get("mode", "thumbnail") if conv.data else "thumbnail"
-    model = conv.data.get("model") if conv.data else None
+    mode = conv.data.get("mode", "thumbnail") if conv and conv.data else "thumbnail"
+    model = conv.data.get("model") if conv and conv.data else None
 
     if mode == "script":
         stream = handle_script_chat_message(

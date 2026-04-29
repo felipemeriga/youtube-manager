@@ -315,8 +315,22 @@ export default function AssetsPage() {
   }, [currentBucket.key]);
 
   useEffect(() => {
-    loadFiles();
-  }, [loadFiles]);
+    const ctrl = new AbortController();
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await listAssets(currentBucket.key, ctrl.signal);
+        if (!ctrl.signal.aborted) {
+          setFiles(data as unknown as AssetFile[]);
+        }
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError") throw err;
+      } finally {
+        if (!ctrl.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => ctrl.abort();
+  }, [currentBucket.key]);
 
   // Clear selection when switching tabs
   useEffect(() => {
@@ -528,10 +542,13 @@ export default function AssetsPage() {
         message: `Indexou ${result.indexed} novas fotos (${result.skipped} já indexadas, ${result.total} total)`,
         severity: "success",
       });
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
       setSnackbar({
         open: true,
-        message: "Falha ao indexar fotos",
+        message: detail
+          ? `Falha ao indexar fotos: ${detail}`
+          : "Falha ao indexar fotos",
         severity: "error",
       });
     } finally {
@@ -551,10 +568,13 @@ export default function AssetsPage() {
       );
       setViewerContent(content);
       setViewerOpen(true);
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
       setSnackbar({
         open: true,
-        message: "Falha ao carregar roteiro",
+        message: detail
+          ? `Falha ao carregar roteiro: ${detail}`
+          : "Falha ao carregar roteiro",
         severity: "error",
       });
     }
