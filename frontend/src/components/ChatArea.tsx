@@ -87,6 +87,8 @@ export default function ChatArea({
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        // leave room for the mobile hamburger button (top-left)
+        pt: { xs: 5, md: 0 },
       }}
     >
       <Box ref={scrollRef} sx={{ flex: 1, overflow: "auto", py: 2 }}>

@@ -4,6 +4,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  Drawer,
+  IconButton,
   Button,
   Stack,
   Typography,
@@ -12,6 +14,7 @@ import {
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
+import MenuIcon from "@mui/icons-material/Menu";
 import ContextPanel from "../components/ContextPanel";
 import ChatArea from "../components/ChatArea";
 import { useToast } from "../components/ToastProvider";
@@ -64,6 +67,7 @@ export default function ChatPage() {
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showModeDialog, setShowModeDialog] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([
     "youtube",
   ]);
@@ -484,13 +488,53 @@ export default function ChatPage() {
 
   return (
     <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
-      <ContextPanel
-        conversations={conversations}
-        selectedId={selectedId}
-        onSelect={handleSelectConversation}
-        onCreate={handleCreateConversation}
-        onDelete={handleDeleteConversation}
-      />
+      {/* Sidebar: permanent on md+, off-canvas drawer on xs */}
+      <Box sx={{ display: { xs: "none", md: "flex" } }}>
+        <ContextPanel
+          conversations={conversations}
+          selectedId={selectedId}
+          onSelect={handleSelectConversation}
+          onCreate={handleCreateConversation}
+          onDelete={handleDeleteConversation}
+        />
+      </Box>
+      <Drawer
+        variant="temporary"
+        open={mobileDrawerOpen}
+        onClose={() => setMobileDrawerOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: "block", md: "none" },
+          "& .MuiDrawer-paper": { width: 260, boxSizing: "border-box" },
+        }}
+      >
+        <ContextPanel
+          conversations={conversations}
+          selectedId={selectedId}
+          onSelect={handleSelectConversation}
+          onCreate={handleCreateConversation}
+          onDelete={handleDeleteConversation}
+          onAfterNavigate={() => setMobileDrawerOpen(false)}
+        />
+      </Drawer>
+      {/* Hamburger toggle, mobile-only */}
+      <IconButton
+        onClick={() => setMobileDrawerOpen(true)}
+        aria-label="Abrir conversas"
+        sx={{
+          display: { xs: "flex", md: "none" },
+          position: "fixed",
+          top: 8,
+          left: 8,
+          zIndex: 1200,
+          color: "rgba(255,255,255,0.7)",
+          backgroundColor: "rgba(18,18,25,0.85)",
+          backdropFilter: "blur(8px)",
+          "&:hover": { backgroundColor: "rgba(30,30,40,0.95)" },
+        }}
+      >
+        <MenuIcon />
+      </IconButton>
       <ChatArea
         messages={messages}
         streamingContent={streamingContent}

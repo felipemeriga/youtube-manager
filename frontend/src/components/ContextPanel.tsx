@@ -28,6 +28,8 @@ interface ContextPanelProps {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
+  /** Called after a navigation action so the parent can close a mobile drawer. */
+  onAfterNavigate?: () => void;
 }
 
 export default function ContextPanel({
@@ -36,6 +38,7 @@ export default function ContextPanel({
   onSelect,
   onCreate,
   onDelete,
+  onAfterNavigate,
 }: ContextPanelProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -51,8 +54,9 @@ export default function ContextPanel({
   return (
     <Box
       sx={{
-        width: 220,
-        borderRight: "1px solid rgba(255,255,255,0.06)",
+        width: { xs: "100%", md: 220 },
+        height: "100%",
+        borderRight: { xs: "none", md: "1px solid rgba(255,255,255,0.06)" },
         backgroundColor: "rgba(18, 18, 25, 0.95)",
         backdropFilter: "blur(16px)",
         display: "flex",
@@ -80,7 +84,10 @@ export default function ContextPanel({
         </Typography>
         <IconButton
           size="small"
-          onClick={onCreate}
+          onClick={() => {
+            onCreate();
+            onAfterNavigate?.();
+          }}
           sx={{
             color: "rgba(255,255,255,0.4)",
             "&:hover": {
@@ -158,7 +165,10 @@ export default function ContextPanel({
           <ListItemButton
             key={conv.id}
             selected={conv.id === selectedId}
-            onClick={() => onSelect(conv.id)}
+            onClick={() => {
+              onSelect(conv.id);
+              onAfterNavigate?.();
+            }}
             onMouseEnter={() => setHoveredId(conv.id)}
             onMouseLeave={() => setHoveredId(null)}
             sx={{
