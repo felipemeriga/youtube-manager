@@ -212,7 +212,7 @@ function MessageBubble({
 
       <Box
         sx={{
-          maxWidth: "70%",
+          maxWidth: { xs: "85%", sm: "70%" },
           p: 2,
           borderRadius: 2.5,
           backgroundColor: isUser
