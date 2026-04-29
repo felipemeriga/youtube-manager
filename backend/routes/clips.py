@@ -60,3 +60,34 @@ async def create_job(req: CreateJobRequest, user_id: str = Depends(get_current_u
     ))
     register_task(job["id"], task)
     return job
+
+
+@router.get("/jobs")
+async def list_jobs(user_id: str = Depends(get_current_user)):
+    sb = await get_async_client()
+    res = await (
+        sb.table("clip_jobs")
+        .select("id, youtube_url, title, duration_seconds, status, progress_pct, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return res.data
+
+
+@router.get("/jobs/{job_id}")
+async def get_job(job_id: str, user_id: str = Depends(get_current_user)):
+    sb = await get_async_client()
+    job_res = await (
+        sb.table("clip_jobs").select("*").eq("id", job_id).eq("user_id", user_id).single().execute()
+    )
+    if not job_res.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    cand_res = await (
+        sb.table("clip_candidates")
+        .select("*")
+        .eq("job_id", job_id)
+        .order("hype_score", desc=True)
+        .execute()
+    )
+    return {**job_res.data, "candidates": cand_res.data}
