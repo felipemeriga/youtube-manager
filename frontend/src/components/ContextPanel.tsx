@@ -2,6 +2,7 @@ import {
   Box,
   Typography,
   IconButton,
+  InputBase,
   List,
   ListItemButton,
   ListItemText,
@@ -10,7 +11,9 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
-import { useState } from "react";
+import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
+import { useMemo, useState } from "react";
 
 interface Conversation {
   id: string;
@@ -35,6 +38,15 @@ export default function ContextPanel({
   onDelete,
 }: ContextPanelProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((c) =>
+      (c.title ?? "Nova conversa").toLowerCase().includes(q)
+    );
+  }, [conversations, query]);
 
   return (
     <Box
@@ -82,8 +94,67 @@ export default function ContextPanel({
         </IconButton>
       </Box>
 
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 0.5,
+          mx: 1,
+          mt: 1,
+          mb: 0.5,
+          px: 1,
+          py: 0.5,
+          borderRadius: 1.5,
+          backgroundColor: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          "&:focus-within": {
+            borderColor: "rgba(124,58,237,0.5)",
+            backgroundColor: "rgba(255,255,255,0.05)",
+          },
+        }}
+      >
+        <SearchIcon sx={{ fontSize: 16, color: "rgba(255,255,255,0.35)" }} />
+        <InputBase
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar..."
+          sx={{
+            flex: 1,
+            color: "rgba(255,255,255,0.85)",
+            fontSize: 12,
+            "& input::placeholder": { color: "rgba(255,255,255,0.3)", opacity: 1 },
+          }}
+        />
+        {query && (
+          <IconButton
+            size="small"
+            onClick={() => setQuery("")}
+            sx={{
+              p: 0.25,
+              color: "rgba(255,255,255,0.35)",
+              "&:hover": { color: "rgba(255,255,255,0.7)" },
+            }}
+          >
+            <ClearIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        )}
+      </Box>
+
       <List sx={{ flex: 1, overflow: "auto", px: 0.75, py: 0.75 }}>
-        {conversations.map((conv) => (
+        {filtered.length === 0 && query && (
+          <Typography
+            variant="caption"
+            sx={{
+              display: "block",
+              textAlign: "center",
+              color: "rgba(255,255,255,0.35)",
+              py: 2,
+            }}
+          >
+            Nenhuma conversa encontrada
+          </Typography>
+        )}
+        {filtered.map((conv) => (
           <ListItemButton
             key={conv.id}
             selected={conv.id === selectedId}
