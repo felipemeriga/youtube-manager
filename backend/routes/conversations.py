@@ -23,9 +23,12 @@ router = APIRouter()
 @router.get("/api/conversations")
 async def list_conversations(user_id: str = Depends(get_current_user)):
     sb = get_sync_client()
+    # Only fetch fields the sidebar list actually renders. Full conversation
+    # details (including the message body and model) come from the detail
+    # endpoint when a row is selected.
     result = (
         sb.table("conversations")
-        .select("*")
+        .select("id, title, updated_at, created_at, mode")
         .eq("user_id", user_id)
         .order("updated_at", desc=True)
         .execute()
