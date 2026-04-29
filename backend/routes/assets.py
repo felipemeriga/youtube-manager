@@ -75,6 +75,24 @@ def validate_bucket(bucket: str):
         )
 
 
+def validate_safe_filename(filename: str) -> None:
+    """Reject filenames that could be used for path traversal.
+
+    Storage paths are constructed as ``f"{user_id}/{filename}"``; any path
+    separator or ``..`` token would let a caller escape their own folder.
+    """
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+    if "/" in filename or "\\" in filename or "\x00" in filename:
+        raise HTTPException(
+            status_code=400, detail="Filename must not contain path separators"
+        )
+    if filename in (".", "..") or ".." in filename:
+        raise HTTPException(
+            status_code=400, detail="Filename must not reference parent directories"
+        )
+
+
 def validate_content_type(bucket: str, content_type: str | None):
     """Reject uploads whose declared content-type isn't whitelisted for the bucket."""
     allowed = ALLOWED_MIME_TYPES.get(bucket, set())
@@ -205,6 +223,7 @@ async def delete_asset(
     bucket: str, filename: str, user_id: str = Depends(get_current_user)
 ):
     validate_bucket(bucket)
+    validate_safe_filename(filename)
     sb = get_sync_client()
     storage_path = f"{user_id}/{filename}"
     sb.storage.from_(bucket).remove([storage_path])
@@ -217,6 +236,7 @@ async def get_signed_url(
 ):
     """Get a temporary signed URL for an asset (valid 1 hour)."""
     validate_bucket(bucket)
+    validate_safe_filename(filename)
     sb = get_sync_client()
     storage_path = f"{user_id}/{filename}"
     result = sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
@@ -236,6 +256,8 @@ async def get_batch_signed_urls(
     bucket = request.get("bucket", "")
     filenames = request.get("filenames", [])
     validate_bucket(bucket)
+    for f in filenames:
+        validate_safe_filename(f)
     sb = get_sync_client()
     paths = [f"{user_id}/{f}" for f in filenames]
     result = sb.storage.from_(bucket).create_signed_urls(paths, 3600)
@@ -263,6 +285,8 @@ async def get_batch_thumbnails(request: dict, user_id: str = Depends(get_current
     filenames = request.get("filenames", [])
     w = request.get("w", 200)
     validate_bucket(bucket)
+    for f in filenames:
+        validate_safe_filename(f)
 
     # Return cached thumbnails immediately, only fetch missing ones
     result: dict[str, str] = {}
@@ -321,6 +345,7 @@ async def download_asset(
     w: int | None = None,
 ):
     validate_bucket(bucket)
+    validate_safe_filename(filename)
     sb = get_sync_client()
     storage_path = f"{user_id}/{filename}"
     data = sb.storage.from_(bucket).download(storage_path)
