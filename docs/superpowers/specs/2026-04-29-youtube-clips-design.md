@@ -18,7 +18,7 @@ Let the user paste a YouTube URL of one of their own videos and get back a ranke
 | App placement | Brand new top-level `/clips` page; not a conversation mode |
 | Max input video duration | ≤60 min, with confirmation modal between 30–60 min |
 | Transcript source | YouTube auto-captions via yt-dlp; Whisper fallback when missing or broken |
-| Captions | Simple burned-in word-level captions, **only on the user's selected final renders** (previews stay caption-free) |
+| Captions | Simple burned-in cue-level captions (one transcript cue at a time), **only on the user's selected final renders** (previews stay caption-free) |
 | Candidate count per video | Adaptive: `min(20, ceil(duration_min / 2))` |
 | Job execution model | DB-backed `clip_jobs` row + asyncio task in FastAPI process + SSE progress (matches existing thumbnail/script SSE pattern) |
 | Storage retention | Source MP4 and previews auto-delete 7 days after job creation; finals persist until manually deleted |
@@ -254,7 +254,7 @@ clips/
 ## Retention / cleanup
 
 - `clip_jobs.expires_at` = `created_at + 7 days` set on insert
-- New endpoint `POST /api/clips/cleanup` (or scheduled function — TBD against existing infra) removes:
+- New endpoint `POST /api/clips/cleanup` — protected by a service-token header (not user auth). Intended to be triggered daily by an external scheduler (e.g., a cron-style task hitting the endpoint with the service token). Removes:
   - `source.mp4` for any job with `expires_at < now()`
   - all `previews/*.mp4` and `previews/*.jpg` for those jobs
   - `clip_candidates` rows whose `final_storage_key IS NULL`
