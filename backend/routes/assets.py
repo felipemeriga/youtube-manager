@@ -40,12 +40,51 @@ MAX_FILE_SIZES = {
     "fonts": 5 * 1024 * 1024,
 }
 
+# Per-bucket MIME whitelist. Reject anything not in the list to prevent
+# malicious uploads (executables, scripts, etc.) ending up in user storage.
+ALLOWED_MIME_TYPES: dict[str, set[str]] = {
+    "reference-thumbs": {"image/jpeg", "image/png", "image/webp", "image/gif"},
+    "personal-photos": {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+    },
+    "logos": {"image/png", "image/jpeg", "image/svg+xml", "image/webp"},
+    "outputs": {"image/png", "image/jpeg", "image/webp"},
+    "scripts": {"text/plain", "text/markdown", "application/json"},
+    "fonts": {
+        "font/ttf",
+        "font/otf",
+        "font/woff",
+        "font/woff2",
+        "application/font-woff",
+        "application/font-woff2",
+        "application/x-font-ttf",
+        "application/x-font-otf",
+    },
+}
+
 
 def validate_bucket(bucket: str):
     if bucket not in VALID_BUCKETS:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid bucket: {bucket}. Must be one of {VALID_BUCKETS}",
+        )
+
+
+def validate_content_type(bucket: str, content_type: str | None):
+    """Reject uploads whose declared content-type isn't whitelisted for the bucket."""
+    allowed = ALLOWED_MIME_TYPES.get(bucket, set())
+    if not content_type or content_type not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid file type '{content_type}' for bucket '{bucket}'. "
+                f"Allowed: {sorted(allowed)}"
+            ),
         )
 
 
@@ -66,6 +105,7 @@ async def upload_asset(
     bucket: str, file: UploadFile = File(...), user_id: str = Depends(get_current_user)
 ):
     validate_bucket(bucket)
+    validate_content_type(bucket, file.content_type)
     content = await file.read()
     max_size = MAX_FILE_SIZES[bucket]
     if len(content) > max_size:

@@ -298,3 +298,52 @@ def test_list_scripts_bucket():
         response = client.get("/api/assets/scripts")
 
     assert response.status_code == 200
+
+
+def test_upload_rejects_disallowed_mime_for_image_bucket():
+    """Uploading a non-image file to an image bucket should return 400."""
+    client = create_app("test-user")
+    with patch("routes.assets.get_sync_client", return_value=MagicMock()):
+        response = client.post(
+            "/api/assets/personal-photos/upload",
+            files={"file": ("evil.exe", b"MZ\x90", "application/x-msdownload")},
+        )
+    assert response.status_code == 400
+    assert "type" in response.json()["detail"].lower()
+
+
+def test_upload_rejects_image_in_fonts_bucket():
+    """An image MIME should not be accepted in the fonts bucket."""
+    client = create_app("test-user")
+    with patch("routes.assets.get_sync_client", return_value=MagicMock()):
+        response = client.post(
+            "/api/assets/fonts/upload",
+            files={"file": ("photo.png", b"png-data", "image/png")},
+        )
+    assert response.status_code == 400
+
+
+def test_upload_accepts_woff2_in_fonts_bucket():
+    """font/woff2 should be accepted for fonts bucket."""
+    client = create_app("test-user")
+    mock_sb = MagicMock()
+    mock_sb.storage.from_.return_value.upload.return_value = {}
+    with patch("routes.assets.get_sync_client", return_value=mock_sb):
+        response = client.post(
+            "/api/assets/fonts/upload",
+            files={"file": ("font.woff2", b"woff2-bytes", "font/woff2")},
+        )
+    assert response.status_code == 200
+
+
+def test_upload_accepts_text_in_scripts_bucket():
+    """text/plain should be accepted for scripts bucket."""
+    client = create_app("test-user")
+    mock_sb = MagicMock()
+    mock_sb.storage.from_.return_value.upload.return_value = {}
+    with patch("routes.assets.get_sync_client", return_value=mock_sb):
+        response = client.post(
+            "/api/assets/scripts/upload",
+            files={"file": ("note.txt", b"hello", "text/plain")},
+        )
+    assert response.status_code == 200
