@@ -4,6 +4,7 @@ import { Box, CircularProgress } from "@mui/material";
 import { AuthProvider } from "./components/AuthProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
+import { ToastProvider } from "./components/ToastProvider";
 import LoginPage from "./pages/LoginPage";
 
 const ChatPage = lazy(() => import("./pages/ChatPage"));
@@ -30,22 +31,24 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route
-              element={
-                <ProtectedRoute>
-                  <AppLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/" element={<ChatPage />} />
-              <Route path="/assets" element={<AssetsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
-          </Routes>
-        </Suspense>
+        <ToastProvider>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <AppLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/" element={<ChatPage />} />
+                <Route path="/assets" element={<AssetsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+            </Routes>
+          </Suspense>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

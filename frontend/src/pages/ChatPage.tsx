@@ -14,6 +14,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
 import ContextPanel from "../components/ContextPanel";
 import ChatArea from "../components/ChatArea";
+import { useToast } from "../components/ToastProvider";
 import {
   listConversations,
   createConversation,
@@ -51,6 +52,7 @@ interface Conversation {
 }
 
 export default function ChatPage() {
+  const { showError } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -387,7 +389,13 @@ export default function ChatPage() {
         imageUrl,
         platforms
       );
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
+      showError(
+        detail
+          ? `Algo deu errado: ${detail}`
+          : "Algo deu errado. Tente novamente."
+      );
       setMessages((prev) => [
         ...prev,
         {

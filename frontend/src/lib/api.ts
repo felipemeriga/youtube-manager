@@ -11,6 +11,27 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+async function readErrorMessage(response: Response, fallback: string) {
+  try {
+    const body = await response.json();
+    if (body && typeof body.detail === "string") return body.detail;
+    if (body && typeof body.error === "string") return body.error;
+    if (body && typeof body.message === "string") return body.message;
+  } catch {
+    // Ignore parse failures and use fallback.
+  }
+  return fallback;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
@@ -21,7 +42,11 @@ export async function apiFetch<T>(
     headers: { ...headers, ...options.headers },
   });
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const message = await readErrorMessage(
+      response,
+      `API error: ${response.status}`
+    );
+    throw new ApiError(response.status, message);
   }
   return response.json();
 }
@@ -44,7 +69,13 @@ export async function apiUpload(
     body: formData,
   });
 
-  if (!response.ok) throw new Error(`Upload error: ${response.status}`);
+  if (!response.ok) {
+    const message = await readErrorMessage(
+      response,
+      `Upload error: ${response.status}`
+    );
+    throw new ApiError(response.status, message);
+  }
   return response.json();
 }
 

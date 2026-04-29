@@ -528,10 +528,13 @@ export default function AssetsPage() {
         message: `Indexou ${result.indexed} novas fotos (${result.skipped} já indexadas, ${result.total} total)`,
         severity: "success",
       });
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
       setSnackbar({
         open: true,
-        message: "Falha ao indexar fotos",
+        message: detail
+          ? `Falha ao indexar fotos: ${detail}`
+          : "Falha ao indexar fotos",
         severity: "error",
       });
     } finally {
@@ -551,10 +554,13 @@ export default function AssetsPage() {
       );
       setViewerContent(content);
       setViewerOpen(true);
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
       setSnackbar({
         open: true,
-        message: "Falha ao carregar roteiro",
+        message: detail
+          ? `Falha ao carregar roteiro: ${detail}`
+          : "Falha ao carregar roteiro",
         severity: "error",
       });
     }
