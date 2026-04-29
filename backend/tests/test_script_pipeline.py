@@ -237,3 +237,58 @@ async def test_system_prompt_uses_default_when_no_template():
 
     assert "Hook / Opening" in result
     assert "Verified Sources" in result
+
+
+@pytest.mark.asyncio
+async def test_persona_memories_messages_run_concurrently():
+    """The three independent reads should be issued concurrently."""
+    import asyncio
+    from services import script_pipeline
+
+    started = []
+    finished = []
+
+    async def slow_persona(sb, user_id):
+        started.append("persona")
+        await asyncio.sleep(0.05)
+        finished.append("persona")
+        return {"channel_name": "X", "language": "en", "persona_text": "p"}
+
+    async def slow_memories(sb, user_id):
+        started.append("memories")
+        await asyncio.sleep(0.05)
+        finished.append("memories")
+        return []
+
+    async def slow_messages(sb, conversation_id):
+        started.append("messages")
+        await asyncio.sleep(0.05)
+        finished.append("messages")
+        return []
+
+    sb = make_async_sb()
+    mock_get_sb = AsyncMock(return_value=sb)
+
+    with (
+        patch("services.script_pipeline.get_supabase", mock_get_sb),
+        patch.object(script_pipeline, "_get_user_persona", slow_persona),
+        patch.object(script_pipeline, "_get_user_memories", slow_memories),
+        patch.object(script_pipeline, "_get_messages", slow_messages),
+        patch("services.script_pipeline.ask_llm", AsyncMock(return_value="ok")),
+    ):
+        start = asyncio.get_event_loop().time()
+        async for _ in script_pipeline.handle_script_chat_message(
+            conversation_id="c1",
+            content="hi",
+            user_id="u1",
+        ):
+            pass
+        elapsed = asyncio.get_event_loop().time() - start
+
+    # All three started before any finished -> concurrent execution.
+    assert started[:3].count("persona") == 1
+    assert started[:3].count("memories") == 1
+    assert started[:3].count("messages") == 1
+    # If sequential, elapsed >= 0.15s; concurrent should be ~0.05s + overhead.
+    assert elapsed < 0.12, f"Expected concurrent (<0.12s), got {elapsed:.3f}s"
+

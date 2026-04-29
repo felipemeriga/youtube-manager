@@ -283,7 +283,14 @@ async def handle_script_chat_message(
     try:
         sb = await get_supabase()
 
-        persona = await _get_user_persona(sb, user_id)
+        # Run the three independent reads in parallel — they don't depend on
+        # each other, so a single round-trip beats three sequential ones.
+        persona, memories, existing_messages = await asyncio.gather(
+            _get_user_persona(sb, user_id),
+            _get_user_memories(sb, user_id),
+            _get_messages(sb, conversation_id),
+        )
+
         if not persona:
             yield sse_event(
                 {
@@ -292,9 +299,6 @@ async def handle_script_chat_message(
                 }
             )
             return
-
-        memories = await _get_user_memories(sb, user_id)
-        existing_messages = await _get_messages(sb, conversation_id)
 
         if not existing_messages:
             await (
