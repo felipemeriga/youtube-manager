@@ -14,9 +14,11 @@ from services.supabase_pool import get_async_client
 
 from .download import download_source
 from .metadata import fetch_metadata
+from .render_final import render_one_final
 from .render_preview import render_all_previews
 from .segment import segment_and_score
 from .sse_broker import broker
+from .storage import download_file
 from .transcript import fetch_transcript
 
 logger = logging.getLogger(__name__)
@@ -164,6 +166,100 @@ async def run_pipeline(
         _active_tasks.pop(job_id, None)
         if job_tmp.exists():
             shutil.rmtree(job_tmp, ignore_errors=True)
+
+
+async def run_finals_pipeline(
+    job_id: str,
+    user_id: str,
+    candidate_ids: list[str],
+    tmp_dir: Path,
+) -> None:
+    sb = await get_async_client()
+    job_tmp = tmp_dir / f"{job_id}_finals"
+    job_tmp.mkdir(parents=True, exist_ok=True)
+
+    try:
+        job_res = await sb.table("clip_jobs").select("*").eq("id", job_id).single().execute()
+        cands_res = await (
+            sb.table("clip_candidates").select("*").in_("id", candidate_ids).execute()
+        )
+        candidates_data = cands_res.data or []
+
+        source = job_tmp / "source.mp4"
+        await download_file(job_res.data["source_storage_key"], source)
+
+        audio_path = job_tmp / "audio.mp3"
+        audio_proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-i", str(source), "-vn", "-acodec", "libmp3lame", "-q:a", "5",
+            str(audio_path),
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await audio_proc.wait()
+        cues = await fetch_transcript(job_res.data["youtube_url"], audio_path, job_tmp)
+
+        total = len(candidates_data)
+        for i, cand_row in enumerate(candidates_data):
+            from .models import CandidateClip
+            candidate = CandidateClip(
+                start_seconds=cand_row["start_seconds"],
+                end_seconds=cand_row["end_seconds"],
+                hype_score=cand_row["hype_score"],
+                hype_reasoning=cand_row.get("hype_reasoning") or "",
+                transcript_excerpt=cand_row.get("transcript_excerpt") or "",
+            )
+            try:
+                key = await render_one_final(
+                    candidate=candidate,
+                    candidate_id=cand_row["id"],
+                    source=source,
+                    cues=cues,
+                    user_id=user_id,
+                    job_id=job_id,
+                    tmp_dir=job_tmp,
+                )
+                signed = await signed_url_helper(key)
+                await sb.table("clip_candidates").update({"final_storage_key": key}).eq("id", cand_row["id"]).execute()
+                await broker.publish(job_id, {
+                    "type": "render_complete",
+                    "candidate_id": cand_row["id"],
+                    "signed_url": signed,
+                })
+            except Exception as e:
+                logger.exception("Final render failed for %s: %s", cand_row["id"], e)
+                await broker.publish(job_id, {
+                    "type": "render_failed",
+                    "candidate_id": cand_row["id"],
+                    "error": str(e)[:200],
+                })
+            await broker.publish(job_id, {
+                "type": "render_progress",
+                "candidate_id": cand_row["id"],
+                "pct": int(100 * (i + 1) / total),
+            })
+
+        await sb.table("clip_jobs").update({
+            "status": "completed", "current_stage": "done", "progress_pct": 100,
+        }).eq("id", job_id).execute()
+        await broker.publish(job_id, {"type": "render_complete_all"})
+
+    except asyncio.CancelledError:
+        await sb.table("clip_jobs").update({
+            "status": "failed", "error_message": "Cancelled during final render",
+        }).eq("id", job_id).execute()
+        raise
+    except Exception as e:
+        logger.exception("Finals pipeline failed for %s", job_id)
+        await sb.table("clip_jobs").update({
+            "status": "failed", "error_message": str(e)[:500],
+        }).eq("id", job_id).execute()
+    finally:
+        _active_tasks.pop(job_id, None)
+        shutil.rmtree(job_tmp, ignore_errors=True)
+
+
+async def signed_url_helper(key: str) -> str:
+    from .storage import signed_url
+    return await signed_url(key)
 
 
 async def recover_orphans() -> int:

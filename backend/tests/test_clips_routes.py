@@ -131,3 +131,22 @@ def test_cancel_job(mock_sb):
         r = client.post("/api/clips/jobs/j1/cancel")
     assert r.status_code == 200
     assert r.json()["status"] == "cancelled"
+
+
+def test_render_endpoint_marks_selected_and_starts_task(mock_sb):
+    job_chain = mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
+    job_chain.execute = AsyncMock(return_value=MagicMock(data={
+        "id": "j1", "user_id": "user-123", "status": "ready",
+        "source_storage_key": "user-123/j1/source.mp4",
+    }))
+    mock_sb.table.return_value.update.return_value.in_.return_value.execute = AsyncMock()
+    mock_sb.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
+
+    with _patch_client(mock_sb), \
+         patch("routes.clips.asyncio.create_task") as mock_create:
+        r = client.post(
+            "/api/clips/jobs/j1/render",
+            json={"candidate_ids": ["c1", "c2"]},
+        )
+    assert r.status_code == 202
+    mock_create.assert_called_once()

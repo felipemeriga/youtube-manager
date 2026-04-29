@@ -123,6 +123,47 @@ async def job_events(job_id: str, request: Request, user_id: str = Depends(get_c
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+class RenderRequest(BaseModel):
+    candidate_ids: list[str]
+
+
+@router.post("/jobs/{job_id}/render", status_code=202)
+async def render_finals(
+    job_id: str,
+    req: RenderRequest,
+    user_id: str = Depends(get_current_user),
+):
+    sb = await get_async_client()
+    job_res = await (
+        sb.table("clip_jobs").select("*").eq("id", job_id).eq("user_id", user_id).single().execute()
+    )
+    if not job_res.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job_res.data["status"] not in ("ready", "completed"):
+        raise HTTPException(status_code=400, detail=f"Cannot render — job status is {job_res.data['status']}")
+
+    await (
+        sb.table("clip_candidates")
+        .update({"selected": True})
+        .in_("id", req.candidate_ids)
+        .execute()
+    )
+    await (
+        sb.table("clip_jobs")
+        .update({"status": "rendering", "current_stage": "final_render", "progress_pct": 0})
+        .eq("id", job_id)
+        .execute()
+    )
+
+    from services.clips.job_runner import run_finals_pipeline
+    tmp_dir = Path(settings.clips_tmp_dir)
+    task = asyncio.create_task(run_finals_pipeline(
+        job_id=job_id, user_id=user_id, candidate_ids=req.candidate_ids, tmp_dir=tmp_dir,
+    ))
+    register_task(job_id, task)
+    return {"status": "rendering", "candidate_ids": req.candidate_ids}
+
+
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str, user_id: str = Depends(get_current_user)):
     sb = await get_async_client()
