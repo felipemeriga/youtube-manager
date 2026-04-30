@@ -25,7 +25,7 @@ export default function SelectionBar({
       }}
     >
       <Typography variant="body2" sx={{ color: "#a78bfa", fontWeight: 600, mr: 1 }}>
-        {count} clip{count > 1 ? "s" : ""} selected
+        {count} clip{count > 1 ? "s" : ""} selecionado{count > 1 ? "s" : ""}
       </Typography>
       <Button
         variant="contained"
@@ -36,7 +36,7 @@ export default function SelectionBar({
           : <MovieCreationIcon />}
         sx={{ px: 3 }}
       >
-        {loading ? "Starting…" : "Render selected clips"}
+        {loading ? "Iniciando…" : "Renderizar clips selecionados"}
       </Button>
     </Box>
   );

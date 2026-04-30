@@ -27,11 +27,11 @@ export default function FinalRenderPanel({
     <Box sx={{ maxWidth: 1100, mx: "auto" }}>
       <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
         <Button onClick={onBack} startIcon={<ArrowBackIcon />} size="small" color="inherit">
-          Back to grid
+          Voltar à grade
         </Button>
         <Box sx={{ flex: 1 }} />
         <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
-          {completedCount} / {selected.length} ready
+          {completedCount} / {selected.length} prontos
         </Typography>
       </Stack>
 
@@ -94,7 +94,7 @@ export default function FinalRenderPanel({
                   onClick={() => download(c.id)}
                   fullWidth
                 >
-                  Download
+                  Baixar
                 </Button>
               ) : (
                 <Box>
@@ -120,7 +120,7 @@ export default function FinalRenderPanel({
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    Rendering… {pct}%
+                    Renderizando… {pct}%
                   </Typography>
                 </Box>
               )}

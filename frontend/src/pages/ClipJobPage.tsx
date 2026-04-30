@@ -65,10 +65,10 @@ export default function ClipJobPage() {
     return (
       <Box sx={{ p: 4, maxWidth: 640, mx: "auto" }}>
         <Button onClick={() => navigate("/clips")} startIcon={<ArrowBackIcon />} sx={{ mb: 2 }} color="inherit">
-          Back to clips
+          Voltar aos clips
         </Button>
         <Alert severity="error" variant="outlined">
-          {job.error_message || "Job failed"}
+          {job.error_message || "Trabalho falhou"}
         </Alert>
       </Box>
     );
@@ -106,14 +106,14 @@ export default function ClipJobPage() {
           size="small"
           sx={{ flexShrink: 0, mt: 0.5 }}
         >
-          All jobs
+          Todos os trabalhos
         </Button>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }} noWrap>
-            {job.title || "Clip candidates"}
+            {job.title || "Candidatos a clips"}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {job.candidates.length} candidate{job.candidates.length === 1 ? "" : "s"} · pick the ones you want to render in 1080p
+            {job.candidates.length} candidato{job.candidates.length === 1 ? "" : "s"} · escolha quais deseja renderizar em 1080p
           </Typography>
         </Box>
       </Stack>

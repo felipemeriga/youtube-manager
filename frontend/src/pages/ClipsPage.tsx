@@ -21,13 +21,13 @@ const STATUS_COLOR: Record<ClipJobStatus, "default" | "primary" | "secondary" | 
 };
 
 const STATUS_LABEL: Record<ClipJobStatus, string> = {
-  pending: "Pending",
-  processing: "Processing",
-  ready: "Ready",
-  rendering: "Rendering",
-  completed: "Completed",
-  failed: "Failed",
-  expired: "Expired",
+  pending: "Aguardando",
+  processing: "Processando",
+  ready: "Pronto",
+  rendering: "Renderizando",
+  completed: "Concluído",
+  failed: "Falhou",
+  expired: "Expirado",
 };
 
 const RUNNING: ClipJobStatus[] = ["pending", "processing", "rendering"];
@@ -36,13 +36,13 @@ function formatRelative(iso: string): string {
   const d = new Date(iso);
   const diffMs = Date.now() - d.getTime();
   const min = Math.floor(diffMs / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return `há ${h} h`;
   const days = Math.floor(h / 24);
-  if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString();
+  if (days < 7) return `há ${days} d`;
+  return d.toLocaleDateString("pt-BR");
 }
 
 function formatDuration(sec: number | null): string {
@@ -81,7 +81,7 @@ export default function ClipsPage() {
   return (
     <Box sx={{ p: 4, maxWidth: 880, mx: "auto" }}>
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
-        YouTube Clips
+        Clips do YouTube
       </Typography>
 
       <NewJobForm onCreated={(id) => navigate(`/clips/${id}`)} />
@@ -90,7 +90,7 @@ export default function ClipsPage() {
         variant="overline"
         sx={{ mt: 5, mb: 1.5, display: "block", color: "text.secondary", letterSpacing: "0.08em" }}
       >
-        Past jobs
+        Trabalhos anteriores
       </Typography>
 
       {jobs.length === 0 ? (
@@ -105,9 +105,9 @@ export default function ClipsPage() {
           }}
         >
           <MovieFilterIcon sx={{ fontSize: 48, color: "primary.light", opacity: 0.6 }} />
-          <Typography variant="subtitle1">No jobs yet</Typography>
+          <Typography variant="subtitle1">Nenhum trabalho ainda</Typography>
           <Typography variant="body2" color="text.secondary">
-            Paste a YouTube URL above to generate your first clips.
+            Cole uma URL do YouTube acima para gerar seus primeiros clips.
           </Typography>
         </Paper>
       ) : (
@@ -167,7 +167,7 @@ export default function ClipsPage() {
                     variant={j.status === "completed" || j.status === "failed" ? "filled" : "outlined"}
                     sx={{ fontWeight: 500 }}
                   />
-                  <Tooltip title="Delete job" placement="left">
+                  <Tooltip title="Excluir trabalho" placement="left">
                     <IconButton
                       size="small"
                       onClick={(e) => {
@@ -193,16 +193,17 @@ export default function ClipsPage() {
       )}
 
       <Dialog open={!!confirmDelete} onClose={() => !deleting && setConfirmDelete(null)}>
-        <DialogTitle>Delete this job?</DialogTitle>
+        <DialogTitle>Excluir este trabalho?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
-            "{confirmDelete?.title || confirmDelete?.youtube_url}" — all candidates,
-            preview clips, and final renders will be permanently deleted. This cannot be undone.
+            "{confirmDelete?.title || confirmDelete?.youtube_url}" — todos os candidatos,
+            clips de prévia e renderizações finais serão excluídos permanentemente.
+            Esta ação não pode ser desfeita.
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(null)} disabled={deleting}>
-            Cancel
+            Cancelar
           </Button>
           <Button
             onClick={handleDelete}
@@ -214,7 +215,7 @@ export default function ClipsPage() {
               "&:hover": { background: "linear-gradient(135deg, #dc2626, #b91c1c)" },
             }}
           >
-            {deleting ? "Deleting…" : "Delete"}
+            {deleting ? "Excluindo…" : "Excluir"}
           </Button>
         </DialogActions>
       </Dialog>

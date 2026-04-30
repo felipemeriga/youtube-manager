@@ -4,12 +4,12 @@ import RadioButtonUncheckedRoundedIcon from "@mui/icons-material/RadioButtonUnch
 import type { ClipJob, ClipJobStage } from "../../types/clips";
 
 const STAGE_LABELS: Record<string, string> = {
-  metadata: "Reading video metadata…",
-  download: "Downloading video…",
-  transcribe: "Transcribing audio…",
-  segment: "Scoring clip-worthy moments…",
-  preview_render: "Rendering preview clips…",
-  final_render: "Rendering final clips…",
+  metadata: "Lendo metadados do vídeo…",
+  download: "Baixando vídeo…",
+  transcribe: "Transcrevendo áudio…",
+  segment: "Avaliando momentos para clips…",
+  preview_render: "Renderizando prévias…",
+  final_render: "Renderizando clips finais…",
 };
 
 const STAGE_ORDER: ClipJobStage[] = [
@@ -20,14 +20,14 @@ const STAGE_ORDER: ClipJobStage[] = [
 ];
 
 const STAGE_SHORT: Record<ClipJobStage, string> = {
-  metadata: "Setup",
+  metadata: "Início",
   download: "Download",
-  transcribe: "Transcribe",
-  segment: "Analyze",
-  preview_render: "Render",
-  await_selection: "Selection",
+  transcribe: "Transcrição",
+  segment: "Análise",
+  preview_render: "Renderização",
+  await_selection: "Seleção",
   final_render: "Final",
-  done: "Done",
+  done: "Concluído",
 };
 
 function stageIndex(stage: ClipJobStage | null | undefined): number {
@@ -42,7 +42,7 @@ function stageIndex(stage: ClipJobStage | null | undefined): number {
 export default function JobProgressPanel({
   job, onCancel,
 }: { job: ClipJob; onCancel: () => void }) {
-  const label = STAGE_LABELS[job.current_stage ?? ""] ?? "Working…";
+  const label = STAGE_LABELS[job.current_stage ?? ""] ?? "Processando…";
   const activeIdx = stageIndex(job.current_stage);
 
   return (
@@ -126,7 +126,7 @@ export default function JobProgressPanel({
 
           <Box>
             <Button onClick={onCancel} color="error" variant="outlined" size="small">
-              Cancel job
+              Cancelar trabalho
             </Button>
           </Box>
         </Stack>

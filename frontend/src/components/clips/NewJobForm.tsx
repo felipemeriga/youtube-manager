@@ -22,7 +22,7 @@ export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) =
       } else {
         await create();
       }
-    } catch (e: any) { setError(e.message || "Preflight failed"); }
+    } catch (e: any) { setError(e.message || "Verificação prévia falhou"); }
     finally { setLoading(false); }
   }
 
@@ -33,7 +33,7 @@ export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) =
       onCreated(job.id);
       setUrl("");
       setConfirm(null);
-    } catch (e: any) { setError(e.message || "Failed to create job"); }
+    } catch (e: any) { setError(e.message || "Falha ao criar trabalho"); }
     finally { setLoading(false); }
   }
 
@@ -42,10 +42,10 @@ export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) =
       <Stack spacing={2}>
         <Box>
           <Typography variant="h6" sx={{ mb: 0.5 }}>
-            Generate clips from a video
+            Gerar clips a partir de um vídeo
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Paste any youtube.com or youtu.be URL. Best results with videos under 60 minutes.
+            Cole qualquer URL do youtube.com ou youtu.be. Melhores resultados com vídeos de até 60 minutos.
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 1.5 }}>
@@ -66,26 +66,28 @@ export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) =
               : <AutoAwesomeIcon />}
             sx={{ px: 3, minWidth: 170, whiteSpace: "nowrap" }}
           >
-            {loading ? "Working…" : "Generate clips"}
+            {loading ? "Processando…" : "Gerar clips"}
           </Button>
         </Box>
         <Typography variant="caption" color="text.secondary">
-          Processing takes ~2 min per minute of video.
+          O processamento leva ~2 min por minuto de vídeo.
         </Typography>
         {error && <Alert severity="error" sx={{ mt: 0 }}>{error}</Alert>}
       </Stack>
       <Dialog open={!!confirm} onClose={() => setConfirm(null)}>
-        <DialogTitle>Long video</DialogTitle>
+        <DialogTitle>Vídeo longo</DialogTitle>
         <DialogContent>
           {confirm && (
             <Typography>
-              "{confirm.title}" is {Math.round(confirm.duration / 60)} min long. Processing will take ~{Math.round(confirm.duration / 30)} min and use significant compute. Continue?
+              "{confirm.title}" tem {Math.round(confirm.duration / 60)} min de duração.
+              O processamento levará ~{Math.round(confirm.duration / 30)} min e usará
+              recurso computacional significativo. Continuar?
             </Typography>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirm(null)}>Cancel</Button>
-          <Button onClick={create} variant="contained">Continue</Button>
+          <Button onClick={() => setConfirm(null)}>Cancelar</Button>
+          <Button onClick={create} variant="contained">Continuar</Button>
         </DialogActions>
       </Dialog>
     </Paper>
