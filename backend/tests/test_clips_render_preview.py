@@ -30,6 +30,18 @@ def test_build_crop_filter_clamps_right():
     assert "crop=608:1080:1312:0" in f
 
 
+def test_build_crop_filter_uses_custom_output_size():
+    """Final renders pass output_size=(1080, 1920) to get true 1080p vertical
+    instead of the 720p preview default."""
+    track = [(0.0, 960)]
+    f = build_crop_filter(
+        track=track, video_height=1080, video_width=1920,
+        output_size=(1080, 1920),
+    )
+    assert "scale=1080:1920" in f
+    assert "scale=720:1280" not in f
+
+
 @pytest.mark.asyncio
 async def test_render_one_preview_orchestrates(tmp_path):
     candidate = CandidateClip(

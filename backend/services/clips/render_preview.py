@@ -24,15 +24,23 @@ def _video_dims(path: Path) -> tuple[int, int]:
     return int(w), int(h)
 
 
+# Default preview output. Finals override via `output_size`.
+PREVIEW_OUTPUT_SIZE: tuple[int, int] = (720, 1280)
+FINAL_OUTPUT_SIZE: tuple[int, int] = (1080, 1920)
+
+
 def build_crop_filter(
     track: list[tuple[float, int]],
     video_height: int,
     video_width: int,
+    output_size: tuple[int, int] = PREVIEW_OUTPUT_SIZE,
 ) -> str:
-    """Return the ffmpeg -vf string for a 9:16 vertical crop.
+    """Return the ffmpeg -vf string for a 9:16 vertical crop + scale.
 
     Uses the median X from the smoothed track (avoids whipping). Clamps so the
-    crop window stays inside the source frame.
+    crop window stays inside the source frame. `output_size` is (width, height)
+    of the final scaled output — defaults to 720x1280 (preview), pass 1080x1920
+    for final renders.
     """
     crop_w = round(video_height * 9 / 16)
     if crop_w % 2:
@@ -43,7 +51,8 @@ def build_crop_filter(
     else:
         cx = video_width // 2
     x_offset = max(0, min(cx - crop_w // 2, video_width - crop_w))
-    return f"crop={crop_w}:{video_height}:{x_offset}:0,scale=720:1280"
+    out_w, out_h = output_size
+    return f"crop={crop_w}:{video_height}:{x_offset}:0,scale={out_w}:{out_h}"
 
 
 async def _ffmpeg_cut(source: Path, start: float, end: float, out: Path) -> None:

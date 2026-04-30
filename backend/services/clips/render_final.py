@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .face_detection import detect_face_track
 from .models import CandidateClip, TranscriptCue
-from .render_preview import _video_dims, build_crop_filter
+from .render_preview import FINAL_OUTPUT_SIZE, _video_dims, build_crop_filter
 from .storage import final_key, upload_file
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,12 @@ async def render_one_final(
     build_ass_file(cues, candidate.start_seconds, candidate.end_seconds, ass_path)
     width, height = _video_dims(source)
     track = detect_face_track(source, candidate.duration_seconds)
-    crop_scale = build_crop_filter(track=track, video_height=height, video_width=width)
+    crop_scale = build_crop_filter(
+        track=track,
+        video_height=height,
+        video_width=width,
+        output_size=FINAL_OUTPUT_SIZE,
+    )
 
     if _subtitles_filter_available():
         # ffmpeg subtitles filter: escape `:` and `\` in the path; use the
