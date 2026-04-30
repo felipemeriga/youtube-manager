@@ -79,7 +79,7 @@ export default function ClipsPage() {
   }
 
   return (
-    <Box sx={{ px: 3, py: 3, maxWidth: 880, mx: "auto" }}>
+    <Box sx={{ px: 3, py: 3, maxWidth: 880, mx: "auto", width: "100%", overflowY: "auto" }}>
       <Typography variant="h4" sx={{ mb: 2, fontWeight: 700 }}>
         Clips do YouTube
       </Typography>

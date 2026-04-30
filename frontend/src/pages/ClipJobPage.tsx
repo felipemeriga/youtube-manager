@@ -97,7 +97,7 @@ export default function ClipJobPage() {
   }
 
   return (
-    <Box sx={{ p: 4, maxWidth: 1600, mx: "auto", pb: 12 }}>
+    <Box sx={{ p: 4, maxWidth: 1600, mx: "auto", pb: 12, width: "100%", overflowY: "auto" }}>
       <Stack direction="row" alignItems="flex-start" spacing={2} sx={{ mb: 3 }}>
         <Button
           onClick={() => navigate("/clips")}
