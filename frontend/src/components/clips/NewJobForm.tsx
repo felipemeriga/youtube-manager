@@ -1,8 +1,9 @@
 import { useState } from "react";
 import {
-  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
-  TextField, Typography, Alert,
+  Box, Button, CircularProgress, Dialog, DialogActions, DialogContent,
+  DialogTitle, Paper, Stack, TextField, Typography, Alert,
 } from "@mui/material";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { clipsApi } from "../../api/clips";
 
 export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) => void }) {
@@ -37,20 +38,42 @@ export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) =
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <Box sx={{ display: "flex", gap: 1 }}>
-        <TextField
-          fullWidth size="small" placeholder="YouTube URL"
-          value={url} onChange={e => setUrl(e.target.value)} disabled={loading}
-        />
-        <Button variant="contained" onClick={submit} disabled={loading || !url}>
-          {loading ? "…" : "Generate clips"}
-        </Button>
-      </Box>
-      <Typography variant="caption" color="text.secondary">
-        ≤60 min videos. Processing takes ~2 min per minute of video.
-      </Typography>
-      {error && <Alert severity="error">{error}</Alert>}
+    <Paper sx={{ p: 3 }}>
+      <Stack spacing={2}>
+        <Box>
+          <Typography variant="h6" sx={{ mb: 0.5 }}>
+            Generate clips from a video
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Paste any youtube.com or youtu.be URL. Best results with videos under 60 minutes.
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", gap: 1.5 }}>
+          <TextField
+            fullWidth
+            placeholder="https://youtube.com/watch?v=..."
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            disabled={loading}
+            onKeyDown={(e) => { if (e.key === "Enter" && url && !loading) submit(); }}
+          />
+          <Button
+            variant="contained"
+            onClick={submit}
+            disabled={loading || !url}
+            startIcon={loading
+              ? <CircularProgress size={16} sx={{ color: "inherit" }} />
+              : <AutoAwesomeIcon />}
+            sx={{ px: 3, minWidth: 170, whiteSpace: "nowrap" }}
+          >
+            {loading ? "Working…" : "Generate clips"}
+          </Button>
+        </Box>
+        <Typography variant="caption" color="text.secondary">
+          Processing takes ~2 min per minute of video.
+        </Typography>
+        {error && <Alert severity="error" sx={{ mt: 0 }}>{error}</Alert>}
+      </Stack>
       <Dialog open={!!confirm} onClose={() => setConfirm(null)}>
         <DialogTitle>Long video</DialogTitle>
         <DialogContent>
@@ -65,6 +88,6 @@ export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) =
           <Button onClick={create} variant="contained">Continue</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Paper>
   );
 }
