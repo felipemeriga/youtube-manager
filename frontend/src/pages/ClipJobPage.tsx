@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Box, Alert } from "@mui/material";
-import { useParams } from "react-router-dom";
+import { Alert, Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useNavigate, useParams } from "react-router-dom";
 import type { ClipJob, ClipCandidate, JobEvent } from "../types/clips";
 import { clipsApi } from "../api/clips";
 import { useClipJobSSE } from "../hooks/useClipJobSSE";
@@ -12,11 +13,13 @@ import FinalRenderPanel from "../components/clips/FinalRenderPanel";
 
 export default function ClipJobPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const navigate = useNavigate();
   const [job, setJob] = useState<ClipJob | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [previewing, setPreviewing] = useState<ClipCandidate | null>(null);
   const [renderProgress, setRenderProgress] = useState<Record<string, number>>({});
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [rendering, setRendering] = useState(false);
 
   async function refresh() {
     if (!jobId) return;
@@ -50,12 +53,23 @@ export default function ClipJobPage() {
     [job, selected],
   );
 
-  if (!job) return <Box sx={{ p: 4 }}>Loading…</Box>;
+  if (!job) {
+    return (
+      <Box sx={{ p: 8, display: "flex", justifyContent: "center" }}>
+        <CircularProgress size={28} />
+      </Box>
+    );
+  }
 
   if (job.status === "failed") {
     return (
-      <Box sx={{ p: 4, maxWidth: 600, mx: "auto" }}>
-        <Alert severity="error">{job.error_message || "Job failed"}</Alert>
+      <Box sx={{ p: 4, maxWidth: 640, mx: "auto" }}>
+        <Button onClick={() => navigate("/clips")} startIcon={<ArrowBackIcon />} sx={{ mb: 2 }} color="inherit">
+          Back to clips
+        </Button>
+        <Alert severity="error" variant="outlined">
+          {job.error_message || "Job failed"}
+        </Alert>
       </Box>
     );
   }
@@ -83,7 +97,27 @@ export default function ClipJobPage() {
   }
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: 4, maxWidth: 1280, mx: "auto", pb: 12 }}>
+      <Stack direction="row" alignItems="flex-start" spacing={2} sx={{ mb: 3 }}>
+        <Button
+          onClick={() => navigate("/clips")}
+          startIcon={<ArrowBackIcon />}
+          color="inherit"
+          size="small"
+          sx={{ flexShrink: 0, mt: 0.5 }}
+        >
+          All jobs
+        </Button>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }} noWrap>
+            {job.title || "Clip candidates"}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {job.candidates.length} candidate{job.candidates.length === 1 ? "" : "s"} · pick the ones you want to render in 1080p
+          </Typography>
+        </Box>
+      </Stack>
+
       <ClipGrid
         candidates={job.candidates}
         selected={selected}
@@ -101,9 +135,15 @@ export default function ClipJobPage() {
       />
       <SelectionBar
         count={selected.size}
+        loading={rendering}
         onRender={async () => {
-          await clipsApi.render(job.id, Array.from(selected));
-          refresh();
+          setRendering(true);
+          try {
+            await clipsApi.render(job.id, Array.from(selected));
+            await refresh();
+          } finally {
+            setRendering(false);
+          }
         }}
       />
     </Box>
