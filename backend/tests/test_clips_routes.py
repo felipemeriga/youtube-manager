@@ -224,13 +224,34 @@ def test_get_candidate_signed_url(mock_sb):
     chain.execute = AsyncMock(return_value=MagicMock(data={
         "id": "c1",
         "preview_storage_key": "user-123/j1/previews/c1.mp4",
+        "preview_poster_key": "user-123/j1/previews/c1.jpg",
         "job_id": "j1",
     }))
     with _patch_client(mock_sb), \
          patch("routes.clips.signed_url", new=AsyncMock(return_value="https://signed/url")):
         r = client.get("/api/clips/candidates/c1/preview-url")
     assert r.status_code == 200
-    assert r.json()["url"] == "https://signed/url"
+    body = r.json()
+    assert body["url"] == "https://signed/url"
+    assert body["poster_url"] == "https://signed/url"
+
+
+def test_get_candidate_signed_url_poster_optional(mock_sb):
+    """If the poster wasn't generated (legacy candidate), return null instead of 500."""
+    chain = mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value
+    chain.execute = AsyncMock(return_value=MagicMock(data={
+        "id": "c1",
+        "preview_storage_key": "user-123/j1/previews/c1.mp4",
+        "preview_poster_key": None,
+        "job_id": "j1",
+    }))
+    with _patch_client(mock_sb), \
+         patch("routes.clips.signed_url", new=AsyncMock(return_value="https://signed/url")):
+        r = client.get("/api/clips/candidates/c1/preview-url")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["url"] == "https://signed/url"
+    assert body["poster_url"] is None
 
 
 def test_cleanup_requires_token():

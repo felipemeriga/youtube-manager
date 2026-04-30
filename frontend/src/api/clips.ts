@@ -42,7 +42,7 @@ export const clipsApi = {
     }),
 
   previewUrl: (candidateId: string, signal?: AbortSignal) =>
-    apiFetch<{ url: string }>(
+    apiFetch<{ url: string; poster_url: string | null }>(
       `/api/clips/candidates/${candidateId}/preview-url`,
       { signal }
     ),

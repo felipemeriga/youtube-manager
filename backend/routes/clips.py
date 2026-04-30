@@ -244,7 +244,7 @@ async def get_preview_url(candidate_id: str, user_id: str = Depends(get_current_
     # RLS will ensure the candidate belongs to a job owned by user_id
     res = await (
         sb.table("clip_candidates")
-        .select("id, preview_storage_key, job_id")
+        .select("id, preview_storage_key, preview_poster_key, job_id")
         .eq("id", candidate_id)
         .single()
         .execute()
@@ -252,7 +252,10 @@ async def get_preview_url(candidate_id: str, user_id: str = Depends(get_current_
     if not res.data or not res.data.get("preview_storage_key"):
         raise HTTPException(status_code=404, detail="Preview not available")
     url = await signed_url(res.data["preview_storage_key"], ttl_seconds=3600)
-    return {"url": url}
+    poster_url = None
+    if res.data.get("preview_poster_key"):
+        poster_url = await signed_url(res.data["preview_poster_key"], ttl_seconds=3600)
+    return {"url": url, "poster_url": poster_url}
 
 
 @router.get("/candidates/{candidate_id}/final-url")

@@ -18,12 +18,17 @@ export default function ClipCard({
   onClick: () => void;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const ctrl = new AbortController();
     clipsApi.previewUrl(candidate.id, ctrl.signal)
-      .then(({ url }) => { if (!ctrl.signal.aborted) setPreviewUrl(url); })
+      .then(({ url, poster_url }) => {
+        if (ctrl.signal.aborted) return;
+        setPreviewUrl(url);
+        setPosterUrl(poster_url);
+      })
       .catch(() => {});
     return () => ctrl.abort();
   }, [candidate.id]);
@@ -54,21 +59,43 @@ export default function ClipCard({
       onMouseEnter={() => videoRef.current?.play().catch(() => {})}
       onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
     >
-      {previewUrl ? (
+      {/* Poster image — shown immediately, sits behind the video so the video's
+          first-frame transition is invisible. */}
+      {posterUrl ? (
+        <Box
+          component="img"
+          src={posterUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          sx={{
+            position: "absolute", inset: 0,
+            width: "100%", height: "100%",
+            objectFit: "cover", display: "block",
+          }}
+        />
+      ) : (
+        <Box sx={{
+          position: "absolute", inset: 0,
+          width: "100%", height: "100%",
+          background: "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(59,130,246,0.08))",
+        }} />
+      )}
+      {previewUrl && (
         <video
           ref={videoRef}
           src={previewUrl}
+          poster={posterUrl ?? undefined}
           muted
           loop
           playsInline
           preload="metadata"
-          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          style={{
+            position: "absolute", inset: 0,
+            width: "100%", height: "100%",
+            objectFit: "cover", display: "block",
+          }}
         />
-      ) : (
-        <Box sx={{
-          width: "100%", height: "100%",
-          background: "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(59,130,246,0.08))",
-        }} />
       )}
 
       {/* Gradient overlay for legibility */}
