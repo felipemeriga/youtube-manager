@@ -79,8 +79,8 @@ export default function ClipsPage() {
   }
 
   return (
-    <Box sx={{ p: 4, maxWidth: 880, mx: "auto" }}>
-      <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
+    <Box sx={{ px: 3, py: 3, maxWidth: 880, mx: "auto" }}>
+      <Typography variant="h4" sx={{ mb: 2, fontWeight: 700 }}>
         Clips do YouTube
       </Typography>
 
@@ -88,7 +88,7 @@ export default function ClipsPage() {
 
       <Typography
         variant="overline"
-        sx={{ mt: 5, mb: 1.5, display: "block", color: "text.secondary", letterSpacing: "0.08em" }}
+        sx={{ mt: 3, mb: 1, display: "block", color: "text.secondary", letterSpacing: "0.08em" }}
       >
         Trabalhos anteriores
       </Typography>
