@@ -13,12 +13,7 @@ export default function ClipGrid({
   return (
     <Box sx={{
       display: "grid", gap: 2,
-      gridTemplateColumns: {
-        xs: "1fr",
-        sm: "repeat(2, 1fr)",
-        md: "repeat(3, 1fr)",
-        lg: "repeat(4, 1fr)",
-      },
+      gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
     }}>
       {candidates.map(c => (
         <ClipCard
