@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  Box, Chip, LinearProgress, Paper, Stack, Typography,
+  Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  IconButton, LinearProgress, Paper, Stack, Tooltip, Typography,
 } from "@mui/material";
 import MovieFilterIcon from "@mui/icons-material/MovieFilter";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useNavigate } from "react-router-dom";
 import type { ClipJobStatus, ClipJobSummary } from "../types/clips";
 import { clipsApi } from "../api/clips";
@@ -53,6 +55,8 @@ function formatDuration(sec: number | null): string {
 export default function ClipsPage() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<ClipJobSummary[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<ClipJobSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -61,6 +65,18 @@ export default function ClipsPage() {
       .catch((err) => { if (err?.name !== "AbortError") throw err; });
     return () => ctrl.abort();
   }, []);
+
+  async function handleDelete() {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await clipsApi.deleteJob(confirmDelete.id);
+      setJobs((prev) => prev.filter((j) => j.id !== confirmDelete.id));
+      setConfirmDelete(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <Box sx={{ p: 4, maxWidth: 880, mx: "auto" }}>
@@ -151,12 +167,57 @@ export default function ClipsPage() {
                     variant={j.status === "completed" || j.status === "failed" ? "filled" : "outlined"}
                     sx={{ fontWeight: 500 }}
                   />
+                  <Tooltip title="Delete job" placement="left">
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDelete(j);
+                      }}
+                      sx={{
+                        color: "text.disabled",
+                        "&:hover": {
+                          color: "error.main",
+                          backgroundColor: "rgba(239,68,68,0.08)",
+                        },
+                      }}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </Stack>
               </Paper>
             );
           })}
         </Stack>
       )}
+
+      <Dialog open={!!confirmDelete} onClose={() => !deleting && setConfirmDelete(null)}>
+        <DialogTitle>Delete this job?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            "{confirmDelete?.title || confirmDelete?.youtube_url}" — all candidates,
+            preview clips, and final renders will be permanently deleted. This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(null)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDelete}
+            disabled={deleting}
+            color="error"
+            variant="contained"
+            sx={{
+              background: "linear-gradient(135deg, #ef4444, #dc2626)",
+              "&:hover": { background: "linear-gradient(135deg, #dc2626, #b91c1c)" },
+            }}
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

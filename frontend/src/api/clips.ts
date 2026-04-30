@@ -24,6 +24,12 @@ export const clipsApi = {
   getJob: (id: string, signal?: AbortSignal) =>
     apiFetch<ClipJob>(`/api/clips/jobs/${id}`, { signal }),
 
+  deleteJob: (id: string) =>
+    apiFetch<{ status: string; files_removed: number }>(
+      `/api/clips/jobs/${id}`,
+      { method: "DELETE" }
+    ),
+
   cancel: (id: string) =>
     apiFetch<{ status: string }>(`/api/clips/jobs/${id}/cancel`, {
       method: "POST",

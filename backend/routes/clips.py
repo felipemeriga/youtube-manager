@@ -14,7 +14,7 @@ from services.clips.job_runner import (
 )
 from services.clips.metadata import fetch_metadata
 from services.clips.sse_broker import broker
-from services.clips.storage import signed_url
+from services.clips.storage import remove_keys, signed_url
 from services.supabase_pool import get_async_client
 
 logger = logging.getLogger(__name__)
@@ -162,6 +162,62 @@ async def render_finals(
     ))
     register_task(job_id, task)
     return {"status": "rendering", "candidate_ids": req.candidate_ids}
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_job(job_id: str, user_id: str = Depends(get_current_user)):
+    """Permanently delete a job, all candidates, and all storage objects.
+
+    Cancels any in-flight pipeline task first. Storage removal is best-effort —
+    DB rows are still deleted even if object removal fails, so the job won't
+    keep showing in the UI as a "ghost" entry.
+    """
+    sb = await get_async_client()
+    job_res = await (
+        sb.table("clip_jobs")
+        .select("id, source_storage_key")
+        .eq("id", job_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute()
+    )
+    if not job_res.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    cancel_task(job_id)
+
+    cands_res = await (
+        sb.table("clip_candidates")
+        .select("preview_storage_key, preview_poster_key, final_storage_key")
+        .eq("job_id", job_id)
+        .execute()
+    )
+    keys: list[str] = []
+    if job_res.data.get("source_storage_key"):
+        keys.append(job_res.data["source_storage_key"])
+    for c in cands_res.data or []:
+        for field in ("preview_storage_key", "preview_poster_key", "final_storage_key"):
+            if c.get(field):
+                keys.append(c[field])
+
+    if keys:
+        try:
+            await remove_keys(keys)
+        except Exception:
+            logger.exception(
+                "Failed to remove storage keys for job %s; deleting DB rows anyway",
+                job_id,
+            )
+
+    await sb.table("clip_candidates").delete().eq("job_id", job_id).execute()
+    await (
+        sb.table("clip_jobs")
+        .delete()
+        .eq("id", job_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return {"status": "deleted", "files_removed": len(keys)}
 
 
 @router.post("/jobs/{job_id}/cancel")

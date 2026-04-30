@@ -133,6 +133,73 @@ def test_cancel_job(mock_sb):
     assert r.json()["status"] == "cancelled"
 
 
+def test_delete_job_removes_storage_and_rows(mock_sb):
+    job_chain = mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
+    job_chain.execute = AsyncMock(return_value=MagicMock(data={
+        "id": "j1",
+        "source_storage_key": "user-123/j1/source.mp4",
+    }))
+    cands_chain = mock_sb.table.return_value.select.return_value.eq.return_value
+    cands_chain.execute = AsyncMock(return_value=MagicMock(data=[
+        {
+            "preview_storage_key": "user-123/j1/previews/c1.mp4",
+            "preview_poster_key": "user-123/j1/previews/c1.jpg",
+            "final_storage_key": None,
+        },
+        {
+            "preview_storage_key": None,
+            "preview_poster_key": None,
+            "final_storage_key": "user-123/j1/finals/c2.mp4",
+        },
+    ]))
+    mock_sb.table.return_value.delete.return_value.eq.return_value.execute = AsyncMock()
+    mock_sb.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute = AsyncMock()
+
+    with _patch_client(mock_sb), \
+         patch("routes.clips.cancel_task") as mock_cancel, \
+         patch("routes.clips.remove_keys", new=AsyncMock()) as mock_remove:
+        r = client.delete("/api/clips/jobs/j1")
+    assert r.status_code == 200
+    assert r.json()["status"] == "deleted"
+    mock_cancel.assert_called_once_with("j1")
+    # All four storage keys (source + 2 previews + 1 final) should be removed
+    mock_remove.assert_awaited_once()
+    keys_passed = mock_remove.await_args.args[0]
+    assert "user-123/j1/source.mp4" in keys_passed
+    assert "user-123/j1/previews/c1.mp4" in keys_passed
+    assert "user-123/j1/previews/c1.jpg" in keys_passed
+    assert "user-123/j1/finals/c2.mp4" in keys_passed
+
+
+def test_delete_job_returns_404_when_not_owned(mock_sb):
+    job_chain = mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
+    job_chain.execute = AsyncMock(return_value=MagicMock(data=None))
+    with _patch_client(mock_sb):
+        r = client.delete("/api/clips/jobs/nonexistent")
+    assert r.status_code == 404
+
+
+def test_delete_job_continues_when_storage_remove_fails(mock_sb):
+    """Storage failures must not block DB cleanup — otherwise the user can't
+    get rid of the job from the UI."""
+    job_chain = mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
+    job_chain.execute = AsyncMock(return_value=MagicMock(data={
+        "id": "j1", "source_storage_key": "user-123/j1/source.mp4",
+    }))
+    cands_chain = mock_sb.table.return_value.select.return_value.eq.return_value
+    cands_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
+    delete_eq = AsyncMock()
+    mock_sb.table.return_value.delete.return_value.eq.return_value.execute = delete_eq
+    mock_sb.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute = AsyncMock()
+
+    with _patch_client(mock_sb), \
+         patch("routes.clips.cancel_task"), \
+         patch("routes.clips.remove_keys", new=AsyncMock(side_effect=RuntimeError("boom"))):
+        r = client.delete("/api/clips/jobs/j1")
+    assert r.status_code == 200
+    delete_eq.assert_awaited()  # candidate-row delete still ran
+
+
 def test_render_endpoint_marks_selected_and_starts_task(mock_sb):
     job_chain = mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
     job_chain.execute = AsyncMock(return_value=MagicMock(data={
