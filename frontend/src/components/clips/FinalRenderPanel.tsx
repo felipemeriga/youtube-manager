@@ -21,7 +21,8 @@ export default function FinalRenderPanel({
     a.click();
   }
 
-  const completedCount = selected.filter((c) => signedUrls[c.id]).length;
+  const isDone = (c: ClipCandidate) => !!signedUrls[c.id] || !!c.final_storage_key;
+  const completedCount = selected.filter(isDone).length;
 
   return (
     <Box sx={{ maxWidth: 1100, mx: "auto" }}>
@@ -43,8 +44,8 @@ export default function FinalRenderPanel({
         }}
       >
         {selected.map((c) => {
-          const pct = progress[c.id] ?? 0;
-          const done = !!signedUrls[c.id];
+          const pct = progress[c.id] ?? (c.final_storage_key ? 100 : 0);
+          const done = isDone(c);
           return (
             <Paper
               key={c.id}

@@ -20,6 +20,7 @@ export default function ClipJobPage() {
   const [renderProgress, setRenderProgress] = useState<Record<string, number>>({});
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [rendering, setRendering] = useState(false);
+  const [renderTriggered, setRenderTriggered] = useState(false);
 
   async function refresh() {
     if (!jobId) return;
@@ -83,7 +84,7 @@ export default function ClipJobPage() {
     );
   }
 
-  if (["rendering", "completed"].includes(job.status) && selectedCandidates.length > 0) {
+  if ((job.status === "rendering" || (job.status === "completed" && renderTriggered)) && selectedCandidates.length > 0) {
     return (
       <Box sx={{ p: 4 }}>
         <FinalRenderPanel
@@ -138,6 +139,7 @@ export default function ClipJobPage() {
         loading={rendering}
         onRender={async () => {
           setRendering(true);
+          setRenderTriggered(true);
           try {
             await clipsApi.render(job.id, Array.from(selected));
             await refresh();
