@@ -240,7 +240,17 @@ async def get_signed_url(
     validate_safe_filename(filename)
     sb = await get_async_client()
     storage_path = f"{user_id}/{filename}"
-    result = await sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
+    # Retry on transient Supabase 502s — storage3 crashes with JSONDecodeError
+    # when the upstream returns a non-JSON gateway error body.
+    result = None
+    for attempt in range(3):
+        try:
+            result = await sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
+            break
+        except Exception:
+            if attempt == 2:
+                raise
+            await asyncio.sleep(0.5)
     if result and result.get("signedURL"):
         from fastapi.responses import JSONResponse
 
@@ -266,8 +276,16 @@ async def get_batch_signed_urls(
         validate_safe_filename(f)
     sb = await get_async_client()
     paths = [f"{user_id}/{f}" for f in filenames]
-    result = await sb.storage.from_(bucket).create_signed_urls(paths, 3600)
-    return result
+    # Retry on transient Supabase 502s — storage3 crashes with JSONDecodeError
+    # when the upstream returns a non-JSON gateway error body.
+    for attempt in range(3):
+        try:
+            result = await sb.storage.from_(bucket).create_signed_urls(paths, 3600)
+            return result
+        except Exception:
+            if attempt == 2:
+                raise
+            await asyncio.sleep(0.5)
 
 
 # In-memory cache for batch thumbnails: (user_id, bucket, name, w) -> data_uri
