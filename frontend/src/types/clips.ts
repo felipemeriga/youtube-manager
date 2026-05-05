@@ -15,7 +15,17 @@ export type ClipJobStage =
   | "preview_render"
   | "await_selection"
   | "final_render"
+  | "download_source"
+  | "extract_audio"
+  | "render_finals"
   | "done";
+
+export type CaptionStyle =
+  | "classic"
+  | "tiktok"
+  | "bold_yellow"
+  | "minimal_box"
+  | "top_centered";
 
 export interface ClipJobSummary {
   id: string;

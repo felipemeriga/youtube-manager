@@ -173,12 +173,17 @@ async def run_finals_pipeline(
     user_id: str,
     candidate_ids: list[str],
     tmp_dir: Path,
+    caption_style: str = "classic",
 ) -> None:
     sb = await get_async_client()
     job_tmp = tmp_dir / f"{job_id}_finals"
     job_tmp.mkdir(parents=True, exist_ok=True)
 
     try:
+        # Stage 1/4: download source
+        await _update_job(job_id, {"current_stage": "download_source", "progress_pct": 5})
+        await _publish_progress(job_id, "download_source", 5)
+
         job_res = await sb.table("clip_jobs").select("*").eq("id", job_id).single().execute()
         cands_res = await (
             sb.table("clip_candidates").select("*").in_("id", candidate_ids).execute()
@@ -188,6 +193,9 @@ async def run_finals_pipeline(
         source = job_tmp / "source.mp4"
         await download_file(job_res.data["source_storage_key"], source)
 
+        # Stage 2/4: extract audio
+        await _update_job(job_id, {"current_stage": "extract_audio", "progress_pct": 15})
+        await _publish_progress(job_id, "extract_audio", 15)
         audio_path = job_tmp / "audio.mp3"
         audio_proc = await asyncio.create_subprocess_exec(
             "ffmpeg", "-y", "-i", str(source), "-vn", "-acodec", "libmp3lame", "-q:a", "5",
@@ -195,10 +203,20 @@ async def run_finals_pipeline(
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
         )
         await audio_proc.wait()
+
+        # Stage 3/4: transcribe
+        await _update_job(job_id, {"current_stage": "transcribe", "progress_pct": 25})
+        await _publish_progress(job_id, "transcribe", 25)
         cues = await fetch_transcript(job_res.data["youtube_url"], audio_path, job_tmp)
 
-        total = len(candidates_data)
-        for i, cand_row in enumerate(candidates_data):
+        # Stage 4/4: render finals (loop). Overall pct goes from 30 → 95 across
+        # all selected candidates; per-candidate intra-encode pct rides on top
+        # via render_progress events keyed by candidate_id.
+        await _update_job(job_id, {"current_stage": "render_finals", "progress_pct": 30})
+        await _publish_progress(job_id, "render_finals", 30)
+
+        total = max(1, len(candidates_data))
+        for cand_idx, cand_row in enumerate(candidates_data):
             from .models import CandidateClip
             candidate = CandidateClip(
                 start_seconds=cand_row["start_seconds"],
@@ -207,39 +225,55 @@ async def run_finals_pipeline(
                 hype_reasoning=cand_row.get("hype_reasoning") or "",
                 transcript_excerpt=cand_row.get("transcript_excerpt") or "",
             )
+            cand_id = cand_row["id"]
+
+            async def _emit_progress(pct: int, _cid: str = cand_id, _idx: int = cand_idx) -> None:
+                # Per-candidate event for the LinearProgress bar in each card.
+                await broker.publish(job_id, {
+                    "type": "render_progress",
+                    "candidate_id": _cid,
+                    "pct": pct,
+                })
+                # Overall job pct: 30 + 65 * (completed_clips + intra_pct/100) / total
+                overall = 30 + int(65 * (_idx + pct / 100.0) / total)
+                await _publish_progress(job_id, "render_finals", min(95, overall))
+
             try:
                 key = await render_one_final(
                     candidate=candidate,
-                    candidate_id=cand_row["id"],
+                    candidate_id=cand_id,
                     source=source,
                     cues=cues,
                     user_id=user_id,
                     job_id=job_id,
                     tmp_dir=job_tmp,
+                    on_progress=_emit_progress,
+                    caption_style=caption_style,
                 )
                 signed = await signed_url_helper(key)
-                await sb.table("clip_candidates").update({"final_storage_key": key}).eq("id", cand_row["id"]).execute()
+                await sb.table("clip_candidates").update({"final_storage_key": key}).eq("id", cand_id).execute()
+                await broker.publish(job_id, {
+                    "type": "render_progress",
+                    "candidate_id": cand_id,
+                    "pct": 100,
+                })
                 await broker.publish(job_id, {
                     "type": "render_complete",
-                    "candidate_id": cand_row["id"],
+                    "candidate_id": cand_id,
                     "signed_url": signed,
                 })
             except Exception as e:
-                logger.exception("Final render failed for %s: %s", cand_row["id"], e)
+                logger.exception("Final render failed for %s: %s", cand_id, e)
                 await broker.publish(job_id, {
                     "type": "render_failed",
-                    "candidate_id": cand_row["id"],
+                    "candidate_id": cand_id,
                     "error": str(e)[:200],
                 })
-            await broker.publish(job_id, {
-                "type": "render_progress",
-                "candidate_id": cand_row["id"],
-                "pct": int(100 * (i + 1) / total),
-            })
 
         await sb.table("clip_jobs").update({
             "status": "completed", "current_stage": "done", "progress_pct": 100,
         }).eq("id", job_id).execute()
+        await _publish_progress(job_id, "done", 100)
         await broker.publish(job_id, {"type": "render_complete_all"})
 
     except asyncio.CancelledError:

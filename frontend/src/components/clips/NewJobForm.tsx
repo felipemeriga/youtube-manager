@@ -5,6 +5,7 @@ import {
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { clipsApi } from "../../api/clips";
+import { ensureNotificationPermission } from "../../lib/notify";
 
 export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) => void }) {
   const [url, setUrl] = useState("");
@@ -15,6 +16,9 @@ export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) =
   async function submit() {
     setError(null);
     setLoading(true);
+    // Lazy permission request — must happen from a user gesture so the
+    // "Clips prontos" notification can fire when the pipeline completes.
+    ensureNotificationPermission();
     try {
       const meta = await clipsApi.preflight(url);
       if (meta.duration_seconds > 1800) {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
-import type { ClipJob, ClipCandidate, JobEvent } from "../types/clips";
+import type { CaptionStyle, ClipJob, ClipCandidate, JobEvent } from "../types/clips";
 import { clipsApi } from "../api/clips";
 import { useClipJobSSE } from "../hooks/useClipJobSSE";
 import JobProgressPanel from "../components/clips/JobProgressPanel";
@@ -10,6 +10,7 @@ import ClipGrid from "../components/clips/ClipGrid";
 import ClipPreviewModal from "../components/clips/ClipPreviewModal";
 import SelectionBar from "../components/clips/SelectionBar";
 import FinalRenderPanel from "../components/clips/FinalRenderPanel";
+import { ensureNotificationPermission, notify } from "../lib/notify";
 
 export default function ClipJobPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -21,6 +22,7 @@ export default function ClipJobPage() {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [rendering, setRendering] = useState(false);
   const [renderTriggered, setRenderTriggered] = useState(false);
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>("classic");
 
   async function refresh() {
     if (!jobId) return;
@@ -40,12 +42,14 @@ export default function ClipJobPage() {
       setJob(j => j ? { ...j, current_stage: e.stage, progress_pct: e.pct } : j);
     } else if (e.type === "ready") {
       refresh();
+      notify("Clips prontos", "Os candidatos a clip estão prontos para você revisar.");
     } else if (e.type === "render_progress") {
       setRenderProgress(p => ({ ...p, [e.candidate_id]: e.pct }));
     } else if (e.type === "render_complete") {
       setSignedUrls(u => ({ ...u, [e.candidate_id]: e.signed_url }));
     } else if (e.type === "render_complete_all") {
       refresh();
+      notify("Renderização concluída", "Seus clips em alta resolução estão prontos para download.");
     }
   });
 
@@ -85,6 +89,9 @@ export default function ClipJobPage() {
   }
 
   if ((job.status === "rendering" || (job.status === "completed" && renderTriggered)) && selectedCandidates.length > 0) {
+    const allDone = selectedCandidates.every(
+      (c) => !!signedUrls[c.id] || !!c.final_storage_key,
+    );
     return (
       <Box sx={{ p: 4 }}>
         <FinalRenderPanel
@@ -92,6 +99,9 @@ export default function ClipJobPage() {
           progress={renderProgress}
           signedUrls={signedUrls}
           onBack={() => setSelected(new Set())}
+          currentStage={job.current_stage}
+          overallPct={job.progress_pct}
+          allDone={allDone}
         />
       </Box>
     );
@@ -137,11 +147,15 @@ export default function ClipJobPage() {
       <SelectionBar
         count={selected.size}
         loading={rendering}
+        captionStyle={captionStyle}
+        onCaptionStyleChange={setCaptionStyle}
         onRender={async () => {
           setRendering(true);
           setRenderTriggered(true);
+          // Lazy permission request — must happen from a user gesture.
+          ensureNotificationPermission();
           try {
-            await clipsApi.render(job.id, Array.from(selected));
+            await clipsApi.render(job.id, Array.from(selected), captionStyle);
             await refresh();
           } finally {
             setRendering(false);

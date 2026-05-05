@@ -1,5 +1,6 @@
 import { apiFetch } from "../lib/api";
 import type {
+  CaptionStyle,
   ClipJob,
   ClipJobSummary,
   PreflightResponse,
@@ -35,10 +36,10 @@ export const clipsApi = {
       method: "POST",
     }),
 
-  render: (id: string, candidate_ids: string[]) =>
+  render: (id: string, candidate_ids: string[], caption_style: CaptionStyle = "classic") =>
     apiFetch<{ status: string }>(`/api/clips/jobs/${id}/render`, {
       method: "POST",
-      body: JSON.stringify({ candidate_ids }),
+      body: JSON.stringify({ candidate_ids, caption_style }),
     }),
 
   previewUrl: (candidateId: string, signal?: AbortSignal) =>

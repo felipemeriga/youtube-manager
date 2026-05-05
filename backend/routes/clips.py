@@ -113,7 +113,7 @@ async def job_events(job_id: str, request: Request, user_id: str = Depends(get_c
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield f"data: {json.dumps(event)}\n\n"
-                    if event.get("type") in ("ready", "error", "render_complete_all"):
+                    if event.get("type") in ("error", "render_complete_all"):
                         break
                 except asyncio.TimeoutError:
                     yield ": heartbeat\n\n"  # SSE comment line keeps connection alive
@@ -125,6 +125,7 @@ async def job_events(job_id: str, request: Request, user_id: str = Depends(get_c
 
 class RenderRequest(BaseModel):
     candidate_ids: list[str]
+    caption_style: str = "classic"
 
 
 @router.post("/jobs/{job_id}/render", status_code=202)
@@ -159,6 +160,7 @@ async def render_finals(
     tmp_dir = Path(settings.clips_tmp_dir)
     task = asyncio.create_task(run_finals_pipeline(
         job_id=job_id, user_id=user_id, candidate_ids=req.candidate_ids, tmp_dir=tmp_dir,
+        caption_style=req.caption_style,
     ))
     register_task(job_id, task)
     return {"status": "rendering", "candidate_ids": req.candidate_ids}

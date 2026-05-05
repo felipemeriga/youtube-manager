@@ -10,6 +10,10 @@ const STAGE_LABELS: Record<string, string> = {
   segment: "Avaliando momentos para clips…",
   preview_render: "Renderizando prévias…",
   final_render: "Renderizando clips finais…",
+  download_source: "Carregando vídeo original…",
+  extract_audio: "Extraindo áudio para legendas…",
+  render_finals: "Renderizando clips em alta resolução…",
+  done: "Concluído",
 };
 
 const STAGE_ORDER: ClipJobStage[] = [
@@ -27,6 +31,9 @@ const STAGE_SHORT: Record<ClipJobStage, string> = {
   preview_render: "Renderização",
   await_selection: "Seleção",
   final_render: "Final",
+  download_source: "Fonte",
+  extract_audio: "Áudio",
+  render_finals: "Render",
   done: "Concluído",
 };
 

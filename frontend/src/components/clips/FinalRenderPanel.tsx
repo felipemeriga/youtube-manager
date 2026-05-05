@@ -2,16 +2,50 @@ import { Box, Button, LinearProgress, Paper, Stack, Typography, alpha } from "@m
 import DownloadIcon from "@mui/icons-material/Download";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
-import type { ClipCandidate } from "../../types/clips";
+import RadioButtonUncheckedRoundedIcon from "@mui/icons-material/RadioButtonUncheckedRounded";
+import type { ClipCandidate, ClipJobStage } from "../../types/clips";
 import { clipsApi } from "../../api/clips";
 
+const RENDER_STAGE_LABELS: Record<string, string> = {
+  download_source: "Carregando vídeo original…",
+  extract_audio: "Extraindo áudio…",
+  transcribe: "Transcrevendo legendas…",
+  render_finals: "Renderizando clips em 1080p…",
+  done: "Concluído",
+};
+
+const RENDER_STAGE_ORDER: ClipJobStage[] = [
+  "download_source",
+  "extract_audio",
+  "transcribe",
+  "render_finals",
+];
+
+const RENDER_STAGE_SHORT: Partial<Record<ClipJobStage, string>> = {
+  download_source: "Fonte",
+  extract_audio: "Áudio",
+  transcribe: "Legendas",
+  render_finals: "Render",
+};
+
+function renderStageIndex(stage: ClipJobStage | null | undefined): number {
+  if (!stage) return -1;
+  const idx = RENDER_STAGE_ORDER.indexOf(stage);
+  if (idx >= 0) return idx;
+  if (stage === "done") return RENDER_STAGE_ORDER.length;
+  return -1;
+}
+
 export default function FinalRenderPanel({
-  selected, progress, signedUrls, onBack,
+  selected, progress, signedUrls, onBack, currentStage, overallPct, allDone,
 }: {
   selected: ClipCandidate[];
   progress: Record<string, number>;
   signedUrls: Record<string, string>;
   onBack: () => void;
+  currentStage: ClipJobStage | null;
+  overallPct: number;
+  allDone: boolean;
 }) {
   async function download(id: string) {
     const url = signedUrls[id] ?? (await clipsApi.finalUrl(id)).url;
@@ -23,6 +57,10 @@ export default function FinalRenderPanel({
 
   const isDone = (c: ClipCandidate) => !!signedUrls[c.id] || !!c.final_storage_key;
   const completedCount = selected.filter(isDone).length;
+  const stageLabel = currentStage
+    ? RENDER_STAGE_LABELS[currentStage] ?? "Processando…"
+    : allDone ? "Concluído" : "Iniciando…";
+  const activeStageIdx = renderStageIndex(currentStage);
 
   return (
     <Box sx={{ maxWidth: 1100, mx: "auto" }}>
@@ -35,6 +73,82 @@ export default function FinalRenderPanel({
           {completedCount} / {selected.length} prontos
         </Typography>
       </Stack>
+
+      {!allDone && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">{stageLabel}</Typography>
+
+            {/* Stage breadcrumb */}
+            <Stack direction="row" spacing={0} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 1 }}>
+              {RENDER_STAGE_ORDER.map((s, i) => {
+                const done = i < activeStageIdx;
+                const active = i === activeStageIdx;
+                return (
+                  <Stack
+                    key={s}
+                    direction="row"
+                    alignItems="center"
+                    spacing={0.75}
+                    sx={{
+                      color: done ? "success.main" : active ? "primary.light" : "text.disabled",
+                      fontWeight: active ? 600 : 500,
+                      mr: i < RENDER_STAGE_ORDER.length - 1 ? 1.5 : 0,
+                    }}
+                  >
+                    {done ? (
+                      <CheckCircleRoundedIcon sx={{ fontSize: 16 }} />
+                    ) : (
+                      <RadioButtonUncheckedRoundedIcon sx={{
+                        fontSize: 16,
+                        animation: active ? "pulse 1.5s ease-in-out infinite" : "none",
+                        "@keyframes pulse": {
+                          "0%, 100%": { opacity: 1 },
+                          "50%": { opacity: 0.4 },
+                        },
+                      }} />
+                    )}
+                    <Typography variant="caption" sx={{ fontWeight: "inherit" }}>
+                      {RENDER_STAGE_SHORT[s]}
+                    </Typography>
+                    {i < RENDER_STAGE_ORDER.length - 1 && (
+                      <Box sx={{
+                        width: 16,
+                        height: 1,
+                        ml: 1,
+                        backgroundColor: done ? "success.main" : alpha("#ffffff", 0.1),
+                      }} />
+                    )}
+                  </Stack>
+                );
+              })}
+            </Stack>
+
+            {/* Overall progress bar */}
+            <Box>
+              <LinearProgress
+                variant="determinate"
+                value={overallPct}
+                sx={{
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: alpha("#ffffff", 0.06),
+                  "& .MuiLinearProgress-bar": {
+                    background: "linear-gradient(90deg, #7c3aed, #3b82f6)",
+                    borderRadius: 4,
+                  },
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{ mt: 1, display: "block", color: "text.secondary", fontVariantNumeric: "tabular-nums" }}
+              >
+                {overallPct}%
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
+      )}
 
       <Box
         sx={{
