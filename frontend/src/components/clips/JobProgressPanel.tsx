@@ -28,7 +28,7 @@ const STAGE_SHORT: Record<ClipJobStage, string> = {
   download: "Download",
   transcribe: "Transcrição",
   segment: "Análise",
-  preview_render: "Renderização",
+  preview_render: "Prévias",
   await_selection: "Seleção",
   final_render: "Final",
   download_source: "Fonte",
