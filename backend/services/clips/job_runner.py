@@ -94,7 +94,13 @@ async def run_pipeline(
         await audio_proc.wait()
 
         cues = await fetch_transcript(url, audio_path, job_tmp)
-        await _update_job(job_id, {"current_stage": "segment", "progress_pct": 45})
+        # Persist cues so the finals pipeline can skip extract_audio + transcribe.
+        cues_json = [{"start": c.start, "end": c.end, "text": c.text} for c in cues]
+        await _update_job(job_id, {
+            "transcript_cues": cues_json,
+            "current_stage": "segment",
+            "progress_pct": 45,
+        })
         await _publish_progress(job_id, "segment", 45)
 
         candidates = await segment_and_score(cues, duration_seconds=metadata.duration_seconds)
@@ -193,21 +199,33 @@ async def run_finals_pipeline(
         source = job_tmp / "source.mp4"
         await download_file(job_res.data["source_storage_key"], source)
 
-        # Stage 2/4: extract audio
-        await _update_job(job_id, {"current_stage": "extract_audio", "progress_pct": 15})
-        await _publish_progress(job_id, "extract_audio", 15)
-        audio_path = job_tmp / "audio.mp3"
-        audio_proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-i", str(source), "-vn", "-acodec", "libmp3lame", "-q:a", "5",
-            str(audio_path),
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )
-        await audio_proc.wait()
+        # Reuse the transcript cached during run_pipeline if present —
+        # extract_audio + transcribe are pure functions of the (already-known)
+        # video, so re-running them on every finals render wastes ~30-60s and
+        # an extra Whisper call on the YT-captions-broken path.
+        saved_cues = job_res.data.get("transcript_cues")
+        if saved_cues:
+            from .models import TranscriptCue
+            cues = [
+                TranscriptCue(start=c["start"], end=c["end"], text=c["text"])
+                for c in saved_cues
+            ]
+        else:
+            # Stage 2/4: extract audio
+            await _update_job(job_id, {"current_stage": "extract_audio", "progress_pct": 15})
+            await _publish_progress(job_id, "extract_audio", 15)
+            audio_path = job_tmp / "audio.mp3"
+            audio_proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-y", "-i", str(source), "-vn", "-acodec", "libmp3lame", "-q:a", "5",
+                str(audio_path),
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+            await audio_proc.wait()
 
-        # Stage 3/4: transcribe
-        await _update_job(job_id, {"current_stage": "transcribe", "progress_pct": 25})
-        await _publish_progress(job_id, "transcribe", 25)
-        cues = await fetch_transcript(job_res.data["youtube_url"], audio_path, job_tmp)
+            # Stage 3/4: transcribe
+            await _update_job(job_id, {"current_stage": "transcribe", "progress_pct": 25})
+            await _publish_progress(job_id, "transcribe", 25)
+            cues = await fetch_transcript(job_res.data["youtube_url"], audio_path, job_tmp)
 
         # Stage 4/4: render finals (loop). Overall pct goes from 30 → 95 across
         # all selected candidates; per-candidate intra-encode pct rides on top
