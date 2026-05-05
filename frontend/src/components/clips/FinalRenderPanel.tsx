@@ -37,14 +37,13 @@ function renderStageIndex(stage: ClipJobStage | null | undefined): number {
 }
 
 export default function FinalRenderPanel({
-  selected, progress, signedUrls, onBack, currentStage, overallPct, allDone,
+  selected, progress, signedUrls, onBack, currentStage, allDone,
 }: {
   selected: ClipCandidate[];
   progress: Record<string, number>;
   signedUrls: Record<string, string>;
   onBack: () => void;
   currentStage: ClipJobStage | null;
-  overallPct: number;
   allDone: boolean;
 }) {
   async function download(id: string) {
@@ -76,11 +75,17 @@ export default function FinalRenderPanel({
 
       {!allDone && (
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Stack spacing={2}>
+          <Stack spacing={2} alignItems="center">
             <Typography variant="body2" color="text.secondary">{stageLabel}</Typography>
 
-            {/* Stage breadcrumb */}
-            <Stack direction="row" spacing={0} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 1 }}>
+            {/* Stage breadcrumb — centered, the only global progress indicator. */}
+            <Stack
+              direction="row"
+              spacing={0}
+              alignItems="center"
+              justifyContent="center"
+              sx={{ flexWrap: "wrap", rowGap: 1 }}
+            >
               {RENDER_STAGE_ORDER.map((s, i) => {
                 const done = i < activeStageIdx;
                 const active = i === activeStageIdx;
@@ -123,29 +128,6 @@ export default function FinalRenderPanel({
                 );
               })}
             </Stack>
-
-            {/* Overall progress bar */}
-            <Box>
-              <LinearProgress
-                variant="determinate"
-                value={overallPct}
-                sx={{
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: alpha("#ffffff", 0.06),
-                  "& .MuiLinearProgress-bar": {
-                    background: "linear-gradient(90deg, #7c3aed, #3b82f6)",
-                    borderRadius: 4,
-                  },
-                }}
-              />
-              <Typography
-                variant="caption"
-                sx={{ mt: 1, display: "block", color: "text.secondary", fontVariantNumeric: "tabular-nums" }}
-              >
-                {overallPct}%
-              </Typography>
-            </Box>
           </Stack>
         </Paper>
       )}
