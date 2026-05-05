@@ -8,12 +8,8 @@ from collections import OrderedDict
 from PIL import Image
 from config import settings
 from services.supabase_pool import get_async_client
+from services.image_provider import get_provider, model_for
 from services.llm import ask_llm
-from services.nano_banana import (
-    generate_background,
-    composite_with_effects,
-    add_text_with_style,
-)
 from services.photo_search import find_best_photos
 from services.thumbnail_memory import get_relevant_memories, extract_and_store_memory
 from services.thumbnail_state import (
@@ -230,18 +226,20 @@ async def generate_background_node(state: ThumbnailState) -> dict:
         previous_bgs = dict(prev_results)
 
     tier = QUALITY_TIER
+    provider = get_provider(state.get("image_provider"))
+    model = model_for(state.get("image_provider"), tier["model"])
 
     # Generate for all platforms concurrently, then upload sequentially
     async def _gen_bg(platform: str) -> tuple[str, bytes]:
         cfg = PLATFORM_CONFIGS[platform]
-        bg_bytes = await generate_background(
+        bg_bytes = await provider.generate_background(
             prompt=prompt,
             reference_images=ref_thumbs,
             logos=logos,
             previous_image=previous_bgs.get(platform),
             aspect_ratio=cfg["aspect_ratio"],
             image_size=tier["image_size"],
-            model=tier["model"],
+            model=model,
         )
         return platform, bg_bytes
 
@@ -322,6 +320,8 @@ async def composite_node(state: ThumbnailState) -> dict:
         previous_comps = dict(prev_results)
 
     tier = QUALITY_TIER
+    provider = get_provider(state.get("image_provider"))
+    model = model_for(state.get("image_provider"), tier["model"])
 
     async def _gen_comp(platform: str) -> tuple[str, bytes]:
         bg_paths = background_urls.get(platform)
@@ -331,7 +331,7 @@ async def composite_node(state: ThumbnailState) -> dict:
         dl_sb = await _get_supabase()
         bg_bytes = await dl_sb.storage.from_("outputs").download(bg_url)
         cfg = PLATFORM_CONFIGS[platform]
-        comp_bytes = await composite_with_effects(
+        comp_bytes = await provider.composite_with_effects(
             bg_bytes,
             person_bytes,
             ref_thumbs,
@@ -341,7 +341,7 @@ async def composite_node(state: ThumbnailState) -> dict:
             transform_prompt=transform_prompt,
             aspect_ratio=cfg["aspect_ratio"],
             image_size=tier["image_size"],
-            model=tier["model"],
+            model=model,
         )
         return platform, comp_bytes
 
@@ -393,6 +393,8 @@ async def add_text_node(state: ThumbnailState) -> dict:
         previous_finals = dict(prev_results)
 
     tier = QUALITY_TIER
+    provider = get_provider(state.get("image_provider"))
+    model = model_for(state.get("image_provider"), tier["model"])
 
     async def _gen_text(platform: str) -> tuple[str, bytes]:
         comp_paths = composite_urls.get(platform)
@@ -402,7 +404,7 @@ async def add_text_node(state: ThumbnailState) -> dict:
         dl_sb = await _get_supabase()
         comp_bytes = await dl_sb.storage.from_("outputs").download(comp_url)
         cfg = PLATFORM_CONFIGS[platform]
-        final_bytes = await add_text_with_style(
+        final_bytes = await provider.add_text_with_style(
             comp_bytes,
             state["thumb_text"],
             ref_thumbs,
@@ -410,7 +412,7 @@ async def add_text_node(state: ThumbnailState) -> dict:
             extra_instructions=text_feedback,
             aspect_ratio=cfg["aspect_ratio"],
             image_size=tier["image_size"],
-            model=tier["model"],
+            model=model,
         )
         return platform, final_bytes
 

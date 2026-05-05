@@ -182,7 +182,7 @@ def test_create_conversation_with_title_in_insert():
     assert response.status_code == 200
     # Verify the insert was called with the correct user_id
     mock_sb.table.return_value.insert.assert_called_once_with(
-        {"user_id": user_id, "mode": "thumbnail"}
+        {"user_id": user_id, "mode": "thumbnail", "image_provider": "gemini"}
     )
 
 
@@ -339,7 +339,7 @@ def test_create_conversation_with_script_mode():
     assert response.status_code == 200
     assert response.json()["mode"] == "script"
     mock_sb.table.return_value.insert.assert_called_once_with(
-        {"user_id": user_id, "mode": "script"}
+        {"user_id": user_id, "mode": "script", "image_provider": "gemini"}
     )
 
 
@@ -363,7 +363,7 @@ def test_create_conversation_default_mode_is_thumbnail():
 
     assert response.status_code == 200
     mock_sb.table.return_value.insert.assert_called_once_with(
-        {"user_id": user_id, "mode": "thumbnail"}
+        {"user_id": user_id, "mode": "thumbnail", "image_provider": "gemini"}
     )
 
 

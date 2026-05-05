@@ -53,7 +53,7 @@ async def test_generate_background_returns_url():
                 sb.storage.from_.return_value.list = AsyncMock(return_value=[])
                 sb.storage.from_.return_value.upload = AsyncMock()
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ):
@@ -114,7 +114,7 @@ async def test_composite_node_returns_url():
         sb.storage.from_.return_value.list = AsyncMock(return_value=[])
         sb.storage.from_.return_value.upload = AsyncMock()
         with patch(
-            "services.thumbnail_nodes.composite_with_effects",
+            "services.nano_banana.composite_with_effects",
             new_callable=AsyncMock,
             return_value=fake_image,
         ):
@@ -146,7 +146,7 @@ async def test_add_text_node_returns_url():
         sb.storage.from_.return_value.list = AsyncMock(return_value=[])
         sb.storage.from_.return_value.upload = AsyncMock()
         with patch(
-            "services.thumbnail_nodes.add_text_with_style",
+            "services.nano_banana.add_text_with_style",
             new_callable=AsyncMock,
             return_value=fake_image,
         ):
@@ -184,7 +184,7 @@ async def test_generate_background_uses_4k_quality():
                 sb.storage.from_.return_value.list = AsyncMock(return_value=[])
                 sb.storage.from_.return_value.upload = AsyncMock()
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ) as mock_gen:

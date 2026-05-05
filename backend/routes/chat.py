@@ -166,6 +166,18 @@ async def thumbnail_stream(
                 .execute()
             )
 
+            # Pull the per-conversation image provider so the graph dispatches
+            # to the right image-gen module. Default to gemini for old rows
+            # that predate the column.
+            conv_row = await (
+                sb.table("conversations")
+                .select("image_provider")
+                .eq("id", conversation_id)
+                .single()
+                .execute()
+            )
+            image_provider = (conv_row.data or {}).get("image_provider") or "gemini"
+
             result = await graph.ainvoke(
                 {
                     "conversation_id": conversation_id,
@@ -186,6 +198,7 @@ async def thumbnail_stream(
                     "composite_mode": "natural",
                     "transform_prompt": None,
                     "clarify_question": None,
+                    "image_provider": image_provider,
                 },
                 config,
             )

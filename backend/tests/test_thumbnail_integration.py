@@ -64,7 +64,7 @@ async def test_full_flow_background_to_photos(mock_supabase):
                 return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ):
@@ -120,7 +120,7 @@ async def test_full_flow_photos_to_composite(mock_supabase):
                 return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ):
@@ -130,7 +130,7 @@ async def test_full_flow_photos_to_composite(mock_supabase):
                         return_value=[],
                     ):
                         with patch(
-                            "services.thumbnail_nodes.composite_with_effects",
+                            "services.nano_banana.composite_with_effects",
                             new_callable=AsyncMock,
                             return_value=fake_image,
                         ):
@@ -190,7 +190,7 @@ async def test_feedback_regenerates_background(mock_supabase):
                 return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ) as mock_gen:
@@ -240,7 +240,7 @@ async def test_full_flow_to_text_prompt(mock_supabase):
                 return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ):
@@ -250,7 +250,7 @@ async def test_full_flow_to_text_prompt(mock_supabase):
                         return_value=[],
                     ):
                         with patch(
-                            "services.thumbnail_nodes.composite_with_effects",
+                            "services.nano_banana.composite_with_effects",
                             new_callable=AsyncMock,
                             return_value=fake_image,
                         ):

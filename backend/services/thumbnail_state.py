@@ -63,3 +63,8 @@ class ThumbnailState(TypedDict):
     # Composite mode: "natural" (preserve person as-is) or "transform" (allow modifications)
     composite_mode: str  # "natural" | "transform"
     transform_prompt: str | None  # e.g. "transform me into an astronaut"
+
+    # Image generation provider — pinned per conversation. "gemini" (default)
+    # uses nano_banana; "openai" uses gpt-image-2 via openai_image. Locked
+    # after creation so all artifacts in a conversation share a style.
+    image_provider: str  # "gemini" | "openai"

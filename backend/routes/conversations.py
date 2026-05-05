@@ -11,6 +11,7 @@ DEFAULT_MESSAGE_LIMIT = 50
 
 class CreateConversationRequest(BaseModel):
     mode: str = "thumbnail"
+    image_provider: str = "gemini"  # "gemini" | "openai" — locked at creation
 
 
 class UpdateConversationRequest(BaseModel):
@@ -43,8 +44,15 @@ async def create_conversation(
 ):
     sb = await get_async_client()
     mode = request.mode if request else "thumbnail"
+    image_provider = request.image_provider if request else "gemini"
+    if image_provider not in {"gemini", "openai"}:
+        raise HTTPException(status_code=400, detail="Invalid image_provider")
     result = await (
-        sb.table("conversations").insert({"user_id": user_id, "mode": mode}).execute()
+        sb.table("conversations").insert({
+            "user_id": user_id,
+            "mode": mode,
+            "image_provider": image_provider,
+        }).execute()
     )
     return result.data[0]
 

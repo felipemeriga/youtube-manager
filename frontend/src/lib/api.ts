@@ -211,10 +211,11 @@ export const listConversations = (signal?: AbortSignal) =>
 export const createConversation = (
   mode: string = "thumbnail",
   signal?: AbortSignal,
+  imageProvider: "gemini" | "openai" = "gemini",
 ) =>
   apiFetch<Record<string, unknown>>("/api/conversations", {
     method: "POST",
-    body: JSON.stringify({ mode }),
+    body: JSON.stringify({ mode, image_provider: imageProvider }),
     signal,
   });
 export const getConversation = (

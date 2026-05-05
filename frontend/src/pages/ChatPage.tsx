@@ -11,6 +11,8 @@ import {
   Typography,
   Checkbox,
   FormControlLabel,
+  Radio,
+  RadioGroup,
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
@@ -72,6 +74,9 @@ export default function ChatPage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([
     "youtube",
   ]);
+  const [imageProvider, setImageProvider] = useState<"gemini" | "openai">(
+    "gemini"
+  );
   const pendingMessageRef = useRef<{
     content: string;
     type: string;
@@ -242,7 +247,7 @@ export default function ChatPage() {
 
   const handleModeSelect = async (mode: string) => {
     setShowModeDialog(false);
-    const conv = await createConversation(mode, getSignal());
+    const conv = await createConversation(mode, getSignal(), imageProvider);
     const newConv = conv as unknown as Conversation;
     setConversations((prev) => [newConv, ...prev]);
     setSelectedId(newConv.id);
@@ -662,6 +667,45 @@ export default function ChatPage() {
                     }}
                   />
                 ))}
+              </Box>
+              <Box sx={{ ml: 4, mt: 1.5 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "rgba(255,255,255,0.5)", display: "block", mb: 0.5 }}
+                >
+                  Modelo de imagem
+                </Typography>
+                <RadioGroup
+                  row
+                  value={imageProvider}
+                  onChange={(e) =>
+                    setImageProvider(e.target.value as "gemini" | "openai")
+                  }
+                >
+                  {[
+                    { key: "gemini", label: "Gemini" },
+                    { key: "openai", label: "OpenAI" },
+                  ].map((p) => (
+                    <FormControlLabel
+                      key={p.key}
+                      value={p.key}
+                      control={
+                        <Radio
+                          size="small"
+                          sx={{
+                            color: "#7c3aed",
+                            "&.Mui-checked": { color: "#7c3aed" },
+                          }}
+                        />
+                      }
+                      label={p.label}
+                      sx={{
+                        color: "rgba(255,255,255,0.7)",
+                        "& .MuiTypography-root": { fontSize: 13 },
+                      }}
+                    />
+                  ))}
+                </RadioGroup>
               </Box>
             </Box>
             <Button

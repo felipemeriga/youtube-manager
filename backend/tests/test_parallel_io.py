@@ -59,7 +59,7 @@ async def test_background_uploads_run_in_parallel():
             "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
         ) as mock_sb,
         patch(
-            "services.thumbnail_nodes.generate_background",
+            "services.nano_banana.generate_background",
             new_callable=AsyncMock,
             return_value=fake_image,
         ),
@@ -98,7 +98,7 @@ async def test_composite_uploads_run_in_parallel():
             "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
         ) as mock_sb,
         patch(
-            "services.thumbnail_nodes.composite_with_effects",
+            "services.nano_banana.composite_with_effects",
             new_callable=AsyncMock,
             return_value=fake_image,
         ),
@@ -137,7 +137,7 @@ async def test_text_node_uploads_run_in_parallel():
             "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
         ) as mock_sb,
         patch(
-            "services.thumbnail_nodes.add_text_with_style",
+            "services.nano_banana.add_text_with_style",
             new_callable=AsyncMock,
             return_value=fake_image,
         ),
