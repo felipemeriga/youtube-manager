@@ -93,10 +93,11 @@ def test_sse_events_streams_published_events(mock_sb):
     job_chain.execute = AsyncMock(return_value=MagicMock(data={"id": "j1", "user_id": "user-123"}))
 
     # Use a custom subscribe that returns a queue pre-populated with a terminal
-    # event ("ready" causes the route to break out of its loop). Publishing via
-    # the live broker doesn't work here because TestClient's streaming runs the
-    # route in a separate event loop — an asyncio.Queue is bound to the loop on
-    # which `get` is awaited, so we must seed the queue from inside that loop.
+    # event ("error" or "render_complete_all" causes the route to break out of
+    # its loop). Publishing via the live broker doesn't work here because
+    # TestClient's streaming runs the route in a separate event loop — an
+    # asyncio.Queue is bound to the loop on which `get` is awaited, so we must
+    # seed the queue from inside that loop.
     import asyncio
     from services.clips import sse_broker as broker_mod
 
@@ -105,7 +106,7 @@ def test_sse_events_streams_published_events(mock_sb):
     def subscribe_with_event(job_id):
         q = real_subscribe(job_id)
         q.put_nowait({"type": "progress", "stage": "metadata", "pct": 5})
-        q.put_nowait({"type": "ready"})  # terminate the stream cleanly
+        q.put_nowait({"type": "render_complete_all"})  # terminate the stream cleanly
         return q
 
     with _patch_client(mock_sb), \
