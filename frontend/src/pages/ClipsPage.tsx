@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import type { ClipJobStatus, ClipJobSummary } from "../types/clips";
 import { clipsApi } from "../api/clips";
 import NewJobForm from "../components/clips/NewJobForm";
+import { usePageAbort } from "../hooks/usePageAbort";
 
 const STATUS_COLOR: Record<ClipJobStatus, "default" | "primary" | "secondary" | "success" | "error" | "warning"> = {
   pending: "warning",
@@ -57,24 +58,30 @@ export default function ClipsPage() {
   const [jobs, setJobs] = useState<ClipJobSummary[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<ClipJobSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const { getSignal, isAbort } = usePageAbort();
 
   useEffect(() => {
-    const ctrl = new AbortController();
-    clipsApi.listJobs(ctrl.signal)
-      .then((data) => { if (!ctrl.signal.aborted) setJobs(data); })
-      .catch((err) => { if (err?.name !== "AbortError") throw err; });
-    return () => ctrl.abort();
+    const signal = getSignal();
+    clipsApi.listJobs(signal)
+      .then((data) => { if (!signal.aborted) setJobs(data); })
+      .catch((err) => { if (!isAbort(err)) throw err; });
+  // getSignal/isAbort are stable for the page lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleDelete() {
     if (!confirmDelete) return;
     setDeleting(true);
+    const signal = getSignal();
     try {
-      await clipsApi.deleteJob(confirmDelete.id);
+      await clipsApi.deleteJob(confirmDelete.id, signal);
       setJobs((prev) => prev.filter((j) => j.id !== confirmDelete.id));
       setConfirmDelete(null);
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
     } finally {
-      setDeleting(false);
+      if (!signal.aborted) setDeleting(false);
     }
   }
 

@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { CaptionStyle, ClipJob, ClipCandidate, JobEvent } from "../types/clips";
 import { clipsApi } from "../api/clips";
 import { useClipJobSSE } from "../hooks/useClipJobSSE";
+import { usePageAbort } from "../hooks/usePageAbort";
 import JobProgressPanel from "../components/clips/JobProgressPanel";
 import ClipGrid from "../components/clips/ClipGrid";
 import ClipPreviewModal from "../components/clips/ClipPreviewModal";
@@ -23,18 +24,29 @@ export default function ClipJobPage() {
   const [rendering, setRendering] = useState(false);
   const [renderTriggered, setRenderTriggered] = useState(false);
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>("classic");
+  // Re-create the page-level abort whenever jobId changes so requests bound
+  // to the previous job are cancelled the moment the route id changes.
+  const { getSignal, isAbort } = usePageAbort(jobId);
 
   async function refresh() {
     if (!jobId) return;
-    setJob(await clipsApi.getJob(jobId));
+    const signal = getSignal();
+    try {
+      const data = await clipsApi.getJob(jobId, signal);
+      if (!signal.aborted) setJob(data);
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
+    }
   }
   useEffect(() => {
     if (!jobId) return;
-    const ctrl = new AbortController();
-    clipsApi.getJob(jobId, ctrl.signal)
-      .then((data) => { if (!ctrl.signal.aborted) setJob(data); })
-      .catch((err) => { if (err?.name !== "AbortError") throw err; });
-    return () => ctrl.abort();
+    const signal = getSignal();
+    clipsApi.getJob(jobId, signal)
+      .then((data) => { if (!signal.aborted) setJob(data); })
+      .catch((err) => { if (!isAbort(err)) throw err; });
+  // jobId reset re-creates the abort controller via usePageAbort.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
   useClipJobSSE(jobId ?? null, (e: JobEvent) => {
@@ -83,7 +95,15 @@ export default function ClipJobPage() {
     return (
       <JobProgressPanel
         job={job}
-        onCancel={async () => { await clipsApi.cancel(job.id); refresh(); }}
+        onCancel={async () => {
+          try {
+            await clipsApi.cancel(job.id, getSignal());
+            refresh();
+          } catch (e) {
+            if (isAbort(e)) return;
+            throw e;
+          }
+        }}
       />
     );
   }
@@ -93,14 +113,13 @@ export default function ClipJobPage() {
       (c) => !!signedUrls[c.id] || !!c.final_storage_key,
     );
     return (
-      <Box sx={{ p: 4 }}>
+      <Box sx={{ p: 4, width: "100%", overflowY: "auto" }}>
         <FinalRenderPanel
           selected={selectedCandidates}
           progress={renderProgress}
           signedUrls={signedUrls}
           onBack={() => setSelected(new Set())}
           currentStage={job.current_stage}
-          overallPct={job.progress_pct}
           allDone={allDone}
         />
       </Box>
@@ -154,11 +173,15 @@ export default function ClipJobPage() {
           setRenderTriggered(true);
           // Lazy permission request — must happen from a user gesture.
           ensureNotificationPermission();
+          const signal = getSignal();
           try {
-            await clipsApi.render(job.id, Array.from(selected), captionStyle);
+            await clipsApi.render(job.id, Array.from(selected), captionStyle, signal);
             await refresh();
+          } catch (e) {
+            if (isAbort(e)) return;
+            throw e;
           } finally {
-            setRendering(false);
+            if (!signal.aborted) setRendering(false);
           }
         }}
       />

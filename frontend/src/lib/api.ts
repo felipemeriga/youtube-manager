@@ -53,7 +53,8 @@ export async function apiFetch<T>(
 
 export async function apiUpload(
   path: string,
-  file: File
+  file: File,
+  signal?: AbortSignal
 ): Promise<Record<string, string>> {
   const {
     data: { session },
@@ -67,6 +68,7 @@ export async function apiUpload(
     method: "POST",
     headers: { Authorization: `Bearer ${session.access_token}` },
     body: formData,
+    signal,
   });
 
   if (!response.ok) {
@@ -105,7 +107,8 @@ export async function streamChat(
   type: string,
   callbacks: StreamCallbacks,
   imageUrl?: string,
-  platforms?: string[]
+  platforms?: string[],
+  signal?: AbortSignal
 ): Promise<void> {
   const headers = await getAuthHeaders();
 
@@ -121,6 +124,7 @@ export async function streamChat(
     method: "POST",
     headers,
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!response.ok || !response.body) {
@@ -133,6 +137,14 @@ export async function streamChat(
   let lastMessageType: string | undefined;
 
   while (true) {
+    // If the caller aborted (e.g. user navigated away), stop reading. The
+    // fetch's underlying connection will also error reader.read() with an
+    // AbortError, but we also break here so we don't dispatch a final chunk
+    // into stale callbacks for an unmounted component.
+    if (signal?.aborted) {
+      try { await reader.cancel(); } catch { /* ignore */ }
+      throw new DOMException("Aborted", "AbortError");
+    }
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -194,80 +206,94 @@ export const AVAILABLE_MODELS = [
   { id: "claude-opus-4-20250514", label: "Opus (best)" },
 ];
 
-export const listConversations = () =>
-  apiFetch<Array<Record<string, unknown>>>("/api/conversations");
-export const createConversation = (mode: string = "thumbnail") =>
+export const listConversations = (signal?: AbortSignal) =>
+  apiFetch<Array<Record<string, unknown>>>("/api/conversations", { signal });
+export const createConversation = (
+  mode: string = "thumbnail",
+  signal?: AbortSignal,
+) =>
   apiFetch<Record<string, unknown>>("/api/conversations", {
     method: "POST",
     body: JSON.stringify({ mode }),
+    signal,
   });
 export const getConversation = (
   id: string,
   limit: number = 50,
-  before?: string
+  before?: string,
+  signal?: AbortSignal
 ) => {
   const params = new URLSearchParams({ limit: String(limit) });
   if (before) params.set("before", before);
   return apiFetch<Record<string, unknown> & { has_more?: boolean }>(
-    `/api/conversations/${id}?${params}`
+    `/api/conversations/${id}?${params}`,
+    { signal }
   );
 };
-export const deleteConversation = (id: string) =>
-  apiFetch<void>(`/api/conversations/${id}`, { method: "DELETE" });
-export const updateConversation = (id: string, data: { model?: string }) =>
+export const deleteConversation = (id: string, signal?: AbortSignal) =>
+  apiFetch<void>(`/api/conversations/${id}`, { method: "DELETE", signal });
+export const updateConversation = (id: string, data: { model?: string }, signal?: AbortSignal) =>
   apiFetch<Record<string, unknown>>(`/api/conversations/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
+    signal,
   });
-export const getConversationStatus = (id: string) =>
+export const getConversationStatus = (id: string, signal?: AbortSignal) =>
   apiFetch<{ status: string; type?: string }>(
-    `/api/conversations/${id}/status`
+    `/api/conversations/${id}/status`,
+    { signal }
   );
 
 export const listAssets = (bucket: string, signal?: AbortSignal) =>
   apiFetch<Array<Record<string, unknown>>>(`/api/assets/${bucket}`, { signal });
 
-export const getBatchSignedUrls = (bucket: string, filenames: string[]) =>
+export const getBatchSignedUrls = (bucket: string, filenames: string[], signal?: AbortSignal) =>
   apiFetch<Array<{ signedURL: string; path: string; error: string | null }>>(
     "/api/assets/batch-signed-urls",
     {
       method: "POST",
       body: JSON.stringify({ bucket, filenames }),
+      signal,
     }
   );
 export const getBatchThumbnails = (
   bucket: string,
   filenames: string[],
-  w: number = 200
+  w: number = 200,
+  signal?: AbortSignal
 ) =>
   apiFetch<Record<string, string>>("/api/assets/batch-thumbnails", {
     method: "POST",
     body: JSON.stringify({ bucket, filenames, w }),
+    signal,
   });
 
-export const deleteAsset = (bucket: string, name: string) =>
-  apiFetch<void>(`/api/assets/${bucket}/${name}`, { method: "DELETE" });
-export const uploadAsset = (bucket: string, file: File) =>
-  apiUpload(`/api/assets/${bucket}/upload`, file);
+export const deleteAsset = (bucket: string, name: string, signal?: AbortSignal) =>
+  apiFetch<void>(`/api/assets/${bucket}/${name}`, { method: "DELETE", signal });
+export const uploadAsset = (bucket: string, file: File, signal?: AbortSignal) =>
+  apiUpload(`/api/assets/${bucket}/upload`, file, signal);
 
-export const reindexPhotos = () =>
+export const reindexPhotos = (signal?: AbortSignal) =>
   apiFetch<{ indexed: number; total: number; skipped: number }>(
     "/api/assets/personal-photos/reindex",
-    { method: "POST" }
+    { method: "POST", signal }
   );
 
-export const analyzeReferenceStyle = () =>
+export const analyzeReferenceStyle = (signal?: AbortSignal) =>
   apiFetch<Record<string, unknown>>("/api/assets/reference-thumbs/analyze", {
     method: "POST",
+    signal,
   });
 
 export async function fetchAssetText(
   bucket: string,
-  name: string
+  name: string,
+  signal?: AbortSignal
 ): Promise<string> {
   const headers = await getAuthHeaders();
   const response = await fetch(`/api/assets/${bucket}/${name}`, {
     headers: { Authorization: headers.Authorization },
+    signal,
   });
   if (!response.ok) throw new Error(`Asset fetch error: ${response.status}`);
   return response.text();
@@ -291,25 +317,29 @@ export interface Persona {
   updated_at: string;
 }
 
-export const getPersona = () =>
-  apiFetch<Persona>("/api/personas").catch((err) => {
+export const getPersona = (signal?: AbortSignal) =>
+  apiFetch<Persona>("/api/personas", { signal }).catch((err) => {
     if (err.message.includes("404")) return null;
     throw err;
   });
 
-export const upsertPersona = (data: {
-  channel_name: string;
-  language: string;
-  persona_text: string;
-  script_template?: ScriptSection[];
-}) =>
+export const upsertPersona = (
+  data: {
+    channel_name: string;
+    language: string;
+    persona_text: string;
+    script_template?: ScriptSection[];
+  },
+  signal?: AbortSignal
+) =>
   apiFetch<Persona>("/api/personas", {
     method: "PUT",
     body: JSON.stringify(data),
+    signal,
   });
 
-export const deletePersona = () =>
-  apiFetch<void>("/api/personas", { method: "DELETE" });
+export const deletePersona = (signal?: AbortSignal) =>
+  apiFetch<void>("/api/personas", { method: "DELETE", signal });
 
 export interface Memory {
   id: string;
@@ -320,7 +350,8 @@ export interface Memory {
   created_at: string;
 }
 
-export const listMemories = () => apiFetch<Memory[]>("/api/memories");
+export const listMemories = (signal?: AbortSignal) =>
+  apiFetch<Memory[]>("/api/memories", { signal });
 
-export const deleteMemory = (id: string) =>
-  apiFetch<void>(`/api/memories/${id}`, { method: "DELETE" });
+export const deleteMemory = (id: string, signal?: AbortSignal) =>
+  apiFetch<void>(`/api/memories/${id}`, { method: "DELETE", signal });

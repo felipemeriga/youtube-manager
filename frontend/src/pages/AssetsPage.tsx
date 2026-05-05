@@ -35,6 +35,7 @@ import {
   fetchAssetText,
   reindexPhotos,
 } from "../lib/api";
+import { usePageAbort } from "../hooks/usePageAbort";
 
 const BUCKETS = [
   { key: "reference-thumbs", label: "Thumbnails de Referência", accept: "image/*" },
@@ -304,15 +305,23 @@ export default function AssetsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const autoDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { getSignal, isAbort } = usePageAbort();
 
   const currentBucket = BUCKETS[activeTab];
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
-    const data = await listAssets(currentBucket.key);
-    setFiles(data as unknown as AssetFile[]);
-    setLoading(false);
-  }, [currentBucket.key]);
+    const signal = getSignal();
+    try {
+      const data = await listAssets(currentBucket.key, signal);
+      if (!signal.aborted) setFiles(data as unknown as AssetFile[]);
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  }, [currentBucket.key, getSignal, isAbort]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -372,9 +381,11 @@ export default function AssetsPage() {
     const items: BatchItem[] = names.map((n) => ({ name: n, status: "pending" as const }));
     setBatchProgress({ type: "delete", items, collapsed: false, done: false });
 
+    const signal = getSignal();
     for (let i = 0; i < names.length; i++) {
+      if (signal.aborted) return;
       try {
-        await deleteAsset(currentBucket.key, names[i]);
+        await deleteAsset(currentBucket.key, names[i], signal);
         setBatchProgress((prev) =>
           prev
             ? {
@@ -385,7 +396,8 @@ export default function AssetsPage() {
               }
             : prev
         );
-      } catch {
+      } catch (e) {
+        if (isAbort(e)) return;
         setBatchProgress((prev) =>
           prev
             ? {
@@ -404,7 +416,7 @@ export default function AssetsPage() {
     loadFiles();
 
     autoDismissRef.current = setTimeout(() => setBatchProgress(null), 5000);
-  }, [selected, currentBucket.key, loadFiles]);
+  }, [selected, currentBucket.key, loadFiles, getSignal, isAbort]);
 
   const handleBatchDownload = useCallback(async () => {
     const names = Array.from(selected);
@@ -473,7 +485,9 @@ export default function AssetsPage() {
     let succeeded = 0;
     let failed = 0;
 
+    const signal = getSignal();
     for (let i = 0; i < fileList.length; i++) {
+      if (signal.aborted) return;
       setFileStatuses((prev) =>
         prev.map((item, idx) =>
           idx === i ? { ...item, status: "uploading" } : item
@@ -481,14 +495,15 @@ export default function AssetsPage() {
       );
 
       try {
-        await uploadAsset(currentBucket.key, fileList[i]);
+        await uploadAsset(currentBucket.key, fileList[i], signal);
         succeeded++;
         setFileStatuses((prev) =>
           prev.map((item, idx) =>
             idx === i ? { ...item, status: "done" } : item
           )
         );
-      } catch {
+      } catch (e) {
+        if (isAbort(e)) return;
         failed++;
         setFileStatuses((prev) =>
           prev.map((item, idx) =>
@@ -518,7 +533,12 @@ export default function AssetsPage() {
   };
 
   const handleDelete = async (name: string) => {
-    await deleteAsset(currentBucket.key, name);
+    try {
+      await deleteAsset(currentBucket.key, name, getSignal());
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
+    }
     loadFiles();
     setSnackbar({
       open: true,
@@ -535,14 +555,16 @@ export default function AssetsPage() {
 
   const handleReindex = async () => {
     setReindexing(true);
+    const signal = getSignal();
     try {
-      const result = await reindexPhotos();
+      const result = await reindexPhotos(signal);
       setSnackbar({
         open: true,
         message: `Indexou ${result.indexed} novas fotos (${result.skipped} já indexadas, ${result.total} total)`,
         severity: "success",
       });
     } catch (err) {
+      if (isAbort(err)) return;
       const detail = err instanceof Error ? err.message : "";
       setSnackbar({
         open: true,
@@ -552,13 +574,13 @@ export default function AssetsPage() {
         severity: "error",
       });
     } finally {
-      setReindexing(false);
+      if (!signal.aborted) setReindexing(false);
     }
   };
 
   const handleViewScript = async (name: string) => {
     try {
-      const content = await fetchAssetText(currentBucket.key, name);
+      const content = await fetchAssetText(currentBucket.key, name, getSignal());
       setViewerTitle(
         name
           .replace(/\.md$/, "")
@@ -569,6 +591,7 @@ export default function AssetsPage() {
       setViewerContent(content);
       setViewerOpen(true);
     } catch (err) {
+      if (isAbort(err)) return;
       const detail = err instanceof Error ? err.message : "";
       setSnackbar({
         open: true,

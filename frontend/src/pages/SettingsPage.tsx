@@ -23,6 +23,7 @@ import {
 } from "../lib/api";
 import type { Memory, ScriptSection } from "../lib/api";
 import ScriptTemplateBuilder from "../components/ScriptTemplateBuilder";
+import { usePageAbort } from "../hooks/usePageAbort";
 
 export default function SettingsPage() {
   const [channelName, setChannelName] = useState("");
@@ -37,13 +38,22 @@ export default function SettingsPage() {
   }>({ open: false, message: "", severity: "success" });
   const [memories, setMemories] = useState<Memory[]>([]);
   const [scriptTemplate, setScriptTemplate] = useState<ScriptSection[]>([]);
+  const { getSignal, isAbort } = usePageAbort();
 
   useEffect(() => {
+    const signal = getSignal();
     Promise.all([
-      getPersona().catch(() => null),
-      listMemories().catch(() => []),
+      getPersona(signal).catch((e) => {
+        if (isAbort(e)) throw e;
+        return null;
+      }),
+      listMemories(signal).catch((e) => {
+        if (isAbort(e)) throw e;
+        return [];
+      }),
     ])
       .then(([persona, mems]) => {
+        if (signal.aborted) return;
         if (persona) {
           setChannelName(persona.channel_name);
           setLanguage(persona.language);
@@ -52,14 +62,19 @@ export default function SettingsPage() {
         }
         setMemories(mems);
       })
-      .catch(() => {
+      .catch((e) => {
+        if (isAbort(e)) return;
         setSnackbar({
           open: true,
           message: "Falha ao carregar configurações",
           severity: "error",
         });
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!signal.aborted) setLoading(false);
+      });
+  // getSignal/isAbort are stable from the hook for the lifetime of the page.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSave = async () => {
@@ -73,34 +88,41 @@ export default function SettingsPage() {
     }
 
     setSaving(true);
+    const signal = getSignal();
     try {
-      await upsertPersona({
-        channel_name: channelName.trim(),
-        language: language.trim(),
-        persona_text: personaText.trim(),
-        script_template: scriptTemplate,
-      });
+      await upsertPersona(
+        {
+          channel_name: channelName.trim(),
+          language: language.trim(),
+          persona_text: personaText.trim(),
+          script_template: scriptTemplate,
+        },
+        signal
+      );
       setSnackbar({
         open: true,
         message: "Persona salva com sucesso",
         severity: "success",
       });
-    } catch {
+    } catch (e) {
+      if (isAbort(e)) return;
       setSnackbar({
         open: true,
         message: "Falha ao salvar persona",
         severity: "error",
       });
     } finally {
-      setSaving(false);
+      if (!signal.aborted) setSaving(false);
     }
   };
 
   const handleDeleteMemory = async (id: string) => {
+    const signal = getSignal();
     try {
-      await deleteMemory(id);
+      await deleteMemory(id, signal);
       setMemories((prev) => prev.filter((m) => m.id !== id));
-    } catch {
+    } catch (e) {
+      if (isAbort(e)) return;
       setSnackbar({
         open: true,
         message: "Falha ao excluir memória",

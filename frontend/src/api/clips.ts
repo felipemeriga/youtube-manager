@@ -7,16 +7,18 @@ import type {
 } from "../types/clips";
 
 export const clipsApi = {
-  preflight: (youtube_url: string) =>
+  preflight: (youtube_url: string, signal?: AbortSignal) =>
     apiFetch<PreflightResponse>("/api/clips/jobs/preflight", {
       method: "POST",
       body: JSON.stringify({ youtube_url }),
+      signal,
     }),
 
-  createJob: (youtube_url: string) =>
+  createJob: (youtube_url: string, signal?: AbortSignal) =>
     apiFetch<ClipJobSummary>("/api/clips/jobs", {
       method: "POST",
       body: JSON.stringify({ youtube_url }),
+      signal,
     }),
 
   listJobs: (signal?: AbortSignal) =>
@@ -25,21 +27,28 @@ export const clipsApi = {
   getJob: (id: string, signal?: AbortSignal) =>
     apiFetch<ClipJob>(`/api/clips/jobs/${id}`, { signal }),
 
-  deleteJob: (id: string) =>
+  deleteJob: (id: string, signal?: AbortSignal) =>
     apiFetch<{ status: string; files_removed: number }>(
       `/api/clips/jobs/${id}`,
-      { method: "DELETE" }
+      { method: "DELETE", signal }
     ),
 
-  cancel: (id: string) =>
+  cancel: (id: string, signal?: AbortSignal) =>
     apiFetch<{ status: string }>(`/api/clips/jobs/${id}/cancel`, {
       method: "POST",
+      signal,
     }),
 
-  render: (id: string, candidate_ids: string[], caption_style: CaptionStyle = "classic") =>
+  render: (
+    id: string,
+    candidate_ids: string[],
+    caption_style: CaptionStyle = "classic",
+    signal?: AbortSignal
+  ) =>
     apiFetch<{ status: string }>(`/api/clips/jobs/${id}/render`, {
       method: "POST",
       body: JSON.stringify({ candidate_ids, caption_style }),
+      signal,
     }),
 
   previewUrl: (candidateId: string, signal?: AbortSignal) =>
@@ -48,8 +57,9 @@ export const clipsApi = {
       { signal }
     ),
 
-  finalUrl: (candidateId: string) =>
+  finalUrl: (candidateId: string, signal?: AbortSignal) =>
     apiFetch<{ url: string }>(
-      `/api/clips/candidates/${candidateId}/final-url`
+      `/api/clips/candidates/${candidateId}/final-url`,
+      { signal }
     ),
 };

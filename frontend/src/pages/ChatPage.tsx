@@ -28,6 +28,7 @@ import {
   updateConversation,
   AVAILABLE_MODELS,
 } from "../lib/api";
+import { usePageAbort } from "../hooks/usePageAbort";
 
 interface Message {
   id?: string;
@@ -90,6 +91,7 @@ export default function ChatPage() {
   > | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { getSignal, isAbort } = usePageAbort();
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -103,9 +105,13 @@ export default function ChatPage() {
   }, [stopPolling]);
 
   const loadConversations = useCallback(async () => {
-    const data = await listConversations();
-    setConversations(data as unknown as Conversation[]);
-  }, []);
+    try {
+      const data = await listConversations(getSignal());
+      setConversations(data as unknown as Conversation[]);
+    } catch (e) {
+      if (!isAbort(e)) throw e;
+    }
+  }, [getSignal, isAbort]);
 
   useEffect(() => {
     loadConversations();
@@ -118,8 +124,9 @@ export default function ChatPage() {
     setIsStreaming(false);
     setStreamingContent("");
 
+    const signal = getSignal();
     try {
-      const data = await getConversation(id);
+      const data = await getConversation(id, 50, undefined, signal);
       const convData = data as {
         messages: Message[];
         mode?: string;
@@ -142,7 +149,7 @@ export default function ChatPage() {
         msgs[msgs.length - 1].role === "user"
       ) {
         try {
-          const statusData = (await getConversationStatus(id)) as Record<
+          const statusData = (await getConversationStatus(id, signal)) as Record<
             string,
             unknown
           >;
@@ -173,20 +180,22 @@ export default function ChatPage() {
             msgs = [...msgs, assistantMsg];
           } else if (statusData.status === "idle") {
             // Graph completed — reload messages from DB
-            const refreshed = await getConversation(id);
+            const refreshed = await getConversation(id, 50, undefined, signal);
             const refreshedMsgs =
               (refreshed as { messages: Message[] }).messages || [];
             if (refreshedMsgs.length > msgs.length) {
               msgs = refreshedMsgs;
             }
           }
-        } catch {
-          // Ignore — proceed with whatever messages we have
+        } catch (e) {
+          if (isAbort(e)) return;
+          // Ignore other errors — proceed with whatever messages we have
         }
       }
 
       setMessages(msgs);
-    } catch {
+    } catch (e) {
+      if (isAbort(e)) return;
       setMessages([]);
       setCurrentStage(null);
       setIsStreaming(false);
@@ -197,12 +206,14 @@ export default function ChatPage() {
     if (!selectedId || !hasMoreMessages || loadingMore || messages.length === 0)
       return;
     setLoadingMore(true);
+    const signal = getSignal();
     try {
       const oldest = messages[0];
       const data = await getConversation(
         selectedId,
         50,
-        oldest.created_at
+        oldest.created_at,
+        signal
       );
       const convData = data as {
         messages: Message[];
@@ -213,10 +224,11 @@ export default function ChatPage() {
       if (olderMsgs.length > 0) {
         setMessages((prev) => [...olderMsgs, ...prev]);
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      if (isAbort(e)) return;
+      // ignore other errors
     } finally {
-      setLoadingMore(false);
+      if (!signal.aborted) setLoadingMore(false);
     }
   };
 
@@ -230,7 +242,7 @@ export default function ChatPage() {
 
   const handleModeSelect = async (mode: string) => {
     setShowModeDialog(false);
-    const conv = await createConversation(mode);
+    const conv = await createConversation(mode, getSignal());
     const newConv = conv as unknown as Conversation;
     setConversations((prev) => [newConv, ...prev]);
     setSelectedId(newConv.id);
@@ -251,7 +263,12 @@ export default function ChatPage() {
   };
 
   const handleDeleteConversation = async (id: string) => {
-    await deleteConversation(id);
+    try {
+      await deleteConversation(id, getSignal());
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
+    }
     setConversations((prev) => prev.filter((c) => c.id !== id));
     if (selectedId === id) {
       setSelectedId(null);
@@ -317,6 +334,7 @@ export default function ChatPage() {
 
     setCurrentStage("generating");
 
+    const signal = getSignal();
     try {
       await streamChat(
         conversationId,
@@ -391,9 +409,13 @@ export default function ChatPage() {
           },
         },
         imageUrl,
-        platforms
+        platforms,
+        signal
       );
     } catch (err) {
+      // Page navigated away (or signal otherwise aborted) — don't surface a
+      // toast/error message: the UI is gone, the request was cancelled by us.
+      if (isAbort(err)) return;
       const detail = err instanceof Error ? err.message : "";
       showError(
         detail
@@ -483,7 +505,12 @@ export default function ChatPage() {
   const handleModelChange = async (newModel: string) => {
     if (!selectedId) return;
     setConversationModel(newModel);
-    await updateConversation(selectedId, { model: newModel || undefined });
+    try {
+      await updateConversation(selectedId, { model: newModel || undefined }, getSignal());
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
+    }
   };
 
   return (

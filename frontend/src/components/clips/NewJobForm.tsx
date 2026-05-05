@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Box, Button, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogTitle, Paper, Stack, TextField, Typography, Alert,
@@ -13,32 +13,54 @@ export default function NewJobForm({ onCreated }: { onCreated: (jobId: string) =
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ duration: number; title: string } | null>(null);
 
+  // Page-scoped abort: navigating away from /clips kills the preflight or
+  // create-job request that may still be hanging on a slow connection.
+  const abortRef = useRef<AbortController>(new AbortController());
+  useEffect(() => {
+    abortRef.current = new AbortController();
+    return () => abortRef.current.abort();
+  }, []);
+  const isAbort = (err: unknown): boolean =>
+    (err as { name?: string } | null)?.name === "AbortError";
+
   async function submit() {
     setError(null);
     setLoading(true);
     // Lazy permission request — must happen from a user gesture so the
     // "Clips prontos" notification can fire when the pipeline completes.
     ensureNotificationPermission();
+    const signal = abortRef.current.signal;
     try {
-      const meta = await clipsApi.preflight(url);
+      const meta = await clipsApi.preflight(url, signal);
+      if (signal.aborted) return;
       if (meta.duration_seconds > 1800) {
         setConfirm({ duration: meta.duration_seconds, title: meta.title });
       } else {
         await create();
       }
-    } catch (e: any) { setError(e.message || "Verificação prévia falhou"); }
-    finally { setLoading(false); }
+    } catch (e: any) {
+      if (isAbort(e)) return;
+      setError(e.message || "Verificação prévia falhou");
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
   }
 
   async function create() {
     setLoading(true);
+    const signal = abortRef.current.signal;
     try {
-      const job = await clipsApi.createJob(url);
+      const job = await clipsApi.createJob(url, signal);
+      if (signal.aborted) return;
       onCreated(job.id);
       setUrl("");
       setConfirm(null);
-    } catch (e: any) { setError(e.message || "Falha ao criar trabalho"); }
-    finally { setLoading(false); }
+    } catch (e: any) {
+      if (isAbort(e)) return;
+      setError(e.message || "Falha ao criar trabalho");
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
   }
 
   return (
