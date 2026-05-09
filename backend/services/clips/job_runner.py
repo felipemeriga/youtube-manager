@@ -142,12 +142,27 @@ async def run_pipeline(
         if total > 0 and len(succeeded) / total < 0.5:
             raise RuntimeError(f"Too many candidate renders failed ({len(succeeded)}/{total})")
 
+        # Batch updates by identical payload to avoid one DB call per candidate.
+        # Failed candidates share `{render_failed: True}`; succeeded candidates each
+        # have their own `preview_storage_key` and so cannot be batched together,
+        # but the failed bucket collapses into a single .in_() update.
+        failed_ids: list[str] = []
         for r in results:
-            updates = {"render_failed": r.get("render_failed", False)}
-            if not r.get("render_failed"):
-                updates["preview_storage_key"] = r["preview_storage_key"]
-                updates["preview_poster_key"] = r["preview_poster_key"]
-            await sb.table("clip_candidates").update(updates).eq("id", r["candidate_id"]).execute()
+            if r.get("render_failed"):
+                failed_ids.append(r["candidate_id"])
+            else:
+                await sb.table("clip_candidates").update({
+                    "render_failed": False,
+                    "preview_storage_key": r["preview_storage_key"],
+                    "preview_poster_key": r["preview_poster_key"],
+                }).eq("id", r["candidate_id"]).execute()
+        if failed_ids:
+            await (
+                sb.table("clip_candidates")
+                .update({"render_failed": True})
+                .in_("id", failed_ids)
+                .execute()
+            )
 
         await _update_job(job_id, {
             "status": "ready",
