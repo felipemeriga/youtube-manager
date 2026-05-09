@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 /**
  * Page-scoped AbortController. Returns helpers to:
@@ -22,13 +22,15 @@ export function usePageAbort(key?: string | null) {
     };
   }, [key]);
 
-  return {
-    /** Stable getter — always returns the current controller's signal. */
-    getSignal: () => ctrlRef.current.signal,
-    /** True if the error is from a fetch abort (DOMException name === "AbortError"). */
-    isAbort: (err: unknown): boolean =>
+  const getSignal = useCallback(() => ctrlRef.current.signal, []);
+
+  const isAbort = useCallback(
+    (err: unknown): boolean =>
       err instanceof DOMException
         ? err.name === "AbortError"
         : (err as { name?: string } | null)?.name === "AbortError",
-  };
+    [],
+  );
+
+  return { getSignal, isAbort };
 }
