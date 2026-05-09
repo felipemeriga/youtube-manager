@@ -118,7 +118,7 @@ async def render_one_preview(
 
     await _ffmpeg_cut(source, candidate.start_seconds, candidate.end_seconds, cut_path)
     width, height = _video_dims(cut_path)
-    track = detect_face_track(cut_path, candidate.duration_seconds)
+    track = await detect_face_track(cut_path, candidate.duration_seconds)
     vf = build_crop_filter(track=track, video_height=height, video_width=width)
 
     await _ffmpeg_reframe(cut_path, vf, preview_path)

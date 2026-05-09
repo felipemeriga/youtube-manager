@@ -9,8 +9,8 @@ Uses MediaPipe's Tasks API (BlazeFace short-range). The legacy
 `mediapipe.solutions` namespace was dropped from recent macOS arm64 wheels,
 so the Tasks model is downloaded once on first use to a cache dir.
 """
+import asyncio
 import logging
-import subprocess
 from pathlib import Path
 
 import httpx
@@ -65,21 +65,25 @@ def smooth_x_track(
     return result
 
 
-def _video_dimensions(video_path: Path) -> tuple[int, int]:
-    out = subprocess.check_output(
-        [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height",
-            "-of", "csv=p=0:s=x",
-            str(video_path),
-        ]
-    ).decode().strip()
+async def _video_dimensions(video_path: Path) -> tuple[int, int]:
+    proc = await asyncio.create_subprocess_exec(
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height",
+        "-of", "csv=p=0:s=x",
+        str(video_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffprobe failed: {stderr.decode(errors='ignore')}")
+    out = stdout.decode().strip()
     w, h = out.split("x")
     return int(w), int(h)
 
 
-def detect_face_track(video_path: Path, duration_seconds: float) -> list[tuple[float, int]]:
+async def detect_face_track(video_path: Path, duration_seconds: float) -> list[tuple[float, int]]:
     """Sample ~1 fps, return smoothed face center-x track.
 
     Falls back to image center if MediaPipe finds nothing or the model fails
@@ -90,7 +94,7 @@ def detect_face_track(video_path: Path, duration_seconds: float) -> list[tuple[f
     from mediapipe.tasks import python as mp_python
     from mediapipe.tasks.python import vision as mp_vision
 
-    width, _ = _video_dimensions(video_path)
+    width, _ = await _video_dimensions(video_path)
     sample_times = [float(i) for i in range(int(duration_seconds))]
     if not sample_times:
         sample_times = [0.0]

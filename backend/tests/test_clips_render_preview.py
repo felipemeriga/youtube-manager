@@ -51,7 +51,7 @@ async def test_render_one_preview_orchestrates(tmp_path):
     source.write_bytes(b"")
 
     with patch("services.clips.render_preview._ffmpeg_cut", new=AsyncMock()) as cut, \
-         patch("services.clips.render_preview.detect_face_track", return_value=[(0.0, 960)]), \
+         patch("services.clips.render_preview.detect_face_track", new=AsyncMock(return_value=[(0.0, 960)])), \
          patch("services.clips.render_preview._video_dims", return_value=(1920, 1080)), \
          patch("services.clips.render_preview._ffmpeg_reframe", new=AsyncMock()) as reframe, \
          patch("services.clips.render_preview._ffmpeg_poster", new=AsyncMock()) as poster, \

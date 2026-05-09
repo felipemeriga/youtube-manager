@@ -222,7 +222,7 @@ async def render_one_final(
         caption_style=caption_style,
     )
     width, height = _video_dims(source)
-    track = detect_face_track(source, candidate.duration_seconds)
+    track = await detect_face_track(source, candidate.duration_seconds)
     crop_scale = build_crop_filter(
         track=track,
         video_height=height,
