@@ -160,7 +160,7 @@ async def _upload_image_with_preview(
     )
 
     try:
-        preview_bytes = _make_preview(image_bytes)
+        preview_bytes = await asyncio.to_thread(_make_preview, image_bytes)
         await sb.storage.from_("outputs").upload(
             preview_path, preview_bytes, {"content-type": "image/jpeg"}
         )

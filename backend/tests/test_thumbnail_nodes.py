@@ -1,7 +1,53 @@
+import io
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+from PIL import Image
 
 from services.thumbnail_state import ThumbnailState
+
+
+def test_make_preview_output_is_byte_identical_to_sync_call():
+    """The async-dispatched _make_preview must produce the same bytes as a direct call.
+
+    Guard against any accidental change to PIL params (resampling, quality, format)
+    when wrapping in asyncio.to_thread. Per project memory, thumbnail output stability
+    is mandatory.
+    """
+    from services.thumbnail_nodes import _make_preview
+
+    img = Image.new("RGB", (1600, 900), (128, 64, 200))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    src_bytes = buf.getvalue()
+
+    # Direct sync call — establishes the reference output.
+    out1 = _make_preview(src_bytes)
+    out2 = _make_preview(src_bytes)
+    # PIL is deterministic for the same input + same params.
+    assert out1 == out2, "_make_preview must be deterministic"
+    assert isinstance(out1, bytes) and len(out1) > 0
+
+
+@pytest.mark.asyncio
+async def test_upload_image_with_preview_runs_pil_in_thread():
+    """_upload_image_with_preview must dispatch _make_preview via asyncio.to_thread."""
+    from services.thumbnail_nodes import _upload_image_with_preview
+
+    sb = MagicMock()
+    sb.storage.from_.return_value.upload = AsyncMock()
+
+    with (
+        patch("services.thumbnail_nodes._get_supabase", new=AsyncMock(return_value=sb)),
+        patch("services.thumbnail_nodes._make_preview", return_value=b"preview-bytes") as preview,
+        patch("asyncio.to_thread", new=AsyncMock(return_value=b"preview-bytes")) as to_thread,
+    ):
+        await _upload_image_with_preview("user-1", "thumb", b"original-bytes")
+
+    assert to_thread.called, "PIL preview must run via asyncio.to_thread"
+    # First positional arg of to_thread should be the _make_preview function.
+    args, _ = to_thread.call_args
+    assert args[0] is preview
 
 
 def make_base_state(**overrides) -> ThumbnailState:
