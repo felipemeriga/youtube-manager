@@ -9,11 +9,18 @@ import base64
 import io
 import logging
 
+import httpx
 from openai import AsyncOpenAI
 
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+
+# Bounded timeout for fetching images by URL (rare path — gpt-image-1.5 returns
+# b64_json by default). Without this, a slow OpenAI CDN response can hang the
+# whole event loop indefinitely.
+_HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
 
 
 # Aspect ratio + tier → explicit size string.  gpt-image-1.5 only supports
@@ -61,9 +68,11 @@ def _decode_response(response) -> bytes:
     url = getattr(item, "url", None)
     if url:
         # Synchronous httpx fetch is fine here — this path is rare (b64 is
-        # the default for gpt-image-2).
+        # the default for gpt-image-1.5).
         import httpx
-        return httpx.get(url).content
+        response = httpx.get(url, timeout=_HTTP_TIMEOUT)
+        response.raise_for_status()
+        return response.content
     raise RuntimeError("OpenAI image response had neither b64_json nor url")
 
 
