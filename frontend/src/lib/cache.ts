@@ -37,7 +37,11 @@ export function useCachedQuery<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
   opts: QueryOptions = {},
 ): { data: T | undefined; isStale: boolean; error: unknown; refetch: () => void } {
-  const { ttl = DEFAULT_TTL, swr = DEFAULT_SWR } = opts;
+  const { ttl = DEFAULT_TTL } = opts;
+  // `swr` (stale-while-revalidate window) is reserved for future use; data is
+  // always returned immediately when present and refetched in the background
+  // when stale, regardless of the configured swr window.
+  void DEFAULT_SWR;
   const [data, setData] = useState<T | undefined>(() => getCached<T>(key));
   const [error, setError] = useState<unknown>(null);
   const [tick, setTick] = useState(0);
