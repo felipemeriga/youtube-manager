@@ -2,13 +2,22 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   ReactNode,
 } from "react";
-import { Alert, Snackbar } from "@mui/material";
+import { Snackbar } from "@mui/material";
+import { Toast, type ToastTone } from "../ds/Toast";
 
 type Severity = "error" | "warning" | "info" | "success";
+
+const SEVERITY_TO_TONE: Record<Severity, ToastTone> = {
+  error: "danger",
+  warning: "warning",
+  info: "info",
+  success: "success",
+};
 
 interface ToastState {
   message: string;
@@ -33,6 +42,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToast({ message, severity: "error" });
   }, []);
 
+  // Auto-dismiss after 5s.
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 5000);
+    return () => window.clearTimeout(id);
+  }, [toast]);
+
   const value = useMemo(() => ({ showToast, showError }), [showToast, showError]);
 
   return (
@@ -40,19 +56,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <Snackbar
         open={Boolean(toast)}
-        autoHideDuration={5000}
-        onClose={() => setToast(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
         {toast ? (
-          <Alert
-            onClose={() => setToast(null)}
-            severity={toast.severity}
-            variant="filled"
-            sx={{ width: "100%" }}
-          >
-            {toast.message}
-          </Alert>
+          <div onClick={() => setToast(null)} style={{ cursor: "pointer" }}>
+            <Toast tone={SEVERITY_TO_TONE[toast.severity]}>{toast.message}</Toast>
+          </div>
         ) : undefined}
       </Snackbar>
     </ToastContext.Provider>
