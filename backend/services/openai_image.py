@@ -1,4 +1,4 @@
-"""OpenAI gpt-image-2 provider — drop-in replacement for nano_banana.py.
+"""OpenAI gpt-image-1.5 provider — drop-in replacement for nano_banana.py.
 
 Same async function signatures, same return type (bytes). Internally translates
 the Gemini-flavored kwargs (aspect_ratio, image_size in 4K/2K/1K) into OpenAI's
@@ -16,13 +16,14 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 
-# Aspect ratio + tier → explicit size string. Pre-computed to satisfy
-# gpt-image-2's constraints: edges multiple of 16, max edge 3840, total
-# pixels in [655_360, 8_294_400], aspect ratio < 3:1.
+# Aspect ratio + tier → explicit size string.  gpt-image-1.5 only supports
+# three fixed sizes: 1536x1024 (landscape), 1024x1024 (square), 1024x1536
+# (portrait).  All tiers map to the same size per aspect ratio; the quality
+# parameter (high/medium/low) controls output fidelity instead.
 SIZE_BY_ASPECT_TIER: dict[str, dict[str, str]] = {
-    "16:9": {"4K": "3840x2160", "2K": "2048x1152", "1K": "1280x720"},
-    "1:1":  {"4K": "2880x2880", "2K": "1536x1536", "1K": "1024x1024"},
-    "9:16": {"4K": "2160x3840", "2K": "1152x2048", "1K": "720x1280"},
+    "16:9": {"4K": "1536x1024", "2K": "1536x1024", "1K": "1536x1024"},
+    "1:1":  {"4K": "1024x1024", "2K": "1024x1024", "1K": "1024x1024"},
+    "9:16": {"4K": "1024x1536", "2K": "1024x1536", "1K": "1024x1536"},
 }
 
 # 4K/2K both use "high" quality (visual quality), differ in target dimensions.
@@ -32,7 +33,7 @@ QUALITY_BY_TIER: dict[str, str] = {"4K": "high", "2K": "high", "1K": "medium"}
 
 
 def _translate_size(aspect_ratio: str, image_size: str) -> tuple[str, str]:
-    """Map (aspect_ratio, image_size) → (size, quality) for gpt-image-2."""
+    """Map (aspect_ratio, image_size) → (size, quality) for gpt-image-1.5."""
     sizes = SIZE_BY_ASPECT_TIER.get(aspect_ratio)
     if sizes is None:
         # Unknown ratio — fall back to YouTube 16:9 to avoid hard failure.
@@ -109,12 +110,17 @@ async def _call_image_api(
             return _decode_response(response)
         except Exception as exc:
             logger.warning(
-                "OpenAI %s failed (tier=%s, size=%s): %s",
-                model, tier, size, exc,
+                "OpenAI %s failed (tier=%s, size=%s, quality=%s): %s",
+                model, tier, size, quality, exc,
             )
             last_exc = exc
     assert last_exc is not None
-    raise last_exc
+    # Re-raise with provider context so the SSE error event surfaces a
+    # message the user can act on instead of a bare OpenAI traceback.
+    raise RuntimeError(
+        f"OpenAI {model} failed for all sizes "
+        f"({', '.join(fallback_chain)}): {last_exc}"
+    ) from last_exc
 
 
 def _section(heading: str, body: str) -> str:
@@ -128,7 +134,7 @@ async def generate_background(
     previous_image: bytes | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
-    model: str = "gpt-image-2",
+    model: str = "gpt-image-1.5",
 ) -> bytes:
     """Generate ONLY background + logo, no person, no text."""
     client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -184,7 +190,7 @@ async def composite_with_effects(
     transform_prompt: str | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
-    model: str = "gpt-image-2",
+    model: str = "gpt-image-1.5",
 ) -> bytes:
     """Composite person onto background with effects matching references."""
     client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -268,7 +274,7 @@ async def add_text_with_style(
     extra_instructions: str | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
-    model: str = "gpt-image-2",
+    model: str = "gpt-image-1.5",
 ) -> bytes:
     """Add styled text to the composite, matching reference typography."""
     client = AsyncOpenAI(api_key=settings.openai_api_key)

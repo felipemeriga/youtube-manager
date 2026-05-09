@@ -22,7 +22,16 @@ DEFAULT_PROVIDER: ProviderName = "gemini"
 # (e.g. switching providers mid-feature without changing the tier config).
 DEFAULT_MODEL_BY_PROVIDER: dict[str, str] = {
     "gemini": "gemini-3-pro-image-preview",
-    "openai": "gpt-image-2",
+    "openai": "gpt-image-1.5",
+}
+
+# Per-provider image-size cap. Gemini handles 4K natively. gpt-image-1.5
+# only supports fixed sizes (1536x1024, 1024x1024, 1024x1536) — the tier
+# just controls quality level. Keep at 2K so _translate_size picks the
+# right mapping.
+DEFAULT_SIZE_BY_PROVIDER: dict[str, str] = {
+    "gemini": "4K",
+    "openai": "2K",
 }
 
 
@@ -43,3 +52,13 @@ def model_for(provider_name: str | None, tier_model: str) -> str:
     if name == "gemini":
         return tier_model
     return DEFAULT_MODEL_BY_PROVIDER.get(name, tier_model)
+
+
+def image_size_for(provider_name: str | None, tier_size: str) -> str:
+    """Pick an image-size tier the active provider can reliably produce.
+
+    QUALITY_TIER hardcodes 4K for the Gemini path. OpenAI's gpt-image-2
+    flags >2.56MP outputs as experimental, so clamp OpenAI to 2K.
+    """
+    name = provider_name or DEFAULT_PROVIDER
+    return DEFAULT_SIZE_BY_PROVIDER.get(name, tier_size)

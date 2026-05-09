@@ -11,8 +11,6 @@ import {
   Typography,
   Checkbox,
   FormControlLabel,
-  Radio,
-  RadioGroup,
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
@@ -74,9 +72,7 @@ export default function ChatPage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([
     "youtube",
   ]);
-  const [imageProvider, setImageProvider] = useState<"gemini" | "openai">(
-    "gemini"
-  );
+  const [imageProvider] = useState<"gemini" | "openai">("gemini");
   const pendingMessageRef = useRef<{
     content: string;
     type: string;
@@ -668,45 +664,8 @@ export default function ChatPage() {
                   />
                 ))}
               </Box>
-              <Box sx={{ ml: 4, mt: 1.5 }}>
-                <Typography
-                  variant="caption"
-                  sx={{ color: "rgba(255,255,255,0.5)", display: "block", mb: 0.5 }}
-                >
-                  Modelo de imagem
-                </Typography>
-                <RadioGroup
-                  row
-                  value={imageProvider}
-                  onChange={(e) =>
-                    setImageProvider(e.target.value as "gemini" | "openai")
-                  }
-                >
-                  {[
-                    { key: "gemini", label: "Gemini" },
-                    { key: "openai", label: "OpenAI" },
-                  ].map((p) => (
-                    <FormControlLabel
-                      key={p.key}
-                      value={p.key}
-                      control={
-                        <Radio
-                          size="small"
-                          sx={{
-                            color: "#7c3aed",
-                            "&.Mui-checked": { color: "#7c3aed" },
-                          }}
-                        />
-                      }
-                      label={p.label}
-                      sx={{
-                        color: "rgba(255,255,255,0.7)",
-                        "& .MuiTypography-root": { fontSize: 13 },
-                      }}
-                    />
-                  ))}
-                </RadioGroup>
-              </Box>
+              {/* OpenAI provider disabled — org verification required for gpt-image-2,
+                  gpt-image-1.5 not yet validated. Re-enable when ready. */}
             </Box>
             <Button
               variant="outlined"

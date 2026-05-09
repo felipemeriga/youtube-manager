@@ -160,6 +160,38 @@ async def test_add_text_node_returns_url():
 
 
 @pytest.mark.asyncio
+async def test_add_text_node_falls_back_to_composite_on_failure():
+    """When the image provider fails on text-add, the node returns the
+    composite as final and a clarify_question, so the graph advances past
+    the text_prompt interrupt instead of leaving the user stuck."""
+    from services.thumbnail_nodes import add_text_node
+
+    composite_urls = {
+        "youtube": {"url": "user-1/comp_abc.png", "preview_url": "user-1/p_abc.jpg"}
+    }
+    state = make_base_state(composite_urls=composite_urls, thumb_text="Guerra do Ira")
+
+    with patch(
+        "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+    ) as mock_sb:
+        sb = MagicMock()
+        mock_sb.return_value = sb
+        sb.storage.from_.return_value.download = AsyncMock(return_value=b"comp-bytes")
+        sb.storage.from_.return_value.list = AsyncMock(return_value=[])
+        sb.storage.from_.return_value.upload = AsyncMock()
+        with patch(
+            "services.nano_banana.add_text_with_style",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("OpenAI gpt-image-2 failed: 400 bad size"),
+        ):
+            result = await add_text_node(state)
+
+    assert result["final_urls"] == composite_urls
+    assert "Falha ao adicionar texto" in result["clarify_question"]
+    assert "Tente novamente" in result["clarify_question"]
+
+
+@pytest.mark.asyncio
 async def test_generate_background_uses_4k_quality():
     from services.thumbnail_nodes import generate_background_node
 

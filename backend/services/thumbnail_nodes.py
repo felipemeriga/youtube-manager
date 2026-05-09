@@ -8,7 +8,7 @@ from collections import OrderedDict
 from PIL import Image
 from config import settings
 from services.supabase_pool import get_async_client
-from services.image_provider import get_provider, model_for
+from services.image_provider import get_provider, image_size_for, model_for
 from services.llm import ask_llm
 from services.photo_search import find_best_photos
 from services.thumbnail_memory import get_relevant_memories, extract_and_store_memory
@@ -228,6 +228,7 @@ async def generate_background_node(state: ThumbnailState) -> dict:
     tier = QUALITY_TIER
     provider = get_provider(state.get("image_provider"))
     model = model_for(state.get("image_provider"), tier["model"])
+    img_size = image_size_for(state.get("image_provider"), tier["image_size"])
 
     # Generate for all platforms concurrently, then upload sequentially
     async def _gen_bg(platform: str) -> tuple[str, bytes]:
@@ -238,7 +239,7 @@ async def generate_background_node(state: ThumbnailState) -> dict:
             logos=logos,
             previous_image=previous_bgs.get(platform),
             aspect_ratio=cfg["aspect_ratio"],
-            image_size=tier["image_size"],
+            image_size=img_size,
             model=model,
         )
         return platform, bg_bytes
@@ -322,6 +323,7 @@ async def composite_node(state: ThumbnailState) -> dict:
     tier = QUALITY_TIER
     provider = get_provider(state.get("image_provider"))
     model = model_for(state.get("image_provider"), tier["model"])
+    img_size = image_size_for(state.get("image_provider"), tier["image_size"])
 
     async def _gen_comp(platform: str) -> tuple[str, bytes]:
         bg_paths = background_urls.get(platform)
@@ -340,7 +342,7 @@ async def composite_node(state: ThumbnailState) -> dict:
             composite_mode=composite_mode,
             transform_prompt=transform_prompt,
             aspect_ratio=cfg["aspect_ratio"],
-            image_size=tier["image_size"],
+            image_size=img_size,
             model=model,
         )
         return platform, comp_bytes
@@ -395,6 +397,7 @@ async def add_text_node(state: ThumbnailState) -> dict:
     tier = QUALITY_TIER
     provider = get_provider(state.get("image_provider"))
     model = model_for(state.get("image_provider"), tier["model"])
+    img_size = image_size_for(state.get("image_provider"), tier["image_size"])
 
     async def _gen_text(platform: str) -> tuple[str, bytes]:
         comp_paths = composite_urls.get(platform)
@@ -411,23 +414,39 @@ async def add_text_node(state: ThumbnailState) -> dict:
             previous_image=previous_finals.get(platform),
             extra_instructions=text_feedback,
             aspect_ratio=cfg["aspect_ratio"],
-            image_size=tier["image_size"],
+            image_size=img_size,
             model=model,
         )
         return platform, final_bytes
 
-    gen_results = await asyncio.gather(*[_gen_text(p) for p in platforms])
+    try:
+        gen_results = await asyncio.gather(*[_gen_text(p) for p in platforms])
 
-    async def _upload_text(platform: str, final_bytes: bytes):
-        original_path, preview_path = await _upload_image_with_preview(
-            user_id, f"thumb_{platform}", final_bytes
+        async def _upload_text(platform: str, final_bytes: bytes):
+            original_path, preview_path = await _upload_image_with_preview(
+                user_id, f"thumb_{platform}", final_bytes
+            )
+            return platform, {"url": original_path, "preview_url": preview_path}
+
+        upload_results = await asyncio.gather(
+            *[_upload_text(p, b) for p, b in gen_results]
         )
-        return platform, {"url": original_path, "preview_url": preview_path}
-
-    upload_results = await asyncio.gather(*[_upload_text(p, b) for p, b in gen_results])
-    final_urls = dict(upload_results)
-
-    return {"final_urls": final_urls}
+        final_urls = dict(upload_results)
+        return {"final_urls": final_urls}
+    except Exception as exc:
+        # Text-add failed (e.g. OpenAI rejected the size or image). Fall back
+        # to the composite (no text) as the "final" so the graph advances
+        # past the text_prompt interrupt — otherwise the user is stuck
+        # resubmitting text and burning more API calls each click.
+        # The clarify_question rides along to review_final's interrupt
+        # payload and renders inline as a chat message.
+        logger.exception("add_text_node failed; falling back to composite")
+        return {
+            "final_urls": composite_urls,
+            "clarify_question": (
+                f"Falha ao adicionar texto: {exc}. Tente novamente."
+            ),
+        }
 
 
 async def save_node(state: ThumbnailState) -> dict:
