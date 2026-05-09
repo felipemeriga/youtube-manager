@@ -3,8 +3,11 @@
 All paths are relative to the `clips` bucket. RLS isolation is enforced by
 prefixing every key with `{user_id}/`.
 """
+import asyncio
 import logging
 from pathlib import Path
+
+import httpx
 
 from config import settings
 from services.supabase_pool import get_async_client
@@ -32,14 +35,33 @@ def final_key(user_id: str, job_id: str, candidate_id: str) -> str:
     return f"{job_prefix(user_id, job_id)}/finals/{candidate_id}.mp4"
 
 
+_UPLOAD_RETRIES = 3
+_UPLOAD_TIMEOUT = 120  # seconds — rendered videos can be 20-50 MB
+
+
 async def upload_file(local_path: Path, storage_key: str, content_type: str = "video/mp4") -> None:
-    """Upload a local file to the clips bucket. Reuses existing Supabase 502 retry pattern."""
+    """Upload a local file to the clips bucket with retry on timeout/502."""
     sb = await get_async_client()
     data = local_path.read_bytes()
-    # Reuse upload pattern from routes/assets.py (retry on 502 etc.)
-    await sb.storage.from_(settings.clips_bucket).upload(
-        storage_key, data, {"contentType": content_type, "upsert": "true"}
-    )
+    last_exc: Exception | None = None
+    for attempt in range(_UPLOAD_RETRIES):
+        try:
+            # Widen the timeout on the storage session for large video uploads.
+            # The Supabase storage client exposes the httpx client as `.session`.
+            original_timeout = sb.storage.session.timeout
+            sb.storage.session.timeout = httpx.Timeout(_UPLOAD_TIMEOUT)
+            try:
+                await sb.storage.from_(settings.clips_bucket).upload(
+                    storage_key, data, {"contentType": content_type, "upsert": "true"}
+                )
+            finally:
+                sb.storage.session.timeout = original_timeout
+            return
+        except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.ConnectTimeout) as exc:
+            last_exc = exc
+            logger.warning("Upload timeout (attempt %d/%d): %s", attempt + 1, _UPLOAD_RETRIES, exc)
+            await asyncio.sleep(2 ** attempt)
+    raise RuntimeError(f"Upload failed after {_UPLOAD_RETRIES} attempts: {last_exc}") from last_exc
 
 
 async def download_file(storage_key: str, local_path: Path) -> None:
