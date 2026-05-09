@@ -112,8 +112,11 @@ async def list_assets(bucket: str, user_id: str = Depends(get_current_user)):
     sb = await get_async_client()
     bucket_api = sb.storage.from_(bucket)
     files = await bucket_api.list(path=user_id)
-    for f in files:
-        f["public_url"] = await bucket_api.get_public_url(f"{user_id}/{f['name']}")
+    urls = await asyncio.gather(
+        *[bucket_api.get_public_url(f"{user_id}/{f['name']}") for f in files]
+    )
+    for f, url in zip(files, urls):
+        f["public_url"] = url
     return files
 
 
