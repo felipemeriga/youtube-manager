@@ -9,7 +9,6 @@ import shutil
 import uuid
 from pathlib import Path
 
-from config import settings
 from services.supabase_pool import get_async_client
 
 from .download import download_source
@@ -19,7 +18,7 @@ from .render_preview import render_all_previews
 from .segment import segment_and_score
 from .sse_broker import broker
 from .storage import download_file
-from .transcript import fetch_transcript
+from .transcript import add_punctuation, fetch_transcript
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +93,7 @@ async def run_pipeline(
         await audio_proc.wait()
 
         cues = await fetch_transcript(url, audio_path, job_tmp)
+        cues = await add_punctuation(cues)
         # Persist cues so the finals pipeline can skip extract_audio + transcribe.
         cues_json = [{"start": c.start, "end": c.end, "text": c.text} for c in cues]
         await _update_job(job_id, {

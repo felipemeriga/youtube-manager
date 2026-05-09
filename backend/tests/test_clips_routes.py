@@ -98,7 +98,6 @@ def test_sse_events_streams_published_events(mock_sb):
     # TestClient's streaming runs the route in a separate event loop — an
     # asyncio.Queue is bound to the loop on which `get` is awaited, so we must
     # seed the queue from inside that loop.
-    import asyncio
     from services.clips import sse_broker as broker_mod
 
     real_subscribe = broker_mod.broker.subscribe
