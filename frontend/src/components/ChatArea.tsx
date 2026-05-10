@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { memo, useRef, useEffect } from "react";
 import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import MessageBubble from "./MessageBubble";
 import AssistantLogo from "./AssistantLogo";
@@ -27,6 +27,51 @@ interface ModelOption {
   id: string;
   label: string;
 }
+
+// Memoized list of static messages. Re-renders only when messages identity
+// changes — token-by-token streaming updates change `streamingContent`, not
+// `messages`, so the static history stays untouched on every token.
+const StaticMessageList = memo(function StaticMessageList({
+  messages,
+  isStreaming,
+  onApprove,
+  onReject,
+  onTopicSelect,
+  onPhotoSelect,
+  onSkipPhoto,
+  onSubmitText,
+  conversationMode,
+}: {
+  messages: Message[];
+  isStreaming: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  onTopicSelect?: (index: number) => void;
+  onPhotoSelect?: (name: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => void;
+  onSkipPhoto?: () => void;
+  onSubmitText?: (text: string) => void;
+  conversationMode?: string;
+}) {
+  return (
+    <>
+      {messages.map((msg, i) => (
+        <MessageBubble
+          key={msg.id || i}
+          message={msg}
+          isLatest={i === messages.length - 1 && !isStreaming}
+          isStreaming={false}
+          onApprove={onApprove}
+          onReject={onReject}
+          onTopicSelect={onTopicSelect}
+          onPhotoSelect={onPhotoSelect}
+          onSkipPhoto={onSkipPhoto}
+          onSubmitText={onSubmitText}
+          conversationMode={conversationMode}
+        />
+      ))}
+    </>
+  );
+});
 
 interface ChatAreaProps {
   messages: Message[];
@@ -70,13 +115,23 @@ export default function ChatArea({
   onLoadMore,
 }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
 
+  // During streaming, switching to "auto" + rAF-throttling avoids the
+  // animation queue thrash that "smooth" causes on every token. Once the
+  // stream settles we do one final smooth scroll to the bottom.
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages, streamingContent]);
+    if (!scrollRef.current) return;
+    const el = scrollRef.current;
+    if (isStreaming) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+      });
+    } else {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages, streamingContent, isStreaming]);
 
   const isEmpty = messages.length === 0 && !isStreaming;
 
@@ -108,7 +163,8 @@ export default function ChatArea({
                 width: 56,
                 height: 56,
                 borderRadius: "50%",
-                background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
+                backgroundColor: "rgba(91,141,239,0.10)",
+                border: "1px solid rgba(91,141,239,0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -141,34 +197,30 @@ export default function ChatArea({
               disabled={loadingMore}
               size="small"
               sx={{
-                color: "#c4b5fd",
+                color: "#93b6f0",
                 textTransform: "none",
                 fontSize: 13,
               }}
             >
               {loadingMore ? (
-                <CircularProgress size={14} sx={{ color: "#7c3aed", mr: 1 }} />
+                <CircularProgress size={14} sx={{ color: "#5b8def", mr: 1 }} />
               ) : null}
               Carregar mensagens anteriores
             </Button>
           </Box>
         )}
 
-        {messages.map((msg, i) => (
-          <MessageBubble
-            key={msg.id || i}
-            message={msg}
-            isLatest={i === messages.length - 1 && !isStreaming}
-            isStreaming={false}
-            onApprove={onApprove}
-            onReject={onReject}
-            onTopicSelect={onTopicSelect}
-            onPhotoSelect={onPhotoSelect}
-            onSkipPhoto={onSkipPhoto}
-            onSubmitText={onSubmitText}
-            conversationMode={conversationMode}
-          />
-        ))}
+        <StaticMessageList
+          messages={messages}
+          isStreaming={isStreaming}
+          onApprove={onApprove}
+          onReject={onReject}
+          onTopicSelect={onTopicSelect}
+          onPhotoSelect={onPhotoSelect}
+          onSkipPhoto={onSkipPhoto}
+          onSubmitText={onSubmitText}
+          conversationMode={conversationMode}
+        />
 
         {isStreaming && streamingContent && (
           <MessageBubble
