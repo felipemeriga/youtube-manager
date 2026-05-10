@@ -1,4 +1,4 @@
-import { memo, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import MessageBubble from "./MessageBubble";
 import AssistantLogo from "./AssistantLogo";
@@ -27,51 +27,6 @@ interface ModelOption {
   id: string;
   label: string;
 }
-
-// Memoized list of static messages. Re-renders only when messages identity
-// changes — token-by-token streaming updates change `streamingContent`, not
-// `messages`, so the static history stays untouched on every token.
-const StaticMessageList = memo(function StaticMessageList({
-  messages,
-  isStreaming,
-  onApprove,
-  onReject,
-  onTopicSelect,
-  onPhotoSelect,
-  onSkipPhoto,
-  onSubmitText,
-  conversationMode,
-}: {
-  messages: Message[];
-  isStreaming: boolean;
-  onApprove: () => void;
-  onReject: () => void;
-  onTopicSelect?: (index: number) => void;
-  onPhotoSelect?: (name: string, instructions?: string, compositeMode?: string, transformPrompt?: string) => void;
-  onSkipPhoto?: () => void;
-  onSubmitText?: (text: string) => void;
-  conversationMode?: string;
-}) {
-  return (
-    <>
-      {messages.map((msg, i) => (
-        <MessageBubble
-          key={msg.id || i}
-          message={msg}
-          isLatest={i === messages.length - 1 && !isStreaming}
-          isStreaming={false}
-          onApprove={onApprove}
-          onReject={onReject}
-          onTopicSelect={onTopicSelect}
-          onPhotoSelect={onPhotoSelect}
-          onSkipPhoto={onSkipPhoto}
-          onSubmitText={onSubmitText}
-          conversationMode={conversationMode}
-        />
-      ))}
-    </>
-  );
-});
 
 interface ChatAreaProps {
   messages: Message[];
@@ -210,17 +165,25 @@ export default function ChatArea({
           </Box>
         )}
 
-        <StaticMessageList
-          messages={messages}
-          isStreaming={isStreaming}
-          onApprove={onApprove}
-          onReject={onReject}
-          onTopicSelect={onTopicSelect}
-          onPhotoSelect={onPhotoSelect}
-          onSkipPhoto={onSkipPhoto}
-          onSubmitText={onSubmitText}
-          conversationMode={conversationMode}
-        />
+        {/* MessageBubble has its own arePropsEqual that ignores callback
+            identity (see MessageBubble.tsx). The map runs every parent
+            render, but each bubble's React.memo skips its own re-render
+            when message/isLatest/isStreaming/conversationMode are stable. */}
+        {messages.map((msg, i) => (
+          <MessageBubble
+            key={msg.id || i}
+            message={msg}
+            isLatest={i === messages.length - 1 && !isStreaming}
+            isStreaming={false}
+            onApprove={onApprove}
+            onReject={onReject}
+            onTopicSelect={onTopicSelect}
+            onPhotoSelect={onPhotoSelect}
+            onSkipPhoto={onSkipPhoto}
+            onSubmitText={onSubmitText}
+            conversationMode={conversationMode}
+          />
+        ))}
 
         {isStreaming && streamingContent && (
           <MessageBubble
