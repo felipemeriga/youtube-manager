@@ -9,7 +9,13 @@ const prefetchers: Record<string, () => Promise<unknown>> = {
 
 const warmed = new Set<string>();
 
-function prefetch(to: string) {
+/**
+ * Warm the JS chunk for a route. First call kicks off the dynamic import;
+ * subsequent calls for the same path are no-ops. Safe to call from anywhere
+ * that has a hover/focus event for a navigation target — including
+ * `<IconButton onMouseEnter={() => prefetchRoute("/assets")}>`.
+ */
+export function prefetchRoute(to: string): void {
   if (warmed.has(to)) return;
   warmed.add(to);
   const exact = prefetchers[to];
@@ -26,15 +32,15 @@ export function PrefetchLink(props: LinkProps) {
     <Link
       {...props}
       onMouseEnter={(e) => {
-        prefetch(to);
+        prefetchRoute(to);
         props.onMouseEnter?.(e);
       }}
       onTouchStart={(e) => {
-        prefetch(to);
+        prefetchRoute(to);
         props.onTouchStart?.(e);
       }}
       onFocus={(e) => {
-        prefetch(to);
+        prefetchRoute(to);
         props.onFocus?.(e);
       }}
     />

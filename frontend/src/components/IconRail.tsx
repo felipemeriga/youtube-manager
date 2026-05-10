@@ -6,6 +6,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
+import { prefetchRoute } from "./PrefetchLink";
 
 export default function IconRail() {
   const navigate = useNavigate();
@@ -39,6 +40,8 @@ export default function IconRail() {
       <Tooltip title="Chat" placement="right">
         <IconButton
           onClick={() => navigate("/")}
+          onMouseEnter={() => prefetchRoute("/")}
+          onFocus={() => prefetchRoute("/")}
           sx={{
             color: isActive("/") ? "#93b6f0" : "rgba(255,255,255,0.4)",
             backgroundColor: isActive("/")
@@ -58,6 +61,8 @@ export default function IconRail() {
       <Tooltip title="Arquivos" placement="right">
         <IconButton
           onClick={() => navigate("/assets")}
+          onMouseEnter={() => prefetchRoute("/assets")}
+          onFocus={() => prefetchRoute("/assets")}
           sx={{
             color: isActive("/assets") ? "#93b6f0" : "rgba(255,255,255,0.4)",
             backgroundColor: isActive("/assets")
@@ -77,6 +82,8 @@ export default function IconRail() {
       <Tooltip title="Clips" placement="right">
         <IconButton
           onClick={() => navigate("/clips")}
+          onMouseEnter={() => prefetchRoute("/clips")}
+          onFocus={() => prefetchRoute("/clips")}
           sx={{
             color: location.pathname.startsWith("/clips")
               ? "#93b6f0"
@@ -98,6 +105,8 @@ export default function IconRail() {
       <Tooltip title="Configurações" placement="right">
         <IconButton
           onClick={() => navigate("/settings")}
+          onMouseEnter={() => prefetchRoute("/settings")}
+          onFocus={() => prefetchRoute("/settings")}
           sx={{
             color: isActive("/settings") ? "#93b6f0" : "rgba(255,255,255,0.4)",
             backgroundColor: isActive("/settings")

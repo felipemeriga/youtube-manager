@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   IconButton, LinearProgress, Paper, Stack, Tooltip, Typography,
@@ -10,6 +10,7 @@ import type { ClipJobStatus, ClipJobSummary } from "../types/clips";
 import { clipsApi } from "../api/clips";
 import NewJobForm from "../components/clips/NewJobForm";
 import { usePageAbort } from "../hooks/usePageAbort";
+import { useCachedQuery, invalidate } from "../lib/cache";
 
 const STATUS_COLOR: Record<ClipJobStatus, "default" | "primary" | "secondary" | "success" | "error" | "warning"> = {
   pending: "warning",
@@ -55,26 +56,21 @@ function formatDuration(sec: number | null): string {
 
 export default function ClipsPage() {
   const navigate = useNavigate();
-  const [jobs, setJobs] = useState<ClipJobSummary[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<ClipJobSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { getSignal, isAbort } = usePageAbort();
 
-  useEffect(() => {
-    const signal = getSignal();
-    let cancelled = false;
-
-    const refresh = () => {
-      clipsApi.listJobs(signal)
-        .then((data) => { if (!cancelled && !signal.aborted) setJobs(data); })
-        .catch((err) => { if (!isAbort(err)) throw err; });
-    };
-    refresh();
-
-    return () => { cancelled = true; };
-  // getSignal/isAbort are stable for the page lifetime.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // SWR cache for the jobs list. Returns whatever's cached immediately on
+  // mount (instant nav-back), refetches in the background when stale.
+  const fetcher = useCallback(
+    (signal: AbortSignal) => clipsApi.listJobs(signal),
+    [],
+  );
+  const { data, refetch } = useCachedQuery<ClipJobSummary[]>(
+    "clips:jobs",
+    fetcher,
+  );
+  const jobs = data ?? [];
 
   // Active-only polling: refresh the list every 5s while any job is in a
   // running state. Stops automatically when all jobs settle. Avoids hammering
@@ -82,16 +78,13 @@ export default function ClipsPage() {
   useEffect(() => {
     const hasActive = jobs.some((j) => RUNNING.includes(j.status));
     if (!hasActive) return;
-    const signal = getSignal();
     const id = window.setInterval(() => {
-      clipsApi.listJobs(signal)
-        .then((data) => { if (!signal.aborted) setJobs(data); })
-        .catch((err) => { if (!isAbort(err)) throw err; });
+      // Force the cache hook to refetch — bypasses TTL freshness check.
+      invalidate("clips:jobs");
+      refetch();
     }, 5000);
     return () => window.clearInterval(id);
-  // getSignal/isAbort stable.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs]);
+  }, [jobs, refetch]);
 
   async function handleDelete() {
     if (!confirmDelete) return;
@@ -99,7 +92,9 @@ export default function ClipsPage() {
     const signal = getSignal();
     try {
       await clipsApi.deleteJob(confirmDelete.id, signal);
-      setJobs((prev) => prev.filter((j) => j.id !== confirmDelete.id));
+      // Invalidate so the next mount/refetch hits the network.
+      invalidate("clips:jobs");
+      refetch();
       setConfirmDelete(null);
     } catch (e) {
       if (isAbort(e)) return;
