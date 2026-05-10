@@ -203,7 +203,7 @@ export default function FinalRenderPanel({
                       borderRadius: 3,
                       backgroundColor: alpha("#ffffff", 0.06),
                       "& .MuiLinearProgress-bar": {
-                        background: "linear-gradient(90deg, #7c3aed, #3b82f6)",
+                        backgroundColor: "#5b8def",
                         borderRadius: 3,
                       },
                     }}

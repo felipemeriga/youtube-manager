@@ -62,12 +62,36 @@ export default function ClipsPage() {
 
   useEffect(() => {
     const signal = getSignal();
-    clipsApi.listJobs(signal)
-      .then((data) => { if (!signal.aborted) setJobs(data); })
-      .catch((err) => { if (!isAbort(err)) throw err; });
+    let cancelled = false;
+
+    const refresh = () => {
+      clipsApi.listJobs(signal)
+        .then((data) => { if (!cancelled && !signal.aborted) setJobs(data); })
+        .catch((err) => { if (!isAbort(err)) throw err; });
+    };
+    refresh();
+
+    return () => { cancelled = true; };
   // getSignal/isAbort are stable for the page lifetime.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Active-only polling: refresh the list every 5s while any job is in a
+  // running state. Stops automatically when all jobs settle. Avoids hammering
+  // the backend when nothing is in flight.
+  useEffect(() => {
+    const hasActive = jobs.some((j) => RUNNING.includes(j.status));
+    if (!hasActive) return;
+    const signal = getSignal();
+    const id = window.setInterval(() => {
+      clipsApi.listJobs(signal)
+        .then((data) => { if (!signal.aborted) setJobs(data); })
+        .catch((err) => { if (!isAbort(err)) throw err; });
+    }, 5000);
+    return () => window.clearInterval(id);
+  // getSignal/isAbort stable.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs]);
 
   async function handleDelete() {
     if (!confirmDelete) return;
@@ -160,7 +184,7 @@ export default function ClipsPage() {
                           borderRadius: 2,
                           backgroundColor: "rgba(255,255,255,0.06)",
                           "& .MuiLinearProgress-bar": {
-                            background: "linear-gradient(90deg, #7c3aed, #3b82f6)",
+                            backgroundColor: "#5b8def",
                             borderRadius: 2,
                           },
                         }}
@@ -217,10 +241,6 @@ export default function ClipsPage() {
             disabled={deleting}
             color="error"
             variant="contained"
-            sx={{
-              background: "linear-gradient(135deg, #ef4444, #dc2626)",
-              "&:hover": { background: "linear-gradient(135deg, #dc2626, #b91c1c)" },
-            }}
           >
             {deleting ? "Excluindo…" : "Excluir"}
           </Button>

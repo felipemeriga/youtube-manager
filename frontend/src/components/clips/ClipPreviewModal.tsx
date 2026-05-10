@@ -61,8 +61,8 @@ export default function ClipPreviewModal({
               zIndex: 2,
               fontWeight: 700,
               color: "white",
-              background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
-              boxShadow: "0 2px 8px rgba(124, 58, 237, 0.4)",
+              backgroundColor: "#5b8def",
+              boxShadow: "0 2px 8px rgba(91, 141, 239, 0.4)",
             }}
           />
         )}

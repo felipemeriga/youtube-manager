@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Card, Checkbox, Chip, Typography, alpha } from "@mui/material";
 import type { ClipCandidate } from "../../types/clips";
 import { clipsApi } from "../../api/clips";
+import { LazyImage } from "../../ds/LazyImage";
 
 function formatTime(s: number) {
   const m = Math.floor(s / 60);
@@ -42,18 +43,18 @@ export default function ClipCard({
         overflow: "hidden",
         aspectRatio: "9 / 16",
         border: selected
-          ? "2px solid #7c3aed"
+          ? "2px solid #5b8def"
           : `1px solid ${alpha("#ffffff", 0.08)}`,
         boxShadow: selected
-          ? "0 0 0 4px rgba(124, 58, 237, 0.18), 0 8px 24px rgba(124, 58, 237, 0.25)"
+          ? "0 0 0 4px rgba(91, 141, 239, 0.18), 0 8px 24px rgba(91, 141, 239, 0.25)"
           : "none",
         transition: "all 0.2s ease",
         "&:hover": {
           transform: "translateY(-3px)",
-          borderColor: selected ? "#7c3aed" : alpha("#7c3aed", 0.5),
+          borderColor: selected ? "#5b8def" : alpha("#5b8def", 0.5),
           boxShadow: selected
-            ? "0 0 0 4px rgba(124, 58, 237, 0.22), 0 12px 28px rgba(124, 58, 237, 0.35)"
-            : "0 8px 24px rgba(124, 58, 237, 0.2)",
+            ? "0 0 0 4px rgba(91, 141, 239, 0.22), 0 12px 28px rgba(91, 141, 239, 0.35)"
+            : "0 8px 24px rgba(91, 141, 239, 0.2)",
         },
       }}
       onMouseEnter={() => videoRef.current?.play().catch(() => {})}
@@ -62,23 +63,14 @@ export default function ClipCard({
       {/* Poster image — shown immediately, sits behind the video so the video's
           first-frame transition is invisible. */}
       {posterUrl ? (
-        <Box
-          component="img"
-          src={posterUrl}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          sx={{
-            position: "absolute", inset: 0,
-            width: "100%", height: "100%",
-            objectFit: "cover", display: "block",
-          }}
-        />
+        <Box sx={{ position: "absolute", inset: 0 }}>
+          <LazyImage src={posterUrl} alt="" />
+        </Box>
       ) : (
         <Box sx={{
           position: "absolute", inset: 0,
           width: "100%", height: "100%",
-          background: "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(59,130,246,0.08))",
+          background: "rgba(91,141,239,0.08)",
         }} />
       )}
       {previewUrl && (
@@ -115,8 +107,8 @@ export default function ClipCard({
           left: 10,
           fontWeight: 700,
           color: "white",
-          background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
-          boxShadow: "0 2px 8px rgba(124, 58, 237, 0.4)",
+          backgroundColor: "#5b8def",
+          boxShadow: "0 2px 8px rgba(91, 141, 239, 0.4)",
           border: "none",
         }}
       />

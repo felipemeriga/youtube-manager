@@ -118,7 +118,7 @@ export default function JobProgressPanel({
                 borderRadius: 4,
                 backgroundColor: alpha("#ffffff", 0.06),
                 "& .MuiLinearProgress-bar": {
-                  background: "linear-gradient(90deg, #7c3aed, #3b82f6)",
+                  backgroundColor: "#5b8def",
                   borderRadius: 4,
                 },
               }}
