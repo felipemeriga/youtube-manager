@@ -160,8 +160,7 @@ function AssetList({
                 width: 40,
                 height: 40,
                 borderRadius: 1.5,
-                background:
-                  "linear-gradient(135deg, rgba(91,141,239,0.2), rgba(59,130,246,0.2))",
+                background: "rgba(91,141,239,0.12)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

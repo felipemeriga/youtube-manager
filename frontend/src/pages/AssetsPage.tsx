@@ -611,15 +611,7 @@ export default function AssetsPage() {
         pb: selected.size > 0 ? 10 : 3,
       }}
     >
-      <Typography
-        variant="h5"
-        sx={{
-          mb: 2,
-          background: "linear-gradient(135deg, #5b8def, #3b82f6)",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-        }}
-      >
+      <Typography variant="h5" sx={{ mb: 2, color: "text.primary" }}>
         Arquivos
       </Typography>
 
