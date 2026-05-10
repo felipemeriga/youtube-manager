@@ -46,6 +46,16 @@ export function useCachedQuery<T>(
   const [error, setError] = useState<unknown>(null);
   const [tick, setTick] = useState(0);
   const mounted = useRef(true);
+  const lastKeyRef = useRef(key);
+
+  // Sync `data` to the cache for the *current* key whenever the key prop
+  // changes — without this, `data` retains the previous key's value until
+  // the effect runs (one render of stale data on every key switch).
+  if (lastKeyRef.current !== key) {
+    lastKeyRef.current = key;
+    const cached = getCached<T>(key);
+    if (data !== cached) setData(cached);
+  }
 
   useEffect(() => {
     mounted.current = true;

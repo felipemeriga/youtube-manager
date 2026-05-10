@@ -13,6 +13,7 @@ export function useClipJobSSE(
     if (!jobId) return;
     let cancelled = false;
     let abort: AbortController | null = null;
+    let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     (async () => {
       const { data } = await supabase.auth.getSession();
@@ -25,6 +26,7 @@ export function useClipJobSSE(
         });
         if (!resp.ok || !resp.body) return;
         const reader = resp.body.getReader();
+        activeReader = reader;
         const decoder = new TextDecoder();
         let buf = "";
         while (!cancelled) {
@@ -53,6 +55,10 @@ export function useClipJobSSE(
 
     return () => {
       cancelled = true;
+      // Explicitly cancel the reader so an in-flight `reader.read()` resolves
+      // immediately on unmount — without this, the read keeps draining bytes
+      // until the connection actually closes (the abort below alone races).
+      activeReader?.cancel().catch(() => { /* ignore */ });
       abort?.abort();
     };
   }, [jobId]);

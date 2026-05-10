@@ -35,7 +35,11 @@ function buildSrcSet(src: string, widths: number[]): string {
     .map((w) => {
       const url = new URL(src, window.location.origin);
       url.searchParams.set("w", String(w));
-      return `${url.pathname}${url.search} ${w}w`;
+      // For same-origin URLs the browser will normalize the absolute form
+      // back to a path; for cross-origin URLs (e.g. Supabase signed) we MUST
+      // emit the absolute URL or the browser will resolve relative to the
+      // current page origin and 404.
+      return `${url.toString()} ${w}w`;
     })
     .join(", ");
 }
