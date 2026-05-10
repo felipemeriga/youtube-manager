@@ -309,6 +309,8 @@ export default function AssetsPage() {
 
   const currentBucket = BUCKETS[activeTab];
 
+  // Refresh helper used after mutations (upload/delete). Uses the page-level
+  // signal so navigation aborts everything.
   const loadFiles = useCallback(async () => {
     setLoading(true);
     const signal = getSignal();
@@ -323,12 +325,24 @@ export default function AssetsPage() {
     }
   }, [currentBucket.key, getSignal, isAbort]);
 
-  // Single fetch on bucket change. Previously two parallel useEffects fetched
-  // the same list (one inline, one via loadFiles callback), doubling network
-  // traffic on every tab switch.
+  // Initial fetch + refetch on bucket change. Uses a per-effect AbortController
+  // so a fast tab switch (A → B) cancels A's in-flight request, preventing the
+  // race where A's late response would overwrite B's already-displayed data.
   useEffect(() => {
-    loadFiles();
-  }, [loadFiles]);
+    const ctrl = new AbortController();
+    setLoading(true);
+    listAssets(currentBucket.key, ctrl.signal)
+      .then((data) => {
+        if (!ctrl.signal.aborted) setFiles(data as unknown as AssetFile[]);
+      })
+      .catch((err) => {
+        if ((err as { name?: string })?.name !== "AbortError") throw err;
+      })
+      .finally(() => {
+        if (!ctrl.signal.aborted) setLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [currentBucket.key]);
 
   // Clear selection when switching tabs
   useEffect(() => {
