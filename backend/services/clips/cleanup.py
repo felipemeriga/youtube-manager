@@ -5,6 +5,7 @@ service token. Removes source MP4s and unselected preview files for any job
 past expires_at, deletes orphan candidate rows, and marks the job 'expired'.
 Final renders are NEVER auto-deleted.
 """
+
 import logging
 
 from services.supabase_pool import get_async_client

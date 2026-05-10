@@ -34,6 +34,7 @@ async def lifespan(app):
     # Clip job recovery — mark orphaned in-flight jobs as failed after restart
     try:
         from services.clips.job_runner import recover_orphans
+
         n = await recover_orphans()
         if n:
             logger.info("Recovered %d orphaned clip jobs (marked failed)", n)

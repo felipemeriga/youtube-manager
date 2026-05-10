@@ -39,8 +39,12 @@ async def test_upload_image_with_preview_runs_pil_in_thread():
 
     with (
         patch("services.thumbnail_nodes._get_supabase", new=AsyncMock(return_value=sb)),
-        patch("services.thumbnail_nodes._make_preview", return_value=b"preview-bytes") as preview,
-        patch("asyncio.to_thread", new=AsyncMock(return_value=b"preview-bytes")) as to_thread,
+        patch(
+            "services.thumbnail_nodes._make_preview", return_value=b"preview-bytes"
+        ) as preview,
+        patch(
+            "asyncio.to_thread", new=AsyncMock(return_value=b"preview-bytes")
+        ) as to_thread,
     ):
         await _upload_image_with_preview("user-1", "thumb", b"original-bytes")
 

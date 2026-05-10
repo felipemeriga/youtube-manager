@@ -11,15 +11,24 @@ logger = logging.getLogger(__name__)
 
 
 def _video_dims(path: Path) -> tuple[int, int]:
-    out = subprocess.check_output(
-        [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height",
-            "-of", "csv=p=0:s=x",
-            str(path),
-        ]
-    ).decode().strip()
+    out = (
+        subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "csv=p=0:s=x",
+                str(path),
+            ]
+        )
+        .decode()
+        .strip()
+    )
     w, h = out.split("x")
     return int(w), int(h)
 
@@ -57,11 +66,16 @@ def build_crop_filter(
 
 async def _ffmpeg_cut(source: Path, start: float, end: float, out: Path) -> None:
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-y",
-        "-ss", str(start),
-        "-to", str(end),
-        "-i", str(source),
-        "-c", "copy",
+        "ffmpeg",
+        "-y",
+        "-ss",
+        str(start),
+        "-to",
+        str(end),
+        "-i",
+        str(source),
+        "-c",
+        "copy",
         str(out),
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
@@ -73,11 +87,22 @@ async def _ffmpeg_cut(source: Path, start: float, end: float, out: Path) -> None
 
 async def _ffmpeg_reframe(clip: Path, vf: str, out: Path) -> None:
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-y",
-        "-i", str(clip),
-        "-vf", vf,
-        "-c:v", "libx264", "-crf", "30", "-preset", "fast",
-        "-c:a", "aac", "-b:a", "96k",
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(clip),
+        "-vf",
+        vf,
+        "-c:v",
+        "libx264",
+        "-crf",
+        "30",
+        "-preset",
+        "fast",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "96k",
         str(out),
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
@@ -89,11 +114,16 @@ async def _ffmpeg_reframe(clip: Path, vf: str, out: Path) -> None:
 
 async def _ffmpeg_poster(clip: Path, out: Path) -> None:
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-y",
-        "-i", str(clip),
-        "-ss", "0.5",
-        "-vframes", "1",
-        "-q:v", "3",
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(clip),
+        "-ss",
+        "0.5",
+        "-vframes",
+        "1",
+        "-q:v",
+        "3",
         str(out),
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,

@@ -10,7 +10,9 @@ from auth import get_current_user
 from config import settings
 from services.clips.cleanup import sweep_expired
 from services.clips.job_runner import (
-    cancel_task, register_task, run_pipeline,
+    cancel_task,
+    register_task,
+    run_pipeline,
 )
 from services.clips.metadata import fetch_metadata
 from services.clips.sse_broker import broker
@@ -50,14 +52,21 @@ async def create_job(req: CreateJobRequest, user_id: str = Depends(get_current_u
     sb = await get_async_client()
     res = await (
         sb.table("clip_jobs")
-        .insert({"user_id": user_id, "youtube_url": req.youtube_url, "status": "pending"})
+        .insert(
+            {"user_id": user_id, "youtube_url": req.youtube_url, "status": "pending"}
+        )
         .execute()
     )
     job = res.data[0]
     tmp_dir = Path(settings.clips_tmp_dir)
-    task = asyncio.create_task(run_pipeline(
-        job_id=job["id"], user_id=user_id, url=req.youtube_url, tmp_dir=tmp_dir,
-    ))
+    task = asyncio.create_task(
+        run_pipeline(
+            job_id=job["id"],
+            user_id=user_id,
+            url=req.youtube_url,
+            tmp_dir=tmp_dir,
+        )
+    )
     register_task(job["id"], task)
     return job
 
@@ -67,7 +76,9 @@ async def list_jobs(user_id: str = Depends(get_current_user)):
     sb = await get_async_client()
     res = await (
         sb.table("clip_jobs")
-        .select("id, youtube_url, title, duration_seconds, status, progress_pct, created_at")
+        .select(
+            "id, youtube_url, title, duration_seconds, status, progress_pct, created_at"
+        )
         .eq("user_id", user_id)
         .order("created_at", desc=True)
         .execute()
@@ -79,7 +90,12 @@ async def list_jobs(user_id: str = Depends(get_current_user)):
 async def get_job(job_id: str, user_id: str = Depends(get_current_user)):
     sb = await get_async_client()
     job_res = await (
-        sb.table("clip_jobs").select("*").eq("id", job_id).eq("user_id", user_id).single().execute()
+        sb.table("clip_jobs")
+        .select("*")
+        .eq("id", job_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute()
     )
     if not job_res.data:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -94,10 +110,17 @@ async def get_job(job_id: str, user_id: str = Depends(get_current_user)):
 
 
 @router.get("/jobs/{job_id}/events")
-async def job_events(job_id: str, request: Request, user_id: str = Depends(get_current_user)):
+async def job_events(
+    job_id: str, request: Request, user_id: str = Depends(get_current_user)
+):
     sb = await get_async_client()
     job_res = await (
-        sb.table("clip_jobs").select("id").eq("id", job_id).eq("user_id", user_id).single().execute()
+        sb.table("clip_jobs")
+        .select("id")
+        .eq("id", job_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute()
     )
     if not job_res.data:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -106,6 +129,7 @@ async def job_events(job_id: str, request: Request, user_id: str = Depends(get_c
 
     async def event_stream():
         import json
+
         try:
             while True:
                 if await request.is_disconnected():
@@ -136,12 +160,20 @@ async def render_finals(
 ):
     sb = await get_async_client()
     job_res = await (
-        sb.table("clip_jobs").select("*").eq("id", job_id).eq("user_id", user_id).single().execute()
+        sb.table("clip_jobs")
+        .select("*")
+        .eq("id", job_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute()
     )
     if not job_res.data:
         raise HTTPException(status_code=404, detail="Job not found")
     if job_res.data["status"] not in ("ready", "completed"):
-        raise HTTPException(status_code=400, detail=f"Cannot render — job status is {job_res.data['status']}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot render — job status is {job_res.data['status']}",
+        )
 
     await (
         sb.table("clip_candidates")
@@ -151,17 +183,25 @@ async def render_finals(
     )
     await (
         sb.table("clip_jobs")
-        .update({"status": "rendering", "current_stage": "final_render", "progress_pct": 0})
+        .update(
+            {"status": "rendering", "current_stage": "final_render", "progress_pct": 0}
+        )
         .eq("id", job_id)
         .execute()
     )
 
     from services.clips.job_runner import run_finals_pipeline
+
     tmp_dir = Path(settings.clips_tmp_dir)
-    task = asyncio.create_task(run_finals_pipeline(
-        job_id=job_id, user_id=user_id, candidate_ids=req.candidate_ids, tmp_dir=tmp_dir,
-        caption_style=req.caption_style,
-    ))
+    task = asyncio.create_task(
+        run_finals_pipeline(
+            job_id=job_id,
+            user_id=user_id,
+            candidate_ids=req.candidate_ids,
+            tmp_dir=tmp_dir,
+            caption_style=req.caption_style,
+        )
+    )
     register_task(job_id, task)
     return {"status": "rendering", "candidate_ids": req.candidate_ids}
 
@@ -213,11 +253,7 @@ async def delete_job(job_id: str, user_id: str = Depends(get_current_user)):
 
     await sb.table("clip_candidates").delete().eq("job_id", job_id).execute()
     await (
-        sb.table("clip_jobs")
-        .delete()
-        .eq("id", job_id)
-        .eq("user_id", user_id)
-        .execute()
+        sb.table("clip_jobs").delete().eq("id", job_id).eq("user_id", user_id).execute()
     )
     return {"status": "deleted", "files_removed": len(keys)}
 
@@ -226,7 +262,12 @@ async def delete_job(job_id: str, user_id: str = Depends(get_current_user)):
 async def cancel_job(job_id: str, user_id: str = Depends(get_current_user)):
     sb = await get_async_client()
     job_res = await (
-        sb.table("clip_jobs").select("id, status").eq("id", job_id).eq("user_id", user_id).single().execute()
+        sb.table("clip_jobs")
+        .select("id, status")
+        .eq("id", job_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute()
     )
     if not job_res.data:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -278,6 +319,9 @@ async def get_final_url(candidate_id: str, user_id: str = Depends(get_current_us
 
 @router.post("/cleanup")
 async def cleanup_endpoint(x_service_token: str = Header(default="")):
-    if not settings.clips_cleanup_token or x_service_token != settings.clips_cleanup_token:
+    if (
+        not settings.clips_cleanup_token
+        or x_service_token != settings.clips_cleanup_token
+    ):
         raise HTTPException(status_code=401, detail="Invalid service token")
     return await sweep_expired()

@@ -4,7 +4,8 @@ import pytest
 
 from services.clips.models import CandidateClip
 from services.clips.render_preview import (
-    build_crop_filter, render_one_preview,
+    build_crop_filter,
+    render_one_preview,
 )
 
 
@@ -34,7 +35,9 @@ def test_build_crop_filter_uses_custom_output_size():
     instead of the 720p preview default."""
     track = [(0.0, 960)]
     f = build_crop_filter(
-        track=track, video_height=1080, video_width=1920,
+        track=track,
+        video_height=1080,
+        video_width=1920,
         output_size=(1080, 1920),
     )
     assert "scale=1080:1920" in f
@@ -44,21 +47,37 @@ def test_build_crop_filter_uses_custom_output_size():
 @pytest.mark.asyncio
 async def test_render_one_preview_orchestrates(tmp_path):
     candidate = CandidateClip(
-        start_seconds=10, end_seconds=40, hype_score=8,
-        hype_reasoning="x", transcript_excerpt="y",
+        start_seconds=10,
+        end_seconds=40,
+        hype_score=8,
+        hype_reasoning="x",
+        transcript_excerpt="y",
     )
     source = tmp_path / "source.mp4"
     source.write_bytes(b"")
 
-    with patch("services.clips.render_preview._ffmpeg_cut", new=AsyncMock()) as cut, \
-         patch("services.clips.render_preview.detect_face_track", new=AsyncMock(return_value=[(0.0, 960)])), \
-         patch("services.clips.render_preview._video_dims", return_value=(1920, 1080)), \
-         patch("services.clips.render_preview._ffmpeg_reframe", new=AsyncMock()) as reframe, \
-         patch("services.clips.render_preview._ffmpeg_poster", new=AsyncMock()) as poster, \
-         patch("services.clips.render_preview.upload_file", new=AsyncMock()) as upload:
+    with (
+        patch("services.clips.render_preview._ffmpeg_cut", new=AsyncMock()) as cut,
+        patch(
+            "services.clips.render_preview.detect_face_track",
+            new=AsyncMock(return_value=[(0.0, 960)]),
+        ),
+        patch("services.clips.render_preview._video_dims", return_value=(1920, 1080)),
+        patch(
+            "services.clips.render_preview._ffmpeg_reframe", new=AsyncMock()
+        ) as reframe,
+        patch(
+            "services.clips.render_preview._ffmpeg_poster", new=AsyncMock()
+        ) as poster,
+        patch("services.clips.render_preview.upload_file", new=AsyncMock()) as upload,
+    ):
         result = await render_one_preview(
-            candidate=candidate, candidate_id="c1", source=source,
-            user_id="u1", job_id="j1", tmp_dir=tmp_path,
+            candidate=candidate,
+            candidate_id="c1",
+            source=source,
+            user_id="u1",
+            job_id="j1",
+            tmp_dir=tmp_path,
         )
 
     assert cut.await_count == 1

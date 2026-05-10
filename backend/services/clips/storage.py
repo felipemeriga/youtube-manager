@@ -3,6 +3,7 @@
 All paths are relative to the `clips` bucket. RLS isolation is enforced by
 prefixing every key with `{user_id}/`.
 """
+
 import asyncio
 import logging
 from pathlib import Path
@@ -39,7 +40,9 @@ _UPLOAD_RETRIES = 3
 _UPLOAD_TIMEOUT = 120  # seconds — rendered videos can be 20-50 MB
 
 
-async def upload_file(local_path: Path, storage_key: str, content_type: str = "video/mp4") -> None:
+async def upload_file(
+    local_path: Path, storage_key: str, content_type: str = "video/mp4"
+) -> None:
     """Upload a local file to the clips bucket with retry on timeout/502."""
     sb = await get_async_client()
     data = local_path.read_bytes()
@@ -59,9 +62,13 @@ async def upload_file(local_path: Path, storage_key: str, content_type: str = "v
             return
         except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.ConnectTimeout) as exc:
             last_exc = exc
-            logger.warning("Upload timeout (attempt %d/%d): %s", attempt + 1, _UPLOAD_RETRIES, exc)
-            await asyncio.sleep(2 ** attempt)
-    raise RuntimeError(f"Upload failed after {_UPLOAD_RETRIES} attempts: {last_exc}") from last_exc
+            logger.warning(
+                "Upload timeout (attempt %d/%d): %s", attempt + 1, _UPLOAD_RETRIES, exc
+            )
+            await asyncio.sleep(2**attempt)
+    raise RuntimeError(
+        f"Upload failed after {_UPLOAD_RETRIES} attempts: {last_exc}"
+    ) from last_exc
 
 
 async def download_file(storage_key: str, local_path: Path) -> None:

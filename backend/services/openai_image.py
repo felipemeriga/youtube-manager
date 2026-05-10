@@ -5,6 +5,7 @@ the Gemini-flavored kwargs (aspect_ratio, image_size in 4K/2K/1K) into OpenAI's
 size + quality params, and collapses Gemini's interleaved text+image Parts into
 a single prompt with positional image markers.
 """
+
 import base64
 import io
 import logging
@@ -29,7 +30,7 @@ _HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
 # parameter (high/medium/low) controls output fidelity instead.
 SIZE_BY_ASPECT_TIER: dict[str, dict[str, str]] = {
     "16:9": {"4K": "1536x1024", "2K": "1536x1024", "1K": "1536x1024"},
-    "1:1":  {"4K": "1024x1024", "2K": "1024x1024", "1K": "1024x1024"},
+    "1:1": {"4K": "1024x1024", "2K": "1024x1024", "1K": "1024x1024"},
     "9:16": {"4K": "1024x1536", "2K": "1024x1536", "1K": "1024x1536"},
 }
 
@@ -70,6 +71,7 @@ def _decode_response(response) -> bytes:
         # Synchronous httpx fetch is fine here — this path is rare (b64 is
         # the default for gpt-image-1.5).
         import httpx
+
         response = httpx.get(url, timeout=_HTTP_TIMEOUT)
         response.raise_for_status()
         return response.content
@@ -120,15 +122,18 @@ async def _call_image_api(
         except Exception as exc:
             logger.warning(
                 "OpenAI %s failed (tier=%s, size=%s, quality=%s): %s",
-                model, tier, size, quality, exc,
+                model,
+                tier,
+                size,
+                quality,
+                exc,
             )
             last_exc = exc
     assert last_exc is not None
     # Re-raise with provider context so the SSE error event surfaces a
     # message the user can act on instead of a bare OpenAI traceback.
     raise RuntimeError(
-        f"OpenAI {model} failed for all sizes "
-        f"({', '.join(fallback_chain)}): {last_exc}"
+        f"OpenAI {model} failed for all sizes ({', '.join(fallback_chain)}): {last_exc}"
     ) from last_exc
 
 
@@ -153,39 +158,50 @@ async def generate_background(
 
     if reference_images:
         n = len(reference_images)
-        sections.append(_section(
-            f"REFERENCE THUMBNAILS (images 1-{n})",
-            "Use ONLY for layout and logo placement. Ignore their text and "
-            "people (those are added in later steps). Generate visuals based "
-            "on the TOPIC below, not the references.",
-        ))
+        sections.append(
+            _section(
+                f"REFERENCE THUMBNAILS (images 1-{n})",
+                "Use ONLY for layout and logo placement. Ignore their text and "
+                "people (those are added in later steps). Generate visuals based "
+                "on the TOPIC below, not the references.",
+            )
+        )
         images.extend(reference_images)
 
     if logos:
         start = len(images) + 1
         end = start + len(logos) - 1
         label = f"image {start}" if start == end else f"images {start}-{end}"
-        sections.append(_section(
-            f"CHANNEL LOGO ({label})",
-            "This is the channel logo. Place it in the same position and "
-            "size as in the reference thumbnails.",
-        ))
+        sections.append(
+            _section(
+                f"CHANNEL LOGO ({label})",
+                "This is the channel logo. Place it in the same position and "
+                "size as in the reference thumbnails.",
+            )
+        )
         images.extend(logos)
 
     if previous_image:
         idx = len(images) + 1
-        sections.append(_section(
-            f"CURRENT BACKGROUND (image {idx})",
-            "User wants changes. Keep everything unchanged except what they "
-            "asked for.",
-        ))
+        sections.append(
+            _section(
+                f"CURRENT BACKGROUND (image {idx})",
+                "User wants changes. Keep everything unchanged except what they "
+                "asked for.",
+            )
+        )
         images.append(previous_image)
 
     sections.append(_section("TASK", prompt))
     full_prompt = "\n".join(sections)
 
     return await _call_image_api(
-        client, model, full_prompt, images, aspect_ratio, image_size,
+        client,
+        model,
+        full_prompt,
+        images,
+        aspect_ratio,
+        image_size,
     )
 
 
@@ -209,34 +225,42 @@ async def composite_with_effects(
 
     if reference_images:
         n = len(reference_images)
-        sections.append(_section(
-            f"REFERENCE THUMBNAILS (images 1-{n})",
-            "Study how the person is composited: position, size, glow, "
-            "lighting, color grading, edge effects. Replicate this style.",
-        ))
+        sections.append(
+            _section(
+                f"REFERENCE THUMBNAILS (images 1-{n})",
+                "Study how the person is composited: position, size, glow, "
+                "lighting, color grading, edge effects. Replicate this style.",
+            )
+        )
         images.extend(reference_images)
 
     if previous_image:
         idx = len(images) + 1
-        sections.append(_section(
-            f"CURRENT COMPOSITE (image {idx})",
-            "User wants changes. Keep everything unchanged except what they "
-            "asked for.",
-        ))
+        sections.append(
+            _section(
+                f"CURRENT COMPOSITE (image {idx})",
+                "User wants changes. Keep everything unchanged except what they "
+                "asked for.",
+            )
+        )
         images.append(previous_image)
 
     bg_idx = len(images) + 1
-    sections.append(_section(
-        f"BACKGROUND IMAGE (image {bg_idx})",
-        "Use as-is, do NOT modify.",
-    ))
+    sections.append(
+        _section(
+            f"BACKGROUND IMAGE (image {bg_idx})",
+            "Use as-is, do NOT modify.",
+        )
+    )
     images.append(background_bytes)
 
     person_idx = len(images) + 1
-    sections.append(_section(
-        f"PERSON PHOTO (image {person_idx})",
-        "This is the person to place in the thumbnail.",
-    ))
+    sections.append(
+        _section(
+            f"PERSON PHOTO (image {person_idx})",
+            "This is the person to place in the thumbnail.",
+        )
+    )
     images.append(person_bytes)
 
     if composite_mode == "transform" and transform_prompt:
@@ -271,7 +295,12 @@ async def composite_with_effects(
     full_prompt = "\n".join(sections)
 
     return await _call_image_api(
-        client, model, full_prompt, images, aspect_ratio, image_size,
+        client,
+        model,
+        full_prompt,
+        images,
+        aspect_ratio,
+        image_size,
     )
 
 
@@ -293,26 +322,32 @@ async def add_text_with_style(
 
     if reference_images:
         n = len(reference_images)
-        sections.append(_section(
-            f"REFERENCE THUMBNAILS (images 1-{n})",
-            "Replicate the SAME typography: font style, weight, color, size, "
-            "position, effects (shadow, stroke, glow).",
-        ))
+        sections.append(
+            _section(
+                f"REFERENCE THUMBNAILS (images 1-{n})",
+                "Replicate the SAME typography: font style, weight, color, size, "
+                "position, effects (shadow, stroke, glow).",
+            )
+        )
         images.extend(reference_images)
 
     if previous_image:
         idx = len(images) + 1
-        sections.append(_section(
-            f"PREVIOUS VERSION (image {idx})",
-            "User wants changes. Keep everything except what they asked for.",
-        ))
+        sections.append(
+            _section(
+                f"PREVIOUS VERSION (image {idx})",
+                "User wants changes. Keep everything except what they asked for.",
+            )
+        )
         images.append(previous_image)
 
     comp_idx = len(images) + 1
-    sections.append(_section(
-        f"CURRENT THUMBNAIL (image {comp_idx})",
-        "Add text only, change nothing else.",
-    ))
+    sections.append(
+        _section(
+            f"CURRENT THUMBNAIL (image {comp_idx})",
+            "Add text only, change nothing else.",
+        )
+    )
     images.append(composite_bytes)
 
     text_prompt = (
@@ -326,5 +361,10 @@ async def add_text_with_style(
     full_prompt = "\n".join(sections)
 
     return await _call_image_api(
-        client, model, full_prompt, images, aspect_ratio, image_size,
+        client,
+        model,
+        full_prompt,
+        images,
+        aspect_ratio,
+        image_size,
     )

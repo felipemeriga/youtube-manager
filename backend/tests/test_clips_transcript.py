@@ -3,7 +3,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from services.clips.transcript import (
-    add_punctuation, fetch_transcript, parse_vtt, is_broken_captions, _split_long_cues,
+    add_punctuation,
+    fetch_transcript,
+    parse_vtt,
+    is_broken_captions,
+    _split_long_cues,
 )
 from services.clips.models import TranscriptCue
 
@@ -36,8 +40,10 @@ def test_is_broken_captions_too_few():
 
 
 def test_is_broken_captions_mostly_music_tags():
-    cues = [type("C", (), {"text": t})() for t in
-            ["[Music]", "[Music]", "[Applause]", "[Music]", "[Music]", "[Music]"]]
+    cues = [
+        type("C", (), {"text": t})()
+        for t in ["[Music]", "[Music]", "[Applause]", "[Music]", "[Music]", "[Music]"]
+    ]
     assert is_broken_captions(cues) is True
 
 
@@ -68,7 +74,9 @@ def test_split_long_cues_splits_long_cue():
 
 
 def test_split_long_cues_preserves_time_bounds():
-    cues = [TranscriptCue(start=5.0, end=10.0, text=" ".join(f"w{i}" for i in range(20)))]
+    cues = [
+        TranscriptCue(start=5.0, end=10.0, text=" ".join(f"w{i}" for i in range(20)))
+    ]
     result = _split_long_cues(cues)
     assert result[0].start == 5.0
     assert abs(result[-1].end - 10.0) < 0.01
@@ -85,7 +93,9 @@ async def test_fetch_transcript_uses_yt_captions_when_good(tmp_path):
         return vtt_path
 
     with patch("services.clips.transcript._download_yt_captions", new=fake_dl):
-        cues = await fetch_transcript("https://youtu.be/x", tmp_path / "audio.mp3", tmp_path)
+        cues = await fetch_transcript(
+            "https://youtu.be/x", tmp_path / "audio.mp3", tmp_path
+        )
     assert len(cues) >= 5
 
 
@@ -103,9 +113,13 @@ async def test_fetch_transcript_falls_back_to_whisper(tmp_path):
     async def fake_whisper(audio_path):
         return fake_whisper_cues
 
-    with patch("services.clips.transcript._download_yt_captions", new=fake_dl), \
-         patch("services.clips.transcript._whisper_transcribe", new=fake_whisper):
-        cues = await fetch_transcript("https://youtu.be/x", tmp_path / "audio.mp3", tmp_path)
+    with (
+        patch("services.clips.transcript._download_yt_captions", new=fake_dl),
+        patch("services.clips.transcript._whisper_transcribe", new=fake_whisper),
+    ):
+        cues = await fetch_transcript(
+            "https://youtu.be/x", tmp_path / "audio.mp3", tmp_path
+        )
     assert len(cues) == 2
 
 
@@ -115,8 +129,11 @@ async def test_add_punctuation_maps_words_back():
         TranscriptCue(start=0.0, end=2.0, text="hello world"),
         TranscriptCue(start=2.0, end=4.0, text="how are you"),
     ]
-    with patch("services.llm.ask_llm", new_callable=AsyncMock,
-               return_value="Hello world, how are you?"):
+    with patch(
+        "services.llm.ask_llm",
+        new_callable=AsyncMock,
+        return_value="Hello world, how are you?",
+    ):
         result = await add_punctuation(cues)
     assert result[0].text == "Hello world,"
     assert result[1].text == "how are you?"
@@ -129,8 +146,11 @@ async def test_add_punctuation_maps_words_back():
 async def test_add_punctuation_falls_back_on_word_count_mismatch():
     cues = [TranscriptCue(start=0.0, end=2.0, text="hello world")]
     # LLM adds an extra word — should fall back to original
-    with patch("services.llm.ask_llm", new_callable=AsyncMock,
-               return_value="Hello, beautiful world!"):
+    with patch(
+        "services.llm.ask_llm",
+        new_callable=AsyncMock,
+        return_value="Hello, beautiful world!",
+    ):
         result = await add_punctuation(cues)
     assert result[0].text == "hello world"
 
@@ -138,7 +158,10 @@ async def test_add_punctuation_falls_back_on_word_count_mismatch():
 @pytest.mark.asyncio
 async def test_add_punctuation_falls_back_on_llm_failure():
     cues = [TranscriptCue(start=0.0, end=2.0, text="hello world")]
-    with patch("services.llm.ask_llm", new_callable=AsyncMock,
-               side_effect=RuntimeError("API down")):
+    with patch(
+        "services.llm.ask_llm",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("API down"),
+    ):
         result = await add_punctuation(cues)
     assert result[0].text == "hello world"

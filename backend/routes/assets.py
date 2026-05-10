@@ -248,7 +248,9 @@ async def get_signed_url(
     result = None
     for attempt in range(3):
         try:
-            result = await sb.storage.from_(bucket).create_signed_url(storage_path, 3600)
+            result = await sb.storage.from_(bucket).create_signed_url(
+                storage_path, 3600
+            )
             break
         except Exception:
             if attempt == 2:

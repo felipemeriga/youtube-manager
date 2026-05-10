@@ -12,9 +12,12 @@ async def test_sweep_deletes_source_and_previews_marks_expired():
         {"id": "j1", "user_id": "u1", "source_storage_key": "u1/j1/source.mp4"},
     ]
     candidates = [
-        {"id": "c1", "preview_storage_key": "u1/j1/previews/c1.mp4",
-         "preview_poster_key": "u1/j1/previews/c1.jpg",
-         "final_storage_key": None},
+        {
+            "id": "c1",
+            "preview_storage_key": "u1/j1/previews/c1.mp4",
+            "preview_poster_key": "u1/j1/previews/c1.jpg",
+            "final_storage_key": None,
+        },
     ]
     sb.table.return_value.select.return_value.lt.return_value.neq.return_value.execute = AsyncMock(
         return_value=MagicMock(data=expired_jobs)
@@ -29,8 +32,12 @@ async def test_sweep_deletes_source_and_previews_marks_expired():
         return_value=MagicMock(data=[{"id": "c1"}])
     )
 
-    with patch("services.clips.cleanup.get_async_client", new=AsyncMock(return_value=sb)), \
-         patch("services.clips.cleanup.remove_keys", new=AsyncMock()) as remove:
+    with (
+        patch(
+            "services.clips.cleanup.get_async_client", new=AsyncMock(return_value=sb)
+        ),
+        patch("services.clips.cleanup.remove_keys", new=AsyncMock()) as remove,
+    ):
         result = await sweep_expired()
 
     # Should remove 3 keys: source + preview mp4 + preview jpg

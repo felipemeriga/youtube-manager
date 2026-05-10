@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     cors_origins: str = "http://localhost:5173"
     database_url: str = ""
-    clips_cleanup_token: str = ""    # service token for /api/clips/cleanup
+    clips_cleanup_token: str = ""  # service token for /api/clips/cleanup
     clips_tmp_dir: str = "/tmp/clips"
     clips_bucket: str = "clips"
 

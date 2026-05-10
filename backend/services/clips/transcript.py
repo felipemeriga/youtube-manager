@@ -37,7 +37,9 @@ def parse_vtt(content: str) -> list[TranscriptCue]:
             continue
         start = _ts_to_seconds(*m.groups()[:4])
         end = _ts_to_seconds(*m.groups()[4:])
-        text = " ".join(ln for ln in lines if ln is not ts_line and "-->" not in ln).strip()
+        text = " ".join(
+            ln for ln in lines if ln is not ts_line and "-->" not in ln
+        ).strip()
         if text:
             cues.append(TranscriptCue(start=start, end=end, text=text))
     return cues
@@ -64,11 +66,13 @@ def _split_long_cues(cues: list[TranscriptCue]) -> list[TranscriptCue]:
         offset = cue.start
         for chunk in chunks:
             chunk_duration = duration * (len(chunk) / total_words)
-            out.append(TranscriptCue(
-                start=offset,
-                end=offset + chunk_duration,
-                text=" ".join(chunk),
-            ))
+            out.append(
+                TranscriptCue(
+                    start=offset,
+                    end=offset + chunk_duration,
+                    text=" ".join(chunk),
+                )
+            )
             offset += chunk_duration
     return out
 
@@ -119,7 +123,8 @@ async def add_punctuation(cues: list[TranscriptCue]) -> list[TranscriptCue]:
     if len(punct_words) != total_original:
         logger.warning(
             "Punctuation word count mismatch: original=%d, punctuated=%d — skipping",
-            total_original, len(punct_words),
+            total_original,
+            len(punct_words),
         )
         return cues
 
@@ -147,11 +152,16 @@ async def _download_yt_captions(url: str, out_dir: Path) -> Path | None:
     out_dir.mkdir(parents=True, exist_ok=True)
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
-        "--write-auto-subs", "--sub-langs", "en",
-        "--sub-format", "vtt",
+        "--write-auto-subs",
+        "--sub-langs",
+        "en",
+        "--sub-format",
+        "vtt",
         "--skip-download",
-        "--convert-subs", "vtt",
-        "-o", str(out_dir / "captions.%(ext)s"),
+        "--convert-subs",
+        "vtt",
+        "-o",
+        str(out_dir / "captions.%(ext)s"),
         url,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -184,15 +194,23 @@ async def _whisper_transcribe(audio_path: Path) -> list[TranscriptCue]:
         current_words.append(w.word)
         last_end = w.end
         if last_end - current_start >= 2.5 or w.word.endswith((".", "?", "!")):
-            cues.append(TranscriptCue(
-                start=current_start, end=last_end, text=" ".join(current_words).strip(),
-            ))
+            cues.append(
+                TranscriptCue(
+                    start=current_start,
+                    end=last_end,
+                    text=" ".join(current_words).strip(),
+                )
+            )
             current_words = []
             current_start = None
     if current_words and current_start is not None:
-        cues.append(TranscriptCue(
-            start=current_start, end=last_end, text=" ".join(current_words).strip(),
-        ))
+        cues.append(
+            TranscriptCue(
+                start=current_start,
+                end=last_end,
+                text=" ".join(current_words).strip(),
+            )
+        )
     return cues
 
 

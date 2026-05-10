@@ -443,9 +443,7 @@ async def add_text_node(state: ThumbnailState) -> dict:
         logger.exception("add_text_node failed; falling back to composite")
         return {
             "final_urls": composite_urls,
-            "clarify_question": (
-                f"Falha ao adicionar texto: {exc}. Tente novamente."
-            ),
+            "clarify_question": (f"Falha ao adicionar texto: {exc}. Tente novamente."),
         }
 
 

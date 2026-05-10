@@ -45,20 +45,15 @@ def _subtitles_filter_available() -> bool:
 #   MarginL, MarginR, MarginV, Encoding
 CAPTION_PRESETS: dict[str, str] = {
     # White text, thick black outline. Bottom-center. Universal default.
-    "classic":
-        "Style: Default,Arial,48,&H00FFFFFF,&H00000000,&H80000000,1,1,3,1,2,40,40,80,1",
+    "classic": "Style: Default,Arial,48,&H00FFFFFF,&H00000000,&H80000000,1,1,3,1,2,40,40,80,1",
     # Big white text, heavy outline, bottom-center. Inspired by social-clip overlays.
-    "tiktok":
-        "Style: Default,Impact,56,&H00FFFFFF,&H00000000,&H80000000,1,1,4,2,2,40,40,90,1",
+    "tiktok": "Style: Default,Impact,56,&H00FFFFFF,&H00000000,&H80000000,1,1,4,2,2,40,40,90,1",
     # Bright yellow w/ thick black outline. Bottom-center.
-    "bold_yellow":
-        "Style: Default,Arial,52,&H0000FFFF,&H00000000,&H80000000,1,1,4,1,2,40,40,80,1",
+    "bold_yellow": "Style: Default,Arial,52,&H0000FFFF,&H00000000,&H80000000,1,1,4,1,2,40,40,80,1",
     # White text on opaque black rounded box. Bottom-center.
-    "minimal_box":
-        "Style: Default,Arial,42,&H00FFFFFF,&H00000000,&HC0000000,0,3,2,0,2,40,40,80,1",
+    "minimal_box": "Style: Default,Arial,42,&H00FFFFFF,&H00000000,&HC0000000,0,3,2,0,2,40,40,80,1",
     # Same as classic but anchored to top-center (alignment 8).
-    "top_centered":
-        "Style: Default,Arial,48,&H00FFFFFF,&H00000000,&H80000000,1,1,3,1,8,40,40,80,1",
+    "top_centered": "Style: Default,Arial,48,&H00FFFFFF,&H00000000,&H80000000,1,1,3,1,8,40,40,80,1",
 }
 
 DEFAULT_CAPTION_STYLE = "classic"
@@ -69,7 +64,8 @@ def _build_ass_header(caption_style: str) -> str:
     if style_line is None:
         logger.warning(
             "Unknown caption_style %r — falling back to %r",
-            caption_style, DEFAULT_CAPTION_STYLE,
+            caption_style,
+            DEFAULT_CAPTION_STYLE,
         )
         style_line = CAPTION_PRESETS[DEFAULT_CAPTION_STYLE]
     return (
@@ -96,7 +92,7 @@ def _seconds_to_ass_ts(seconds: float) -> str:
 
 
 CUE_GAP_SECONDS = 0.12  # short blank between back-to-back cues so consecutive
-                        # phrases don't visually glue into one paragraph
+# phrases don't visually glue into one paragraph
 
 
 def build_ass_file(
@@ -135,7 +131,11 @@ def build_ass_file(
 
 
 async def _ffmpeg_render_with_subs(
-    source: Path, start: float, end: float, vf_with_subs: str, out: Path,
+    source: Path,
+    start: float,
+    end: float,
+    vf_with_subs: str,
+    out: Path,
     on_progress: ProgressCallback | None = None,
 ) -> None:
     """Encode a single clip. If `on_progress` is provided, ffmpeg emits structured
@@ -144,14 +144,28 @@ async def _ffmpeg_render_with_subs(
     caller after upload, not here."""
     duration = max(0.001, end - start)
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-y",
-        "-ss", str(start),
-        "-to", str(end),
-        "-i", str(source),
-        "-vf", vf_with_subs,
-        "-c:v", "libx264", "-crf", "18", "-preset", "slow",
-        "-c:a", "aac", "-b:a", "192k",
-        "-progress", "pipe:1",
+        "ffmpeg",
+        "-y",
+        "-ss",
+        str(start),
+        "-to",
+        str(end),
+        "-i",
+        str(source),
+        "-vf",
+        vf_with_subs,
+        "-c:v",
+        "libx264",
+        "-crf",
+        "18",
+        "-preset",
+        "slow",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-progress",
+        "pipe:1",
         "-nostats",
         str(out),
         stdout=asyncio.subprocess.PIPE,
@@ -167,7 +181,9 @@ async def _ffmpeg_render_with_subs(
             if not raw:
                 break
             line = raw.decode(errors="replace").strip()
-            if not line.startswith("out_time_us=") and not line.startswith("out_time_ms="):
+            if not line.startswith("out_time_us=") and not line.startswith(
+                "out_time_ms="
+            ):
                 continue
             try:
                 us = int(line.split("=", 1)[1])
@@ -218,7 +234,10 @@ async def render_one_final(
     out_path = tmp_dir / f"{candidate_id}_final.mp4"
 
     build_ass_file(
-        cues, candidate.start_seconds, candidate.end_seconds, ass_path,
+        cues,
+        candidate.start_seconds,
+        candidate.end_seconds,
+        ass_path,
         caption_style=caption_style,
     )
     width, height = _video_dims(source)
@@ -244,7 +263,11 @@ async def render_one_final(
         vf = crop_scale
 
     await _ffmpeg_render_with_subs(
-        source, candidate.start_seconds, candidate.end_seconds, vf, out_path,
+        source,
+        candidate.start_seconds,
+        candidate.end_seconds,
+        vf,
+        out_path,
         on_progress=on_progress,
     )
     key = final_key(user_id, job_id, candidate_id)

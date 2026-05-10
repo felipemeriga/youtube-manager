@@ -9,6 +9,7 @@ Uses MediaPipe's Tasks API (BlazeFace short-range). The legacy
 `mediapipe.solutions` namespace was dropped from recent macOS arm64 wheels,
 so the Tasks model is downloaded once on first use to a cache dir.
 """
+
 import asyncio
 import logging
 from pathlib import Path
@@ -44,7 +45,9 @@ def _ensure_model() -> Path:
     return path
 
 
-def fallback_center(video_width: int, sample_times: list[float]) -> list[tuple[float, int]]:
+def fallback_center(
+    video_width: int, sample_times: list[float]
+) -> list[tuple[float, int]]:
     cx = video_width // 2
     return [(t, cx) for t in sample_times]
 
@@ -67,10 +70,15 @@ def smooth_x_track(
 
 async def _video_dimensions(video_path: Path) -> tuple[int, int]:
     proc = await asyncio.create_subprocess_exec(
-        "ffprobe", "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=width,height",
-        "-of", "csv=p=0:s=x",
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "csv=p=0:s=x",
         str(video_path),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -83,7 +91,9 @@ async def _video_dimensions(video_path: Path) -> tuple[int, int]:
     return int(w), int(h)
 
 
-async def detect_face_track(video_path: Path, duration_seconds: float) -> list[tuple[float, int]]:
+async def detect_face_track(
+    video_path: Path, duration_seconds: float
+) -> list[tuple[float, int]]:
     """Sample ~1 fps, return smoothed face center-x track.
 
     Falls back to image center if MediaPipe finds nothing or the model fails

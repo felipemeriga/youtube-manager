@@ -3,6 +3,7 @@ clip_jobs row, publishes SSE events, and inserts clip_candidates rows.
 
 Maintains a registry of in-flight asyncio tasks for cancellation.
 """
+
 import asyncio
 import logging
 import shutil
@@ -66,29 +67,52 @@ async def run_pipeline(
     job_tmp.mkdir(parents=True, exist_ok=True)
 
     try:
-        await _update_job(job_id, {"status": "processing", "current_stage": "metadata", "progress_pct": 1})
+        await _update_job(
+            job_id,
+            {"status": "processing", "current_stage": "metadata", "progress_pct": 1},
+        )
         await _publish_progress(job_id, "metadata", 1)
         metadata = await fetch_metadata(url)
-        await _update_job(job_id, {
-            "title": metadata.title,
-            "duration_seconds": metadata.duration_seconds,
-            "youtube_video_id": metadata.youtube_video_id,
-            "current_stage": "download",
-            "progress_pct": 5,
-        })
+        await _update_job(
+            job_id,
+            {
+                "title": metadata.title,
+                "duration_seconds": metadata.duration_seconds,
+                "youtube_video_id": metadata.youtube_video_id,
+                "current_stage": "download",
+                "progress_pct": 5,
+            },
+        )
         await _publish_progress(job_id, "download", 5)
 
-        source = await download_source(url=url, user_id=user_id, job_id=job_id, tmp_dir=job_tmp)
-        await _update_job(job_id, {"current_stage": "transcribe", "progress_pct": 25,
-                                    "source_storage_key": f"{user_id}/{job_id}/source.mp4"})
+        source = await download_source(
+            url=url, user_id=user_id, job_id=job_id, tmp_dir=job_tmp
+        )
+        await _update_job(
+            job_id,
+            {
+                "current_stage": "transcribe",
+                "progress_pct": 25,
+                "source_storage_key": f"{user_id}/{job_id}/source.mp4",
+            },
+        )
         await _publish_progress(job_id, "transcribe", 25)
 
         # Extract audio for whisper fallback
         audio_path = job_tmp / "audio.mp3"
         audio_proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-i", str(source), "-vn", "-acodec", "libmp3lame", "-q:a", "5",
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(source),
+            "-vn",
+            "-acodec",
+            "libmp3lame",
+            "-q:a",
+            "5",
             str(audio_path),
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
         )
         await audio_proc.wait()
 
@@ -96,31 +120,44 @@ async def run_pipeline(
         cues = await add_punctuation(cues)
         # Persist cues so the finals pipeline can skip extract_audio + transcribe.
         cues_json = [{"start": c.start, "end": c.end, "text": c.text} for c in cues]
-        await _update_job(job_id, {
-            "transcript_cues": cues_json,
-            "current_stage": "segment",
-            "progress_pct": 45,
-        })
+        await _update_job(
+            job_id,
+            {
+                "transcript_cues": cues_json,
+                "current_stage": "segment",
+                "progress_pct": 45,
+            },
+        )
         await _publish_progress(job_id, "segment", 45)
 
-        candidates = await segment_and_score(cues, duration_seconds=metadata.duration_seconds)
-        await _update_job(job_id, {"current_stage": "preview_render", "progress_pct": 55})
+        candidates = await segment_and_score(
+            cues, duration_seconds=metadata.duration_seconds
+        )
+        await _update_job(
+            job_id, {"current_stage": "preview_render", "progress_pct": 55}
+        )
         await _publish_progress(job_id, "preview_render", 55)
 
         # Pre-create candidate rows so we have IDs before render
         candidate_ids: list[tuple[str, object]] = []
         for c in candidates:
             cid = str(uuid.uuid4())
-            await sb.table("clip_candidates").insert({
-                "id": cid,
-                "job_id": job_id,
-                "start_seconds": c.start_seconds,
-                "end_seconds": c.end_seconds,
-                "duration_seconds": c.duration_seconds,
-                "hype_score": c.hype_score,
-                "hype_reasoning": c.hype_reasoning,
-                "transcript_excerpt": c.transcript_excerpt,
-            }).execute()
+            await (
+                sb.table("clip_candidates")
+                .insert(
+                    {
+                        "id": cid,
+                        "job_id": job_id,
+                        "start_seconds": c.start_seconds,
+                        "end_seconds": c.end_seconds,
+                        "duration_seconds": c.duration_seconds,
+                        "hype_score": c.hype_score,
+                        "hype_reasoning": c.hype_reasoning,
+                        "transcript_excerpt": c.transcript_excerpt,
+                    }
+                )
+                .execute()
+            )
             candidate_ids.append((cid, c))
 
         total = len(candidate_ids)
@@ -140,7 +177,9 @@ async def run_pipeline(
 
         succeeded = [r for r in results if not r.get("render_failed")]
         if total > 0 and len(succeeded) / total < 0.5:
-            raise RuntimeError(f"Too many candidate renders failed ({len(succeeded)}/{total})")
+            raise RuntimeError(
+                f"Too many candidate renders failed ({len(succeeded)}/{total})"
+            )
 
         # Batch updates by identical payload to avoid one DB call per candidate.
         # Failed candidates share `{render_failed: True}`; succeeded candidates each
@@ -151,11 +190,18 @@ async def run_pipeline(
             if r.get("render_failed"):
                 failed_ids.append(r["candidate_id"])
             else:
-                await sb.table("clip_candidates").update({
-                    "render_failed": False,
-                    "preview_storage_key": r["preview_storage_key"],
-                    "preview_poster_key": r["preview_poster_key"],
-                }).eq("id", r["candidate_id"]).execute()
+                await (
+                    sb.table("clip_candidates")
+                    .update(
+                        {
+                            "render_failed": False,
+                            "preview_storage_key": r["preview_storage_key"],
+                            "preview_poster_key": r["preview_poster_key"],
+                        }
+                    )
+                    .eq("id", r["candidate_id"])
+                    .execute()
+                )
         if failed_ids:
             await (
                 sb.table("clip_candidates")
@@ -164,19 +210,28 @@ async def run_pipeline(
                 .execute()
             )
 
-        await _update_job(job_id, {
-            "status": "ready",
-            "current_stage": "await_selection",
-            "progress_pct": 100,
-        })
+        await _update_job(
+            job_id,
+            {
+                "status": "ready",
+                "current_stage": "await_selection",
+                "progress_pct": 100,
+            },
+        )
         # Fetch final candidate list for SSE payload
         cand_res = await (
-            sb.table("clip_candidates").select("*").eq("job_id", job_id).order("hype_score", desc=True).execute()
+            sb.table("clip_candidates")
+            .select("*")
+            .eq("job_id", job_id)
+            .order("hype_score", desc=True)
+            .execute()
         )
         await broker.publish(job_id, {"type": "ready", "candidates": cand_res.data})
 
     except asyncio.CancelledError:
-        await _update_job(job_id, {"status": "failed", "error_message": "Cancelled by user"})
+        await _update_job(
+            job_id, {"status": "failed", "error_message": "Cancelled by user"}
+        )
         await broker.publish(job_id, {"type": "error", "message": "Cancelled by user"})
         raise
     except Exception as e:
@@ -202,10 +257,14 @@ async def run_finals_pipeline(
 
     try:
         # Stage 1/4: download source
-        await _update_job(job_id, {"current_stage": "download_source", "progress_pct": 5})
+        await _update_job(
+            job_id, {"current_stage": "download_source", "progress_pct": 5}
+        )
         await _publish_progress(job_id, "download_source", 5)
 
-        job_res = await sb.table("clip_jobs").select("*").eq("id", job_id).single().execute()
+        job_res = (
+            await sb.table("clip_jobs").select("*").eq("id", job_id).single().execute()
+        )
         cands_res = await (
             sb.table("clip_candidates").select("*").in_("id", candidate_ids).execute()
         )
@@ -221,36 +280,55 @@ async def run_finals_pipeline(
         saved_cues = job_res.data.get("transcript_cues")
         if saved_cues:
             from .models import TranscriptCue
+
             cues = [
                 TranscriptCue(start=c["start"], end=c["end"], text=c["text"])
                 for c in saved_cues
             ]
         else:
             # Stage 2/4: extract audio
-            await _update_job(job_id, {"current_stage": "extract_audio", "progress_pct": 15})
+            await _update_job(
+                job_id, {"current_stage": "extract_audio", "progress_pct": 15}
+            )
             await _publish_progress(job_id, "extract_audio", 15)
             audio_path = job_tmp / "audio.mp3"
             audio_proc = await asyncio.create_subprocess_exec(
-                "ffmpeg", "-y", "-i", str(source), "-vn", "-acodec", "libmp3lame", "-q:a", "5",
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(source),
+                "-vn",
+                "-acodec",
+                "libmp3lame",
+                "-q:a",
+                "5",
                 str(audio_path),
-                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
             )
             await audio_proc.wait()
 
             # Stage 3/4: transcribe
-            await _update_job(job_id, {"current_stage": "transcribe", "progress_pct": 25})
+            await _update_job(
+                job_id, {"current_stage": "transcribe", "progress_pct": 25}
+            )
             await _publish_progress(job_id, "transcribe", 25)
-            cues = await fetch_transcript(job_res.data["youtube_url"], audio_path, job_tmp)
+            cues = await fetch_transcript(
+                job_res.data["youtube_url"], audio_path, job_tmp
+            )
 
         # Stage 4/4: render finals (loop). Overall pct goes from 30 → 95 across
         # all selected candidates; per-candidate intra-encode pct rides on top
         # via render_progress events keyed by candidate_id.
-        await _update_job(job_id, {"current_stage": "render_finals", "progress_pct": 30})
+        await _update_job(
+            job_id, {"current_stage": "render_finals", "progress_pct": 30}
+        )
         await _publish_progress(job_id, "render_finals", 30)
 
         total = max(1, len(candidates_data))
         for cand_idx, cand_row in enumerate(candidates_data):
             from .models import CandidateClip
+
             candidate = CandidateClip(
                 start_seconds=cand_row["start_seconds"],
                 end_seconds=cand_row["end_seconds"],
@@ -260,13 +338,18 @@ async def run_finals_pipeline(
             )
             cand_id = cand_row["id"]
 
-            async def _emit_progress(pct: int, _cid: str = cand_id, _idx: int = cand_idx) -> None:
+            async def _emit_progress(
+                pct: int, _cid: str = cand_id, _idx: int = cand_idx
+            ) -> None:
                 # Per-candidate event for the LinearProgress bar in each card.
-                await broker.publish(job_id, {
-                    "type": "render_progress",
-                    "candidate_id": _cid,
-                    "pct": pct,
-                })
+                await broker.publish(
+                    job_id,
+                    {
+                        "type": "render_progress",
+                        "candidate_id": _cid,
+                        "pct": pct,
+                    },
+                )
                 # Overall job pct: 30 + 65 * (completed_clips + intra_pct/100) / total
                 overall = 30 + int(65 * (_idx + pct / 100.0) / total)
                 await _publish_progress(job_id, "render_finals", min(95, overall))
@@ -284,41 +367,80 @@ async def run_finals_pipeline(
                     caption_style=caption_style,
                 )
                 signed = await signed_url_helper(key)
-                await sb.table("clip_candidates").update({"final_storage_key": key}).eq("id", cand_id).execute()
-                await broker.publish(job_id, {
-                    "type": "render_progress",
-                    "candidate_id": cand_id,
-                    "pct": 100,
-                })
-                await broker.publish(job_id, {
-                    "type": "render_complete",
-                    "candidate_id": cand_id,
-                    "signed_url": signed,
-                })
+                await (
+                    sb.table("clip_candidates")
+                    .update({"final_storage_key": key})
+                    .eq("id", cand_id)
+                    .execute()
+                )
+                await broker.publish(
+                    job_id,
+                    {
+                        "type": "render_progress",
+                        "candidate_id": cand_id,
+                        "pct": 100,
+                    },
+                )
+                await broker.publish(
+                    job_id,
+                    {
+                        "type": "render_complete",
+                        "candidate_id": cand_id,
+                        "signed_url": signed,
+                    },
+                )
             except Exception as e:
                 logger.exception("Final render failed for %s: %s", cand_id, e)
-                await broker.publish(job_id, {
-                    "type": "render_failed",
-                    "candidate_id": cand_id,
-                    "error": str(e)[:200],
-                })
+                await broker.publish(
+                    job_id,
+                    {
+                        "type": "render_failed",
+                        "candidate_id": cand_id,
+                        "error": str(e)[:200],
+                    },
+                )
 
-        await sb.table("clip_jobs").update({
-            "status": "completed", "current_stage": "done", "progress_pct": 100,
-        }).eq("id", job_id).execute()
+        await (
+            sb.table("clip_jobs")
+            .update(
+                {
+                    "status": "completed",
+                    "current_stage": "done",
+                    "progress_pct": 100,
+                }
+            )
+            .eq("id", job_id)
+            .execute()
+        )
         await _publish_progress(job_id, "done", 100)
         await broker.publish(job_id, {"type": "render_complete_all"})
 
     except asyncio.CancelledError:
-        await sb.table("clip_jobs").update({
-            "status": "failed", "error_message": "Cancelled during final render",
-        }).eq("id", job_id).execute()
+        await (
+            sb.table("clip_jobs")
+            .update(
+                {
+                    "status": "failed",
+                    "error_message": "Cancelled during final render",
+                }
+            )
+            .eq("id", job_id)
+            .execute()
+        )
         raise
     except Exception as e:
         logger.exception("Finals pipeline failed for %s", job_id)
-        await sb.table("clip_jobs").update({
-            "status": "failed", "error_message": str(e)[:500],
-        }).eq("id", job_id).execute()
+        await (
+            sb.table("clip_jobs")
+            .update(
+                {
+                    "status": "failed",
+                    "error_message": str(e)[:500],
+                }
+            )
+            .eq("id", job_id)
+            .execute()
+        )
     finally:
         _active_tasks.pop(job_id, None)
         shutil.rmtree(job_tmp, ignore_errors=True)
@@ -326,6 +448,7 @@ async def run_finals_pipeline(
 
 async def signed_url_helper(key: str) -> str:
     from .storage import signed_url
+
     return await signed_url(key)
 
 

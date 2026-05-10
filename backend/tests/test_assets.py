@@ -10,9 +10,7 @@ VALID_BUCKETS = ["reference-thumbs", "personal-photos", "logos", "outputs", "scr
 
 def _patch_get_client(mock_sb):
     """Patch routes.assets.get_async_client (itself async) to return mock_sb."""
-    return patch(
-        "routes.assets.get_async_client", new=AsyncMock(return_value=mock_sb)
-    )
+    return patch("routes.assets.get_async_client", new=AsyncMock(return_value=mock_sb))
 
 
 def create_app(user_id: str) -> TestClient:
@@ -29,9 +27,9 @@ def create_app(user_id: str) -> TestClient:
 def test_list_assets():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.list = AsyncMock(return_value=[
-        {"name": "thumb1.png", "metadata": {"size": 12345}}
-    ])
+    mock_sb.storage.from_.return_value.list = AsyncMock(
+        return_value=[{"name": "thumb1.png", "metadata": {"size": 12345}}]
+    )
     mock_sb.storage.from_.return_value.get_public_url = AsyncMock(
         return_value="https://example.com/thumb1.png"
     )
@@ -53,9 +51,9 @@ def test_list_assets_invalid_bucket():
 def test_upload_asset():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.upload = AsyncMock(return_value={
-        "Key": "test-user/photo.jpg"
-    })
+    mock_sb.storage.from_.return_value.upload = AsyncMock(
+        return_value={"Key": "test-user/photo.jpg"}
+    )
 
     with _patch_get_client(mock_sb):
         response = client.post(
@@ -71,7 +69,9 @@ def test_upload_asset():
 def test_delete_asset():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.remove = AsyncMock(return_value=[{"name": "photo.jpg"}])
+    mock_sb.storage.from_.return_value.remove = AsyncMock(
+        return_value=[{"name": "photo.jpg"}]
+    )
 
     with _patch_get_client(mock_sb):
         response = client.delete("/api/assets/personal-photos/photo.jpg")
@@ -82,7 +82,9 @@ def test_delete_asset():
 def test_download_asset():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.download = AsyncMock(return_value=b"image-binary-data")
+    mock_sb.storage.from_.return_value.download = AsyncMock(
+        return_value=b"image-binary-data"
+    )
 
     with _patch_get_client(mock_sb):
         response = client.get("/api/assets/reference-thumbs/thumb1.png")
@@ -132,9 +134,9 @@ def test_delete_asset_invalid_bucket():
 def test_upload_preserves_content_type():
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.upload = AsyncMock(return_value={
-        "Key": "test-user/image.png"
-    })
+    mock_sb.storage.from_.return_value.upload = AsyncMock(
+        return_value={"Key": "test-user/image.png"}
+    )
 
     with _patch_get_client(mock_sb):
         response = client.post(
@@ -429,9 +431,9 @@ def test_signed_url_returns_cache_control_header():
     """Signed URL response should be cacheable for slightly less than the TTL."""
     client = create_app("test-user")
     mock_sb = MagicMock()
-    mock_sb.storage.from_.return_value.create_signed_url = AsyncMock(return_value={
-        "signedURL": "https://example/signed?token=x"
-    })
+    mock_sb.storage.from_.return_value.create_signed_url = AsyncMock(
+        return_value={"signedURL": "https://example/signed?token=x"}
+    )
     with _patch_get_client(mock_sb):
         response = client.get("/api/assets/outputs/signed/foo.png")
     assert response.status_code == 200

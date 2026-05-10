@@ -12,7 +12,10 @@ MAX_DURATION_SECONDS = 3600
 async def _run_ytdlp_dump(url: str) -> str:
     """Run `yt-dlp --dump-json --no-download <url>` and return stdout."""
     proc = await asyncio.create_subprocess_exec(
-        "yt-dlp", "--dump-json", "--no-download", url,
+        "yt-dlp",
+        "--dump-json",
+        "--no-download",
+        url,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

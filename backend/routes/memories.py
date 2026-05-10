@@ -22,7 +22,11 @@ async def list_memories(user_id: str = Depends(get_current_user)):
 @router.delete("/api/memories/{memory_id}", status_code=204)
 async def delete_memory(memory_id: str, user_id: str = Depends(get_current_user)):
     sb = await get_async_client()
-    await sb.table("user_memories").delete().eq("id", memory_id).eq(
-        "user_id", user_id
-    ).execute()
+    await (
+        sb.table("user_memories")
+        .delete()
+        .eq("id", memory_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
     return Response(status_code=204)

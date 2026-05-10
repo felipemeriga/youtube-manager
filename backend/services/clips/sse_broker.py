@@ -5,6 +5,7 @@ Each connected SSE client subscribes via `subscribe(job_id)`, getting back an
 asyncio.Queue. The pipeline calls `publish(job_id, event)` after each stage.
 On disconnect the client calls `unsubscribe(job_id, queue)`.
 """
+
 import asyncio
 import logging
 from collections import defaultdict

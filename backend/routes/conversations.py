@@ -48,11 +48,15 @@ async def create_conversation(
     if image_provider not in {"gemini", "openai"}:
         raise HTTPException(status_code=400, detail="Invalid image_provider")
     result = await (
-        sb.table("conversations").insert({
-            "user_id": user_id,
-            "mode": mode,
-            "image_provider": image_provider,
-        }).execute()
+        sb.table("conversations")
+        .insert(
+            {
+                "user_id": user_id,
+                "mode": mode,
+                "image_provider": image_provider,
+            }
+        )
+        .execute()
     )
     return result.data[0]
 

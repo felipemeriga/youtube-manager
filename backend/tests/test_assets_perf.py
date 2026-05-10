@@ -1,4 +1,5 @@
 """Verify list_assets dispatches public_url calls concurrently."""
+
 import asyncio
 from unittest.mock import AsyncMock, patch
 import pytest
@@ -8,9 +9,9 @@ from routes.assets import list_assets
 
 class _Bucket:
     def __init__(self):
-        self.list = AsyncMock(return_value=[
-            {"name": f"file{i}.jpg"} for i in range(20)
-        ])
+        self.list = AsyncMock(
+            return_value=[{"name": f"file{i}.jpg"} for i in range(20)]
+        )
         self.dispatch_log: list[float] = []
 
         async def get_url(path):
@@ -37,7 +38,9 @@ class _Client:
 @pytest.mark.asyncio
 async def test_list_assets_dispatches_urls_concurrently():
     fake_client = _Client()
-    with patch("routes.assets.get_async_client", new=AsyncMock(return_value=fake_client)):
+    with patch(
+        "routes.assets.get_async_client", new=AsyncMock(return_value=fake_client)
+    ):
         result = await list_assets(bucket="personal-photos", user_id="user1")
 
     assert len(result) == 20

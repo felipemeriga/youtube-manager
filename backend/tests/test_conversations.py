@@ -151,9 +151,9 @@ def test_delete_conversation():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=MagicMock(data=[
-        {"id": "conv-1"}
-    ]))
+    mock_sb.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=[{"id": "conv-1"}])
+    )
 
     with _patch_get_client(mock_sb):
         response = client.delete("/api/conversations/conv-1")
@@ -166,15 +166,19 @@ def test_create_conversation_with_title_in_insert():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.insert.return_value.execute = AsyncMock(return_value=MagicMock(data=[
-        {
-            "id": "new-conv-2",
-            "user_id": user_id,
-            "title": None,
-            "created_at": "2026-04-03T00:00:00Z",
-            "updated_at": "2026-04-03T00:00:00Z",
-        }
-    ]))
+    mock_sb.table.return_value.insert.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data=[
+                {
+                    "id": "new-conv-2",
+                    "user_id": user_id,
+                    "title": None,
+                    "created_at": "2026-04-03T00:00:00Z",
+                    "updated_at": "2026-04-03T00:00:00Z",
+                }
+            ]
+        )
+    )
 
     with _patch_get_client(mock_sb):
         response = client.post("/api/conversations")
@@ -204,7 +208,9 @@ def test_delete_nonexistent_conversation_returns_404():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=MagicMock(data=[]))
+    mock_sb.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=[])
+    )
 
     with _patch_get_client(mock_sb):
         response = client.delete("/api/conversations/nonexistent-id")
@@ -218,7 +224,9 @@ def test_list_conversations_empty():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(return_value=MagicMock(data=[]))
+    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=[])
+    )
 
     with _patch_get_client(mock_sb):
         response = client.get("/api/conversations")
@@ -260,9 +268,9 @@ def test_delete_conversation_response_body():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=MagicMock(data=[
-        {"id": "conv-1"}
-    ]))
+    mock_sb.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=[{"id": "conv-1"}])
+    )
 
     with _patch_get_client(mock_sb):
         response = client.delete("/api/conversations/conv-1")
@@ -277,13 +285,17 @@ def test_create_conversation_returns_first_record():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.insert.return_value.execute = AsyncMock(return_value=MagicMock(data=[
-        {
-            "id": "new-conv",
-            "user_id": user_id,
-            "title": None,
-        }
-    ]))
+    mock_sb.table.return_value.insert.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data=[
+                {
+                    "id": "new-conv",
+                    "user_id": user_id,
+                    "title": None,
+                }
+            ]
+        )
+    )
 
     with _patch_get_client(mock_sb):
         response = client.post("/api/conversations")
@@ -323,15 +335,19 @@ def test_create_conversation_with_script_mode():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.insert.return_value.execute = AsyncMock(return_value=MagicMock(data=[
-        {
-            "id": "new-conv",
-            "user_id": user_id,
-            "mode": "script",
-            "created_at": "2026-04-03T00:00:00Z",
-            "updated_at": "2026-04-03T00:00:00Z",
-        }
-    ]))
+    mock_sb.table.return_value.insert.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data=[
+                {
+                    "id": "new-conv",
+                    "user_id": user_id,
+                    "mode": "script",
+                    "created_at": "2026-04-03T00:00:00Z",
+                    "updated_at": "2026-04-03T00:00:00Z",
+                }
+            ]
+        )
+    )
 
     with _patch_get_client(mock_sb):
         response = client.post("/api/conversations", json={"mode": "script"})
@@ -348,15 +364,19 @@ def test_create_conversation_default_mode_is_thumbnail():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.insert.return_value.execute = AsyncMock(return_value=MagicMock(data=[
-        {
-            "id": "new-conv",
-            "user_id": user_id,
-            "mode": "thumbnail",
-            "created_at": "2026-04-03T00:00:00Z",
-            "updated_at": "2026-04-03T00:00:00Z",
-        }
-    ]))
+    mock_sb.table.return_value.insert.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data=[
+                {
+                    "id": "new-conv",
+                    "user_id": user_id,
+                    "mode": "thumbnail",
+                    "created_at": "2026-04-03T00:00:00Z",
+                    "updated_at": "2026-04-03T00:00:00Z",
+                }
+            ]
+        )
+    )
 
     with _patch_get_client(mock_sb):
         response = client.post("/api/conversations")
@@ -373,10 +393,14 @@ def test_list_conversations_preserves_order():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(return_value=MagicMock(data=[
-        {"id": "conv-2", "updated_at": "2026-04-04T00:00:00Z"},
-        {"id": "conv-1", "updated_at": "2026-04-03T00:00:00Z"},
-    ]))
+    mock_sb.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data=[
+                {"id": "conv-2", "updated_at": "2026-04-04T00:00:00Z"},
+                {"id": "conv-1", "updated_at": "2026-04-03T00:00:00Z"},
+            ]
+        )
+    )
 
     with _patch_get_client(mock_sb):
         response = client.get("/api/conversations")

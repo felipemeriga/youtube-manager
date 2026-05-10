@@ -33,9 +33,7 @@ def _patch_storage():
     bucket_api.download = AsyncMock(side_effect=_download)
     sb.storage.from_.return_value = bucket_api
 
-    return patch.object(
-        thumbnail_nodes, "_get_supabase", AsyncMock(return_value=sb)
-    )
+    return patch.object(thumbnail_nodes, "_get_supabase", AsyncMock(return_value=sb))
 
 
 @pytest.mark.asyncio
@@ -44,7 +42,9 @@ async def test_cache_evicts_oldest_when_over_max():
     with _patch_storage():
         # Fill the cache past the limit
         for i in range(thumbnail_nodes._CACHE_MAX + 5):
-            await thumbnail_nodes._fetch_all_assets(None, f"user-{i}", "reference-thumbs")
+            await thumbnail_nodes._fetch_all_assets(
+                None, f"user-{i}", "reference-thumbs"
+            )
 
         assert len(thumbnail_nodes._asset_cache) == thumbnail_nodes._CACHE_MAX
         # First inserted users should be gone
