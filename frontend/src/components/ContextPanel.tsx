@@ -91,8 +91,8 @@ export default function ContextPanel({
           sx={{
             color: "rgba(255,255,255,0.4)",
             "&:hover": {
-              color: "#a78bfa",
-              backgroundColor: "rgba(124,58,237,0.08)",
+              color: "#93b6f0",
+              backgroundColor: "rgba(91,141,239,0.08)",
             },
             transition: "all 0.2s ease",
           }}
@@ -115,7 +115,7 @@ export default function ContextPanel({
           backgroundColor: "rgba(255,255,255,0.03)",
           border: "1px solid rgba(255,255,255,0.06)",
           "&:focus-within": {
-            borderColor: "rgba(124,58,237,0.5)",
+            borderColor: "rgba(91,141,239,0.5)",
             backgroundColor: "rgba(255,255,255,0.05)",
           },
         }}
@@ -203,8 +203,8 @@ export default function ContextPanel({
               py: 0.75,
               transition: "all 0.2s ease",
               "&.Mui-selected": {
-                backgroundColor: "rgba(124, 58, 237, 0.12)",
-                "&:hover": { backgroundColor: "rgba(124, 58, 237, 0.18)" },
+                backgroundColor: "rgba(91, 141, 239, 0.12)",
+                "&:hover": { backgroundColor: "rgba(91, 141, 239, 0.18)" },
               },
               "&:hover": { backgroundColor: "rgba(255,255,255,0.04)" },
             }}
@@ -242,11 +242,11 @@ export default function ContextPanel({
                   backgroundColor:
                     conv.mode === "script"
                       ? "rgba(59,130,246,0.1)"
-                      : "rgba(124,58,237,0.1)",
+                      : "rgba(91,141,239,0.1)",
                   border: `1px solid ${
                     conv.mode === "script"
                       ? "rgba(59,130,246,0.2)"
-                      : "rgba(124,58,237,0.2)"
+                      : "rgba(91,141,239,0.2)"
                   }`,
                   width: "fit-content",
                 }}
@@ -254,13 +254,13 @@ export default function ContextPanel({
                 {conv.mode === "script" ? (
                   <DescriptionIcon sx={{ fontSize: 11, color: "#60a5fa" }} />
                 ) : (
-                  <ImageIcon sx={{ fontSize: 11, color: "#a78bfa" }} />
+                  <ImageIcon sx={{ fontSize: 11, color: "#93b6f0" }} />
                 )}
                 <Typography
                   sx={{
                     fontSize: 10,
                     fontWeight: 600,
-                    color: conv.mode === "script" ? "#60a5fa" : "#a78bfa",
+                    color: conv.mode === "script" ? "#60a5fa" : "#93b6f0",
                     textTransform: "uppercase",
                     letterSpacing: 0.5,
                   }}

@@ -25,7 +25,7 @@ export default function ApprovalButtons({
           startIcon={<CheckIcon />}
           onClick={onApprove}
           disabled={disabled}
-          sx={{ background: "linear-gradient(135deg, #059669, #10b981)" }}
+          sx={{ background: "#10b981" }}
         >
           Aprovar
         </Button>
@@ -50,7 +50,7 @@ export default function ApprovalButtons({
           startIcon={<CheckIcon />}
           onClick={onApprove}
           disabled={disabled}
-          sx={{ background: "linear-gradient(135deg, #059669, #10b981)" }}
+          sx={{ background: "#10b981" }}
         >
           Aprovar
         </Button>
@@ -59,7 +59,7 @@ export default function ApprovalButtons({
           startIcon={<RefreshIcon />}
           onClick={onReject}
           disabled={disabled}
-          sx={{ borderColor: "rgba(124,58,237,0.5)", color: "#7c3aed" }}
+          sx={{ borderColor: "rgba(91,141,239,0.5)", color: "#5b8def" }}
         >
           Refazer
         </Button>
@@ -74,7 +74,7 @@ export default function ApprovalButtons({
         startIcon={<SaveIcon />}
         onClick={onApprove}
         disabled={disabled}
-        sx={{ background: "linear-gradient(135deg, #059669, #10b981)" }}
+        sx={{ background: "#10b981" }}
       >
         Salvar
       </Button>
@@ -83,7 +83,7 @@ export default function ApprovalButtons({
         startIcon={<RefreshIcon />}
         onClick={onReject}
         disabled={disabled}
-        sx={{ borderColor: "rgba(124,58,237,0.5)", color: "#7c3aed" }}
+        sx={{ borderColor: "rgba(91,141,239,0.5)", color: "#5b8def" }}
       >
         Refazer
       </Button>

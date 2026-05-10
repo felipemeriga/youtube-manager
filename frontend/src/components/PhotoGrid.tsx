@@ -161,15 +161,15 @@ export default function PhotoGrid({
           onClick={() => setOpen(true)}
           disabled={disabled}
           sx={{
-            borderColor: "#7c3aed",
-            color: "#c4b5fd",
+            borderColor: "#5b8def",
+            color: "#93b6f0",
             textTransform: "none",
             fontSize: 14,
             px: 3,
             py: 1.2,
             "&:hover": {
-              borderColor: "#a78bfa",
-              backgroundColor: "rgba(124,58,237,0.1)",
+              borderColor: "#93b6f0",
+              backgroundColor: "rgba(91,141,239,0.1)",
             },
           }}
         >
@@ -281,7 +281,7 @@ export default function PhotoGrid({
                 <Box sx={{ mb: 3 }}>
                   <Typography
                     variant="subtitle2"
-                    sx={{ color: "#a78bfa", mb: 1.5, fontWeight: 600 }}
+                    sx={{ color: "#93b6f0", mb: 1.5, fontWeight: 600 }}
                   >
                     Recomendadas para este tema
                   </Typography>
@@ -347,17 +347,17 @@ export default function PhotoGrid({
                       onClick={handleLoadMore}
                       disabled={loadingMore}
                       sx={{
-                        borderColor: "rgba(124,58,237,0.3)",
-                        color: "#c4b5fd",
+                        borderColor: "rgba(91,141,239,0.3)",
+                        color: "#93b6f0",
                         textTransform: "none",
                         "&:hover": {
-                          borderColor: "#7c3aed",
-                          backgroundColor: "rgba(124,58,237,0.1)",
+                          borderColor: "#5b8def",
+                          backgroundColor: "rgba(91,141,239,0.1)",
                         },
                       }}
                     >
                       {loadingMore ? (
-                        <CircularProgress size={16} sx={{ color: "#7c3aed", mr: 1 }} />
+                        <CircularProgress size={16} sx={{ color: "#5b8def", mr: 1 }} />
                       ) : null}
                       Carregar mais ({nonRecommended.length - visibleCount} restantes)
                     </Button>
@@ -397,9 +397,9 @@ export default function PhotoGrid({
                     borderColor: "rgba(255,255,255,0.1)",
                     textTransform: "none",
                     "&.Mui-selected": {
-                      color: "#a78bfa",
-                      backgroundColor: "rgba(124,58,237,0.15)",
-                      borderColor: "rgba(124,58,237,0.3)",
+                      color: "#93b6f0",
+                      backgroundColor: "rgba(91,141,239,0.15)",
+                      borderColor: "rgba(91,141,239,0.3)",
                     },
                   },
                 }}
@@ -442,13 +442,13 @@ export default function PhotoGrid({
                     backgroundColor: "rgba(0,0,0,0.2)",
                     borderRadius: 2,
                     "& fieldset": {
-                      borderColor: "rgba(124,58,237,0.3)",
+                      borderColor: "rgba(91,141,239,0.3)",
                     },
                     "&:hover fieldset": {
-                      borderColor: "rgba(124,58,237,0.5)",
+                      borderColor: "rgba(91,141,239,0.5)",
                     },
                     "&.Mui-focused fieldset": {
-                      borderColor: "#7c3aed",
+                      borderColor: "#5b8def",
                     },
                   },
                   "& .MuiInputBase-input::placeholder": {
@@ -461,12 +461,12 @@ export default function PhotoGrid({
                 variant="contained"
                 onClick={handleConfirm}
                 sx={{
-                  backgroundColor: "#7c3aed",
+                  backgroundColor: "#5b8def",
                   textTransform: "none",
                   fontWeight: 600,
                   px: 3,
                   whiteSpace: "nowrap",
-                  "&:hover": { backgroundColor: "#6d28d9" },
+                  "&:hover": { backgroundColor: "#4a7ad8" },
                 }}
               >
                 Usar foto
@@ -498,12 +498,12 @@ function PhotoCard({
         borderRadius: 2,
         overflow: "hidden",
         cursor: "pointer",
-        border: selected ? "3px solid #7c3aed" : "3px solid transparent",
-        boxShadow: selected ? "0 0 20px rgba(124,58,237,0.4)" : "none",
+        border: selected ? "3px solid #5b8def" : "3px solid transparent",
+        boxShadow: selected ? "0 0 20px rgba(91,141,239,0.4)" : "none",
         transition: "all 0.2s ease",
         "&:hover": {
           transform: "scale(1.02)",
-          borderColor: selected ? "#7c3aed" : "rgba(124,58,237,0.5)",
+          borderColor: selected ? "#5b8def" : "rgba(91,141,239,0.5)",
         },
       }}
     >
@@ -531,7 +531,7 @@ function PhotoCard({
             backgroundColor: "rgba(255,255,255,0.03)",
           }}
         >
-          <CircularProgress size={20} sx={{ color: "#7c3aed" }} />
+          <CircularProgress size={20} sx={{ color: "#5b8def" }} />
         </Box>
       )}
       {photo.recommended && (
@@ -543,7 +543,7 @@ function PhotoCard({
             position: "absolute",
             top: 8,
             right: 8,
-            backgroundColor: "rgba(124,58,237,0.85)",
+            backgroundColor: "rgba(91,141,239,0.85)",
             color: "#fff",
             fontSize: 11,
             height: 24,
@@ -555,7 +555,7 @@ function PhotoCard({
           sx={{
             position: "absolute",
             inset: 0,
-            backgroundColor: "rgba(124,58,237,0.15)",
+            backgroundColor: "rgba(91,141,239,0.15)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -566,7 +566,7 @@ function PhotoCard({
               width: 32,
               height: 32,
               borderRadius: "50%",
-              backgroundColor: "#7c3aed",
+              backgroundColor: "#5b8def",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

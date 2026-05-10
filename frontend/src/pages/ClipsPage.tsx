@@ -156,8 +156,8 @@ export default function ClipsPage() {
                   transition: "all 0.2s ease",
                   "&:hover": {
                     transform: "translateY(-1px)",
-                    borderColor: "rgba(124, 58, 237, 0.4)",
-                    boxShadow: "0 4px 16px rgba(124, 58, 237, 0.15)",
+                    borderColor: "rgba(91, 141, 239, 0.4)",
+                    boxShadow: "0 4px 16px rgba(91, 141, 239, 0.15)",
                   },
                 }}
               >

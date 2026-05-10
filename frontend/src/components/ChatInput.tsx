@@ -233,8 +233,8 @@ export default function ChatInput({
               color: "rgba(255,255,255,0.4)",
               transition: "all 0.2s ease",
               "&:hover": {
-                color: "#7c3aed",
-                backgroundColor: "rgba(124,58,237,0.08)",
+                color: "#5b8def",
+                backgroundColor: "rgba(91,141,239,0.08)",
               },
             }}
           >
@@ -252,12 +252,12 @@ export default function ChatInput({
               height: 40,
               borderRadius: 2.5,
               color: attachedImage?.fromBrowser
-                ? "#7c3aed"
+                ? "#5b8def"
                 : "rgba(255,255,255,0.4)",
               transition: "all 0.2s ease",
               "&:hover": {
-                color: "#7c3aed",
-                backgroundColor: "rgba(124,58,237,0.08)",
+                color: "#5b8def",
+                backgroundColor: "rgba(91,141,239,0.08)",
               },
             }}
           >
@@ -293,12 +293,12 @@ export default function ChatInput({
             height: 40,
             borderRadius: 2.5,
             background: canSend
-              ? "linear-gradient(135deg, #7c3aed, #3b82f6)"
+              ? "#5b8def"
               : "rgba(255,255,255,0.05)",
             color: canSend ? "#fff" : "rgba(255,255,255,0.2)",
             transition: "all 0.2s ease",
             "&:hover": {
-              background: "linear-gradient(135deg, #6d28d9, #2563eb)",
+              background: "#4a7ad8",
             },
             "&:disabled": {
               background: "rgba(255,255,255,0.05)",
@@ -477,9 +477,9 @@ function StorageBrowserDialog({
             "& .MuiTab-root": {
               textTransform: "none",
               color: "rgba(255,255,255,0.5)",
-              "&.Mui-selected": { color: "#a78bfa" },
+              "&.Mui-selected": { color: "#93b6f0" },
             },
-            "& .MuiTabs-indicator": { backgroundColor: "#7c3aed" },
+            "& .MuiTabs-indicator": { backgroundColor: "#5b8def" },
           }}
         >
           {BROWSABLE_BUCKETS.map((b) => (
@@ -496,7 +496,7 @@ function StorageBrowserDialog({
                 py: 4,
               }}
             >
-              <CircularProgress size={24} sx={{ color: "#7c3aed" }} />
+              <CircularProgress size={24} sx={{ color: "#5b8def" }} />
             </Box>
           ) : files.length === 0 ? (
             <Typography
@@ -524,7 +524,7 @@ function StorageBrowserDialog({
                     border: "2px solid transparent",
                     transition: "all 0.2s",
                     "&:hover": {
-                      borderColor: "#7c3aed",
+                      borderColor: "#5b8def",
                       transform: "scale(1.03)",
                     },
                   }}
@@ -552,7 +552,7 @@ function StorageBrowserDialog({
                         backgroundColor: "rgba(255,255,255,0.03)",
                       }}
                     >
-                      <CircularProgress size={16} sx={{ color: "#7c3aed" }} />
+                      <CircularProgress size={16} sx={{ color: "#5b8def" }} />
                     </Box>
                   )}
                   <Box sx={{ px: 0.5, py: 0.25 }}>

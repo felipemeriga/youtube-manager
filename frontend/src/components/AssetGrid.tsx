@@ -72,7 +72,7 @@ function formatScriptName(name: string) {
 
 const checkboxSx = {
   color: "rgba(255,255,255,0.3)",
-  "&.Mui-checked": { color: "#7c3aed" },
+  "&.Mui-checked": { color: "#5b8def" },
   p: 0.5,
 };
 
@@ -117,20 +117,20 @@ function AssetList({
               p: 2,
               borderRadius: 2,
               border: isSelected
-                ? "1px solid rgba(124,58,237,0.5)"
+                ? "1px solid rgba(91,141,239,0.5)"
                 : "1px solid rgba(255,255,255,0.08)",
               backgroundColor: isSelected
-                ? "rgba(124,58,237,0.08)"
+                ? "rgba(91,141,239,0.08)"
                 : "rgba(255,255,255,0.03)",
               cursor: onView ? "pointer" : "default",
               boxShadow: isSelected
-                ? "0 0 12px rgba(124,58,237,0.15)"
+                ? "0 0 12px rgba(91,141,239,0.15)"
                 : "none",
               "&:hover": {
                 backgroundColor: isSelected
-                  ? "rgba(124,58,237,0.12)"
+                  ? "rgba(91,141,239,0.12)"
                   : "rgba(255,255,255,0.06)",
-                borderColor: "rgba(124,58,237,0.3)",
+                borderColor: "rgba(91,141,239,0.3)",
                 "& .select-checkbox": {
                   opacity: 1,
                 },
@@ -161,14 +161,14 @@ function AssetList({
                 height: 40,
                 borderRadius: 1.5,
                 background:
-                  "linear-gradient(135deg, rgba(124,58,237,0.2), rgba(59,130,246,0.2))",
+                  "linear-gradient(135deg, rgba(91,141,239,0.2), rgba(59,130,246,0.2))",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <DescriptionIcon sx={{ fontSize: 20, color: "#a78bfa" }} />
+              <DescriptionIcon sx={{ fontSize: 20, color: "#93b6f0" }} />
             </Box>
 
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -206,7 +206,7 @@ function AssetList({
                   onClick={() => onView(file.name)}
                   sx={{
                     color: "rgba(255,255,255,0.5)",
-                    "&:hover": { color: "#7c3aed" },
+                    "&:hover": { color: "#5b8def" },
                   }}
                 >
                   <VisibilityIcon fontSize="small" />
@@ -217,7 +217,7 @@ function AssetList({
                 onClick={() => onDownload(file.name)}
                 sx={{
                   color: "rgba(255,255,255,0.5)",
-                  "&:hover": { color: "#7c3aed" },
+                  "&:hover": { color: "#5b8def" },
                 }}
               >
                 <DownloadIcon fontSize="small" />
@@ -319,13 +319,13 @@ export default function AssetGrid({
                 borderRadius: 2,
                 overflow: "hidden",
                 border: isSelected
-                  ? "1px solid rgba(124,58,237,0.5)"
+                  ? "1px solid rgba(91,141,239,0.5)"
                   : "1px solid rgba(255,255,255,0.08)",
                 backgroundColor: isSelected
-                  ? "rgba(124,58,237,0.08)"
+                  ? "rgba(91,141,239,0.08)"
                   : "rgba(255,255,255,0.03)",
                 boxShadow: isSelected
-                  ? "0 0 12px rgba(124,58,237,0.15)"
+                  ? "0 0 12px rgba(91,141,239,0.15)"
                   : "none",
                 position: "relative",
                 transition: "all 0.2s",

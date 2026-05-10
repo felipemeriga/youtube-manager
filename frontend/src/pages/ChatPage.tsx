@@ -621,8 +621,8 @@ export default function ChatPage() {
                   py: 1.5,
                   width: "100%",
                   "&:hover": {
-                    borderColor: "#7c3aed",
-                    backgroundColor: "rgba(124,58,237,0.08)",
+                    borderColor: "#5b8def",
+                    backgroundColor: "rgba(91,141,239,0.08)",
                   },
                 }}
               >
@@ -650,8 +650,8 @@ export default function ChatPage() {
                         }}
                         size="small"
                         sx={{
-                          color: "#7c3aed",
-                          "&.Mui-checked": { color: "#7c3aed" },
+                          color: "#5b8def",
+                          "&.Mui-checked": { color: "#5b8def" },
                         }}
                       />
                     }
@@ -677,8 +677,8 @@ export default function ChatPage() {
                 color: "text.primary",
                 py: 1.5,
                 "&:hover": {
-                  borderColor: "#7c3aed",
-                  backgroundColor: "rgba(124,58,237,0.08)",
+                  borderColor: "#5b8def",
+                  backgroundColor: "rgba(91,141,239,0.08)",
                 },
               }}
             >

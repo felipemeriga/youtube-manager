@@ -98,10 +98,10 @@ function SelectionToolbar({
         px: 3,
         backgroundColor: "rgba(15,15,25,0.85)",
         backdropFilter: "blur(12px)",
-        borderTop: "1px solid rgba(124,58,237,0.3)",
+        borderTop: "1px solid rgba(91,141,239,0.3)",
       }}
     >
-      <Typography variant="body2" sx={{ color: "#a78bfa", fontWeight: 600, mr: 1 }}>
+      <Typography variant="body2" sx={{ color: "#93b6f0", fontWeight: 600, mr: 1 }}>
         {count} selecionado{count > 1 ? "s" : ""}
       </Typography>
       <Button
@@ -110,12 +110,12 @@ function SelectionToolbar({
         startIcon={<DownloadIcon />}
         onClick={onDownload}
         sx={{
-          borderColor: "rgba(124,58,237,0.4)",
-          color: "#a78bfa",
+          borderColor: "rgba(91,141,239,0.4)",
+          color: "#93b6f0",
           textTransform: "none",
           "&:hover": {
-            borderColor: "#7c3aed",
-            backgroundColor: "rgba(124,58,237,0.1)",
+            borderColor: "#5b8def",
+            backgroundColor: "rgba(91,141,239,0.1)",
           },
         }}
       >
@@ -192,7 +192,7 @@ function BatchProgressDialog({
         width: 320,
         backgroundColor: "rgba(20,20,30,0.95)",
         backdropFilter: "blur(16px)",
-        border: "1px solid rgba(124,58,237,0.3)",
+        border: "1px solid rgba(91,141,239,0.3)",
         borderRadius: 2,
         overflow: "hidden",
         boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
@@ -212,7 +212,7 @@ function BatchProgressDialog({
         }}
       >
         <Box>
-          <Typography variant="body2" sx={{ color: "#a78bfa", fontWeight: 600 }}>
+          <Typography variant="body2" sx={{ color: "#93b6f0", fontWeight: 600 }}>
             {label}
           </Typography>
           <Typography variant="caption" color="text.secondary">
@@ -238,9 +238,9 @@ function BatchProgressDialog({
         value={pct}
         sx={{
           height: 2,
-          backgroundColor: "rgba(124,58,237,0.1)",
+          backgroundColor: "rgba(91,141,239,0.1)",
           "& .MuiLinearProgress-bar": {
-            backgroundColor: progress.done ? "#10b981" : "#7c3aed",
+            backgroundColor: progress.done ? "#10b981" : "#5b8def",
           },
         }}
       />
@@ -615,7 +615,7 @@ export default function AssetsPage() {
         variant="h5"
         sx={{
           mb: 2,
-          background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
+          background: "linear-gradient(135deg, #5b8def, #3b82f6)",
           WebkitBackgroundClip: "text",
           WebkitTextFillColor: "transparent",
         }}
@@ -629,8 +629,8 @@ export default function AssetsPage() {
         sx={{
           mb: 3,
           "& .MuiTab-root": { textTransform: "none" },
-          "& .Mui-selected": { color: "#7c3aed" },
-          "& .MuiTabs-indicator": { backgroundColor: "#7c3aed" },
+          "& .Mui-selected": { color: "#5b8def" },
+          "& .MuiTabs-indicator": { backgroundColor: "#5b8def" },
         }}
       >
         {BUCKETS.map((b) => (
@@ -654,12 +654,12 @@ export default function AssetsPage() {
                 disabled={reindexing}
                 size="small"
                 sx={{
-                  borderColor: "rgba(124,58,237,0.3)",
-                  color: "#a78bfa",
+                  borderColor: "rgba(91,141,239,0.3)",
+                  color: "#93b6f0",
                   whiteSpace: "nowrap",
                   "&:hover": {
-                    borderColor: "#7c3aed",
-                    backgroundColor: "rgba(124,58,237,0.08)",
+                    borderColor: "#5b8def",
+                    backgroundColor: "rgba(91,141,239,0.08)",
                   },
                 }}
               >

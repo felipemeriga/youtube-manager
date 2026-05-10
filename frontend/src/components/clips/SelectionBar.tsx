@@ -37,11 +37,11 @@ export default function SelectionBar({
         px: 3,
         backgroundColor: "rgba(15,15,25,0.85)",
         backdropFilter: "blur(12px)",
-        borderTop: "1px solid rgba(124,58,237,0.3)",
+        borderTop: "1px solid rgba(91,141,239,0.3)",
         flexWrap: "wrap",
       }}
     >
-      <Typography variant="body2" sx={{ color: "#a78bfa", fontWeight: 600, mr: 1 }}>
+      <Typography variant="body2" sx={{ color: "#93b6f0", fontWeight: 600, mr: 1 }}>
         {count} clip{count > 1 ? "s" : ""} selecionado{count > 1 ? "s" : ""}
       </Typography>
       <FormControl size="small" sx={{ minWidth: 220 }} disabled={loading}>

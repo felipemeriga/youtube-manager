@@ -40,13 +40,13 @@ export default function IconRail() {
         <IconButton
           onClick={() => navigate("/")}
           sx={{
-            color: isActive("/") ? "#a78bfa" : "rgba(255,255,255,0.4)",
+            color: isActive("/") ? "#93b6f0" : "rgba(255,255,255,0.4)",
             backgroundColor: isActive("/")
-              ? "rgba(124,58,237,0.12)"
+              ? "rgba(91,141,239,0.12)"
               : "transparent",
             "&:hover": {
-              color: "#a78bfa",
-              backgroundColor: "rgba(124,58,237,0.08)",
+              color: "#93b6f0",
+              backgroundColor: "rgba(91,141,239,0.08)",
             },
             transition: "all 0.2s ease",
           }}
@@ -59,13 +59,13 @@ export default function IconRail() {
         <IconButton
           onClick={() => navigate("/assets")}
           sx={{
-            color: isActive("/assets") ? "#a78bfa" : "rgba(255,255,255,0.4)",
+            color: isActive("/assets") ? "#93b6f0" : "rgba(255,255,255,0.4)",
             backgroundColor: isActive("/assets")
-              ? "rgba(124,58,237,0.12)"
+              ? "rgba(91,141,239,0.12)"
               : "transparent",
             "&:hover": {
-              color: "#a78bfa",
-              backgroundColor: "rgba(124,58,237,0.08)",
+              color: "#93b6f0",
+              backgroundColor: "rgba(91,141,239,0.08)",
             },
             transition: "all 0.2s ease",
           }}
@@ -79,14 +79,14 @@ export default function IconRail() {
           onClick={() => navigate("/clips")}
           sx={{
             color: location.pathname.startsWith("/clips")
-              ? "#a78bfa"
+              ? "#93b6f0"
               : "rgba(255,255,255,0.4)",
             backgroundColor: location.pathname.startsWith("/clips")
-              ? "rgba(124,58,237,0.12)"
+              ? "rgba(91,141,239,0.12)"
               : "transparent",
             "&:hover": {
-              color: "#a78bfa",
-              backgroundColor: "rgba(124,58,237,0.08)",
+              color: "#93b6f0",
+              backgroundColor: "rgba(91,141,239,0.08)",
             },
             transition: "all 0.2s ease",
           }}
@@ -99,13 +99,13 @@ export default function IconRail() {
         <IconButton
           onClick={() => navigate("/settings")}
           sx={{
-            color: isActive("/settings") ? "#a78bfa" : "rgba(255,255,255,0.4)",
+            color: isActive("/settings") ? "#93b6f0" : "rgba(255,255,255,0.4)",
             backgroundColor: isActive("/settings")
-              ? "rgba(124,58,237,0.12)"
+              ? "rgba(91,141,239,0.12)"
               : "transparent",
             "&:hover": {
-              color: "#a78bfa",
-              backgroundColor: "rgba(124,58,237,0.08)",
+              color: "#93b6f0",
+              backgroundColor: "rgba(91,141,239,0.08)",
             },
             transition: "all 0.2s ease",
           }}
@@ -135,9 +135,9 @@ export default function IconRail() {
           height: 30,
           fontSize: 13,
           fontWeight: 600,
-          backgroundColor: "rgba(124,58,237,0.2)",
-          color: "#a78bfa",
-          border: "1px solid rgba(124,58,237,0.3)",
+          backgroundColor: "rgba(91,141,239,0.2)",
+          color: "#93b6f0",
+          border: "1px solid rgba(91,141,239,0.3)",
         }}
       >
         {initial}

@@ -34,7 +34,7 @@ export default function ScriptViewer({ content }: ScriptViewerProps) {
           mb: 1.5,
           pb: 1,
           borderBottom: "1px solid rgba(255,255,255,0.08)",
-          color: "#c4b5fd",
+          color: "#93b6f0",
         },
         "& h3": {
           fontSize: "1rem",
@@ -48,13 +48,13 @@ export default function ScriptViewer({ content }: ScriptViewerProps) {
           color: "rgba(255,255,255,0.85)",
         },
         "& a": {
-          color: "#7c3aed",
+          color: "#5b8def",
           textDecoration: "none",
-          borderBottom: "1px solid rgba(124,58,237,0.3)",
+          borderBottom: "1px solid rgba(91,141,239,0.3)",
           transition: "all 0.15s",
           "&:hover": {
-            color: "#a78bfa",
-            borderBottomColor: "#a78bfa",
+            color: "#93b6f0",
+            borderBottomColor: "#93b6f0",
           },
         },
         "& table": {
@@ -64,15 +64,15 @@ export default function ScriptViewer({ content }: ScriptViewerProps) {
           fontSize: "0.8rem",
         },
         "& thead": {
-          backgroundColor: "rgba(124,58,237,0.1)",
+          backgroundColor: "rgba(91,141,239,0.1)",
         },
         "& th": {
           textAlign: "left",
           px: 1.5,
           py: 1,
           fontWeight: 600,
-          borderBottom: "2px solid rgba(124,58,237,0.3)",
-          color: "#c4b5fd",
+          borderBottom: "2px solid rgba(91,141,239,0.3)",
+          color: "#93b6f0",
           whiteSpace: "nowrap",
         },
         "& td": {
@@ -85,12 +85,12 @@ export default function ScriptViewer({ content }: ScriptViewerProps) {
           backgroundColor: "rgba(255,255,255,0.02)",
         },
         "& blockquote": {
-          borderLeft: "3px solid #7c3aed",
+          borderLeft: "3px solid #5b8def",
           ml: 0,
           pl: 2,
           py: 0.5,
           my: 1.5,
-          backgroundColor: "rgba(124,58,237,0.05)",
+          backgroundColor: "rgba(91,141,239,0.05)",
           borderRadius: "0 8px 8px 0",
           "& p": {
             mb: 0.5,

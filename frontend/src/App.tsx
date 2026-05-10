@@ -24,7 +24,7 @@ function PageLoader() {
         minHeight: 200,
       }}
     >
-      <CircularProgress sx={{ color: "#7c3aed" }} />
+      <CircularProgress sx={{ color: "#5b8def" }} />
     </Box>
   );
 }

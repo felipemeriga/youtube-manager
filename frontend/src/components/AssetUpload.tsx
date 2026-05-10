@@ -33,7 +33,7 @@ const statusIcon: Record<FileUploadStatus, React.ReactNode> = {
   ),
   uploading: (
     <UploadFileIcon
-      sx={{ color: "#7c3aed", fontSize: 20, animation: "pulse 1.5s infinite" }}
+      sx={{ color: "#5b8def", fontSize: 20, animation: "pulse 1.5s infinite" }}
     />
   ),
   done: <CheckCircleIcon sx={{ color: "#10b981", fontSize: 20 }} />,
@@ -91,17 +91,17 @@ export default function AssetUpload({
         sx={{
           border: "2px dashed",
           borderColor: dragOver
-            ? "#7c3aed"
+            ? "#5b8def"
             : isUploading
-            ? "rgba(124,58,237,0.5)"
-            : "rgba(124,58,237,0.3)",
+            ? "rgba(91,141,239,0.5)"
+            : "rgba(91,141,239,0.3)",
           borderRadius: 2,
           p: 3,
           textAlign: "center",
           cursor: isUploading ? "default" : "pointer",
           transition: "all 0.2s",
-          backgroundColor: dragOver ? "rgba(124,58,237,0.08)" : "transparent",
-          "&:hover": isUploading ? {} : { borderColor: "#7c3aed" },
+          backgroundColor: dragOver ? "rgba(91,141,239,0.08)" : "transparent",
+          "&:hover": isUploading ? {} : { borderColor: "#5b8def" },
         }}
         onClick={() => {
           if (!isUploading) {
@@ -121,7 +121,7 @@ export default function AssetUpload({
         <CloudUploadIcon
           sx={{
             fontSize: 40,
-            color: isUploading ? "#7c3aed" : "rgba(124,58,237,0.5)",
+            color: isUploading ? "#5b8def" : "rgba(91,141,239,0.5)",
             mb: 1,
             ...(isUploading ? { animation: "pulse 1.5s infinite" } : {}),
           }}
@@ -143,10 +143,10 @@ export default function AssetUpload({
               mx: "auto",
               mt: 1.5,
               maxWidth: 300,
-              backgroundColor: "rgba(124,58,237,0.15)",
+              backgroundColor: "rgba(91,141,239,0.15)",
               "& .MuiLinearProgress-bar": {
                 borderRadius: 3,
-                background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
+                background: "#5b8def",
               },
             }}
           />
