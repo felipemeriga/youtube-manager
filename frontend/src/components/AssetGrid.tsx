@@ -4,6 +4,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import DescriptionIcon from "@mui/icons-material/Description";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import { LazyImage } from "../ds/LazyImage";
 
 interface AssetFile {
   name: string;
@@ -362,19 +363,14 @@ export default function AssetGrid({
               </Box>
 
               {isImage(file.name) ? (
-                <Box
-                  component="img"
-                  src={file.public_url || `/api/assets/${bucket}/${file.name}`}
-                  alt={file.name}
-                  loading="lazy"
-                  decoding="async"
-                  sx={{
-                    width: "100%",
-                    height: 280,
-                    objectFit: "cover",
-                    display: "block",
-                  }}
-                />
+                <Box sx={{ width: "100%", height: 280 }}>
+                  <LazyImage
+                    src={`/api/assets/${bucket}/${file.name}`}
+                    alt={file.name}
+                    widths={[200, 400, 800]}
+                    sizes="(max-width: 600px) 200px, (max-width: 1200px) 400px, 800px"
+                  />
+                </Box>
               ) : (
                 <Box
                   sx={{

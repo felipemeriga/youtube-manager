@@ -323,23 +323,12 @@ export default function AssetsPage() {
     }
   }, [currentBucket.key, getSignal, isAbort]);
 
+  // Single fetch on bucket change. Previously two parallel useEffects fetched
+  // the same list (one inline, one via loadFiles callback), doubling network
+  // traffic on every tab switch.
   useEffect(() => {
-    const ctrl = new AbortController();
-    (async () => {
-      setLoading(true);
-      try {
-        const data = await listAssets(currentBucket.key, ctrl.signal);
-        if (!ctrl.signal.aborted) {
-          setFiles(data as unknown as AssetFile[]);
-        }
-      } catch (err) {
-        if ((err as { name?: string })?.name !== "AbortError") throw err;
-      } finally {
-        if (!ctrl.signal.aborted) setLoading(false);
-      }
-    })();
-    return () => ctrl.abort();
-  }, [currentBucket.key]);
+    loadFiles();
+  }, [loadFiles]);
 
   // Clear selection when switching tabs
   useEffect(() => {
@@ -382,34 +371,41 @@ export default function AssetsPage() {
     setBatchProgress({ type: "delete", items, collapsed: false, done: false });
 
     const signal = getSignal();
-    for (let i = 0; i < names.length; i++) {
-      if (signal.aborted) return;
-      try {
-        await deleteAsset(currentBucket.key, names[i], signal);
-        setBatchProgress((prev) =>
-          prev
-            ? {
-                ...prev,
-                items: prev.items.map((item, idx) =>
-                  idx === i ? { ...item, status: "done" } : item
-                ),
-              }
-            : prev
-        );
-      } catch (e) {
-        if (isAbort(e)) return;
-        setBatchProgress((prev) =>
-          prev
-            ? {
-                ...prev,
-                items: prev.items.map((item, idx) =>
-                  idx === i ? { ...item, status: "error" } : item
-                ),
-              }
-            : prev
-        );
-      }
-    }
+    // Dispatch all deletes in parallel; each updates its own progress slot on
+    // completion. Previously this looped with `await`, turning N deletes into
+    // N sequential round trips.
+    await Promise.all(
+      names.map(async (name, i) => {
+        if (signal.aborted) return;
+        try {
+          await deleteAsset(currentBucket.key, name, signal);
+          setBatchProgress((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  items: prev.items.map((item, idx) =>
+                    idx === i ? { ...item, status: "done" } : item
+                  ),
+                }
+              : prev
+          );
+        } catch (e) {
+          if (isAbort(e)) return;
+          setBatchProgress((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  items: prev.items.map((item, idx) =>
+                    idx === i ? { ...item, status: "error" } : item
+                  ),
+                }
+              : prev
+          );
+        }
+      })
+    );
+
+    if (signal.aborted) return;
 
     setBatchProgress((prev) => (prev ? { ...prev, done: true } : prev));
     setSelected(new Set());
