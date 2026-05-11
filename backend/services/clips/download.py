@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 from .storage import source_key, upload_file
+from .ytdlp_args import ytdlp_auth_args
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 async def _run_ytdlp_download(url: str, out_path: Path) -> None:
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
+        *ytdlp_auth_args(),
         "-f",
         "bv*[height<=1080]+ba/b",
         "--merge-output-format",

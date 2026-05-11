@@ -3,6 +3,7 @@ import json
 import logging
 
 from .models import VideoMetadata
+from .ytdlp_args import ytdlp_auth_args
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,7 @@ async def _run_ytdlp_dump(url: str) -> str:
     """Run `yt-dlp --dump-json --no-download <url>` and return stdout."""
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
+        *ytdlp_auth_args(),
         "--dump-json",
         "--no-download",
         url,

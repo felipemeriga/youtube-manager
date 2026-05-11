@@ -190,9 +190,12 @@ def is_broken_captions(cues: list) -> bool:
 
 
 async def _download_yt_captions(url: str, out_dir: Path) -> Path | None:
+    from .ytdlp_args import ytdlp_auth_args
+
     out_dir.mkdir(parents=True, exist_ok=True)
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
+        *ytdlp_auth_args(),
         "--write-auto-subs",
         "--sub-langs",
         "en",
