@@ -363,11 +363,15 @@ export default function AssetGrid({
 
               {isImage(file.name) ? (
                 <Box sx={{ width: "100%", height: 280 }}>
+                  {/* Use the Supabase public_url returned by list_assets — the
+                      browser fetches <img src> directly without our Bearer
+                      token, so the backend route would 401. Responsive srcset
+                      via `?w=` is omitted here because Supabase URLs use a
+                      different transform API; revisit if/when we route image
+                      requests through a signed-URL endpoint. */}
                   <LazyImage
-                    src={`/api/assets/${bucket}/${file.name}`}
+                    src={file.public_url || `/api/assets/${bucket}/${file.name}`}
                     alt={file.name}
-                    widths={[200, 400, 800]}
-                    sizes="(max-width: 600px) 200px, (max-width: 1200px) 400px, 800px"
                   />
                 </Box>
               ) : (
