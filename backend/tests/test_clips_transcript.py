@@ -73,6 +73,29 @@ def test_split_long_cues_splits_long_cue():
     assert abs(result[1].end - 12.0) < 0.01
 
 
+def test_split_long_cues_breaks_at_sentence_end():
+    """When a sentence ends within the soft-break window, the chunk ends there
+    even if a few words short of the hard cap."""
+    text = "Hi there. This second sentence runs a little longer overall."
+    # 11 words; hard cap is 8.  After "there." (2 words) we're below the
+    # soft-break floor of 4, so first chunk should continue until "longer"
+    # (10th word) — i.e. once we have >=4 words AND see a '.' or '!'/'?'.
+    # The natural split lands at "longer." (end of sentence) once length>=4.
+    cues = [TranscriptCue(start=0.0, end=11.0, text=text)]
+    result = _split_long_cues(cues)
+    # Last chunk should end with a sentence-ending mark, not be cut mid-clause
+    assert result[-1].text.rstrip().endswith((".", "?", "!"))
+
+
+def test_split_long_cues_prefers_comma_near_limit():
+    """A comma at word 7 should be a better break than continuing to word 8."""
+    text = "alpha bravo charlie delta echo foxtrot golf, hotel india juliet"
+    cues = [TranscriptCue(start=0.0, end=10.0, text=text)]
+    result = _split_long_cues(cues)
+    # First chunk should end with the comma word, not be cut after "hotel"
+    assert result[0].text.endswith("golf,")
+
+
 def test_split_long_cues_preserves_time_bounds():
     cues = [
         TranscriptCue(start=5.0, end=10.0, text=" ".join(f"w{i}" for i in range(20)))

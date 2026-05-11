@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 # Maximum words shown per subtitle frame.  Longer cues are split into
 # proportionally-timed sub-cues so viewers can read comfortably.
 MAX_WORDS_PER_CUE = 8
+# Once a chunk has at least this many words, a `.`, `?`, or `!` is enough to
+# end it — landing on a sentence boundary even if a few words short.
+_SOFT_BREAK_AFTER = max(4, MAX_WORDS_PER_CUE - 4)
 
 VTT_TIMESTAMP_RE = re.compile(
     r"(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})"
@@ -45,8 +48,46 @@ def parse_vtt(content: str) -> list[TranscriptCue]:
     return cues
 
 
+def _smart_chunk(words: list[str]) -> list[list[str]]:
+    """Group a flat word list into subtitle-sized chunks, preferring breaks
+    after sentence-ending punctuation (``.?!``) and falling back to clause
+    punctuation (``,;:``) once the chunk is close to the hard limit.
+
+    A chunk never exceeds ``MAX_WORDS_PER_CUE`` words; a sentence boundary
+    landing a few words short is allowed so the next subtitle can start on
+    a new sentence instead of mid-clause.
+    """
+    chunks: list[list[str]] = []
+    current: list[str] = []
+    for w in words:
+        current.append(w)
+        last = w[-1:] if w else ""
+        is_sentence_end = last in ".?!"
+        is_clause_end = last in ",;:"
+        # Strong preference: end the chunk after a full sentence once we
+        # have a readable minimum number of words.
+        if is_sentence_end and len(current) >= _SOFT_BREAK_AFTER:
+            chunks.append(current)
+            current = []
+            continue
+        # Mild preference: a comma is a fine break when we're already near
+        # the hard cap and another word would overflow.
+        if is_clause_end and len(current) >= MAX_WORDS_PER_CUE - 1:
+            chunks.append(current)
+            current = []
+            continue
+        # Hard cap.
+        if len(current) >= MAX_WORDS_PER_CUE:
+            chunks.append(current)
+            current = []
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def _split_long_cues(cues: list[TranscriptCue]) -> list[TranscriptCue]:
-    """Split cues with more than MAX_WORDS_PER_CUE words into smaller sub-cues.
+    """Split cues into subtitle-sized sub-cues, preferring breaks at
+    sentence/clause punctuation. Cues already short enough pass through.
 
     Time is distributed proportionally across sub-cues so each chunk appears
     on screen for a duration that matches its share of the original text.
@@ -57,11 +98,8 @@ def _split_long_cues(cues: list[TranscriptCue]) -> list[TranscriptCue]:
         if len(words) <= MAX_WORDS_PER_CUE:
             out.append(cue)
             continue
-        # Split words into chunks of MAX_WORDS_PER_CUE
-        chunks: list[list[str]] = []
-        for i in range(0, len(words), MAX_WORDS_PER_CUE):
-            chunks.append(words[i : i + MAX_WORDS_PER_CUE])
-        total_words = len(words)
+        chunks = _smart_chunk(words)
+        total_words = sum(len(c) for c in chunks)
         duration = cue.end - cue.start
         offset = cue.start
         for chunk in chunks:
@@ -79,10 +117,13 @@ def _split_long_cues(cues: list[TranscriptCue]) -> list[TranscriptCue]:
 
 _PUNCTUATE_SYSTEM = (
     "You are a punctuation corrector for video subtitles. "
-    "Add commas, periods, question marks, and other punctuation where natural. "
-    "Fix capitalization at sentence starts. "
-    "Do NOT change, add, remove, or reorder any words — only insert punctuation "
-    "and fix letter case. Return ONLY the corrected text, nothing else."
+    "Detect the language of the input text and add punctuation that is "
+    "natural for that language — commas, periods, question marks, "
+    "exclamation marks, semicolons, colons, and quotation marks where "
+    "appropriate. Fix capitalization at sentence starts and on proper nouns. "
+    "Do NOT change, add, remove, or reorder any words — only insert "
+    "punctuation and fix letter case. Preserve hyphens inside hyphenated "
+    "words (e.g. 'well-known'). Return ONLY the corrected text, nothing else."
 )
 
 _PUNCTUATE_MODEL = "claude-haiku-4-5-20251001"
@@ -223,11 +264,13 @@ async def fetch_transcript(
 
     Retries Whisper once on failure before raising.
     """
+    # Return raw cues without splitting — the caller (`job_runner`) runs
+    # `add_punctuation` first, then `_split_long_cues`, so subtitle breaks
+    # can land on sentence boundaries instead of mid-clause.
     vtt_path = await _download_yt_captions(url, tmp_dir)
     if vtt_path and vtt_path.exists():
         cues = parse_vtt(vtt_path.read_text())
         if not is_broken_captions(cues):
-            cues = _split_long_cues(cues)
             logger.info("Using YT captions: %d cues", len(cues))
             return cues
         logger.info("YT captions broken (%d cues) — falling back to Whisper", len(cues))
@@ -237,8 +280,7 @@ async def fetch_transcript(
     last_err: Exception | None = None
     for attempt in range(2):
         try:
-            cues = await _whisper_transcribe(audio_path)
-            return _split_long_cues(cues)
+            return await _whisper_transcribe(audio_path)
         except Exception as e:
             last_err = e
             logger.warning("Whisper attempt %d failed: %s", attempt + 1, e)
