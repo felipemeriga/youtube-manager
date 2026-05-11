@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 
 type Entry<T> = { data: T; ts: number };
+type FlightEntry = { promise: Promise<unknown>; ctrl: AbortController };
 const store = new Map<string, Entry<unknown>>();
-const inFlight = new Map<string, Promise<unknown>>();
+const inFlight = new Map<string, FlightEntry>();
 
 export interface QueryOptions {
   ttl?: number;       // ms; below this age data is considered fresh
@@ -68,18 +69,36 @@ export function useCachedQuery<T>(
     if (entry) setData(entry.data);
 
     if (!fresh) {
-      // Deduplicate in-flight requests by key.
-      let p = inFlight.get(key) as Promise<T> | undefined;
-      if (!p) {
-        p = fetcher(abort.signal)
+      // Reuse an in-flight promise IF AND ONLY IF its abort signal is still
+      // live. Under React StrictMode (and any other mount→unmount→remount
+      // cycle), the first mount's controller aborts when its cleanup runs;
+      // attaching to that already-rejected promise from the second mount used
+      // to silently swallow the AbortError and leave `data` undefined forever.
+      // Tracking the controller per inFlight entry lets us drop a dead promise
+      // and issue a fresh fetch when the prior mount has aborted.
+      type Flight = { promise: Promise<T>; ctrl: AbortController };
+      let flight = inFlight.get(key) as Flight | undefined;
+      if (flight && flight.ctrl.signal.aborted) {
+        inFlight.delete(key);
+        flight = undefined;
+      }
+      if (!flight) {
+        const promise = fetcher(abort.signal)
           .then((v) => {
             setCached(key, v);
             return v;
           })
-          .finally(() => inFlight.delete(key));
-        inFlight.set(key, p);
+          .finally(() => {
+            // Only clear if we're still the registered flight (a later mount
+            // may have replaced us after an abort).
+            if (inFlight.get(key) && (inFlight.get(key) as Flight).ctrl === abort) {
+              inFlight.delete(key);
+            }
+          });
+        flight = { promise, ctrl: abort };
+        inFlight.set(key, flight);
       }
-      p.then((v) => {
+      flight.promise.then((v) => {
         if (!mounted.current) return;
         setData(v);
         setError(null);
