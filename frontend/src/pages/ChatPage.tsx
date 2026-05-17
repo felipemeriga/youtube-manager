@@ -9,8 +9,6 @@ import {
   Button,
   Stack,
   Typography,
-  Checkbox,
-  FormControlLabel,
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
@@ -69,9 +67,7 @@ export default function ChatPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [showModeDialog, setShowModeDialog] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([
-    "youtube",
-  ]);
+  const selectedPlatforms = ["youtube"];
   const [imageProvider] = useState<"gemini" | "openai">("gemini");
   const pendingMessageRef = useRef<{
     content: string;
@@ -628,42 +624,6 @@ export default function ChatPage() {
               >
                 Thumbnail
               </Button>
-              <Box sx={{ ml: 4, mt: 1 }}>
-                {[
-                  { key: "youtube", label: "YouTube (16:9)" },
-                  { key: "instagram_post", label: "Instagram Post (1:1)" },
-                  { key: "instagram_story", label: "Instagram Story (9:16)" },
-                ].map((p) => (
-                  <FormControlLabel
-                    key={p.key}
-                    control={
-                      <Checkbox
-                        checked={selectedPlatforms.includes(p.key)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedPlatforms((prev) => [...prev, p.key]);
-                          } else {
-                            setSelectedPlatforms((prev) =>
-                              prev.filter((k) => k !== p.key)
-                            );
-                          }
-                        }}
-                        size="small"
-                        sx={{
-                          color: "#5b8def",
-                          "&.Mui-checked": { color: "#5b8def" },
-                        }}
-                      />
-                    }
-                    label={p.label}
-                    sx={{
-                      color: "rgba(255,255,255,0.7)",
-                      display: "flex",
-                      "& .MuiTypography-root": { fontSize: 13 },
-                    }}
-                  />
-                ))}
-              </Box>
               {/* OpenAI provider disabled — org verification required for gpt-image-2,
                   gpt-image-1.5 not yet validated. Re-enable when ready. */}
             </Box>

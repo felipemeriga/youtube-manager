@@ -296,7 +296,10 @@ async def composite_node(state: ThumbnailState) -> dict:
     person_bytes = await sb.storage.from_("personal-photos").download(
         f"{user_id}/{state['photo_name']}"
     )
-    ref_thumbs = await _fetch_all_assets(sb, user_id, "reference-thumbs")
+    ref_thumbs, logos = await asyncio.gather(
+        _fetch_all_assets(sb, user_id, "reference-thumbs"),
+        _fetch_all_assets(sb, user_id, "logos"),
+    )
     extra = state.get("extra_instructions")
     composite_mode = state.get("composite_mode") or "natural"
     transform_prompt = state.get("transform_prompt")
@@ -341,6 +344,7 @@ async def composite_node(state: ThumbnailState) -> dict:
             previous_image=previous_comps.get(platform),
             composite_mode=composite_mode,
             transform_prompt=transform_prompt,
+            logos=logos or None,
             aspect_ratio=cfg["aspect_ratio"],
             image_size=img_size,
             model=model,

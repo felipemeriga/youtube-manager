@@ -30,8 +30,6 @@ _HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
 # parameter (high/medium/low) controls output fidelity instead.
 SIZE_BY_ASPECT_TIER: dict[str, dict[str, str]] = {
     "16:9": {"4K": "1536x1024", "2K": "1536x1024", "1K": "1536x1024"},
-    "1:1": {"4K": "1024x1024", "2K": "1024x1024", "1K": "1024x1024"},
-    "9:16": {"4K": "1024x1536", "2K": "1024x1536", "1K": "1024x1536"},
 }
 
 # 4K/2K both use "high" quality (visual quality), differ in target dimensions.
@@ -213,6 +211,7 @@ async def composite_with_effects(
     previous_image: bytes | None = None,
     composite_mode: str = "natural",
     transform_prompt: str | None = None,
+    logos: list[bytes] | None = None,
     aspect_ratio: str = "16:9",
     image_size: str = "4K",
     model: str = "gpt-image-1.5",
@@ -263,6 +262,20 @@ async def composite_with_effects(
     )
     images.append(person_bytes)
 
+    if logos:
+        start = len(images) + 1
+        end = start + len(logos) - 1
+        label = f"image {start}" if start == end else f"images {start}-{end}"
+        sections.append(
+            _section(
+                f"CHANNEL LOGO ({label})",
+                "This logo is already on the background. You MUST keep it "
+                "visible in the exact same position and size. Do NOT remove, "
+                "cover, or alter the logo.",
+            )
+        )
+        images.extend(logos)
+
     if composite_mode == "transform" and transform_prompt:
         instructions = (
             f"TRANSFORM MODE: {transform_prompt}\n"
@@ -271,7 +284,7 @@ async def composite_with_effects(
             "3. Remove the person's original background\n"
             "4. Apply reference-style effects (glow, lighting, color grading)\n"
             "5. Position/size the person as in references\n"
-            "6. No text. Background must remain pixel-perfect."
+            "6. No text. Background and logo must remain pixel-perfect — do NOT remove or cover the logo."
         )
     elif extra_instructions:
         instructions = (
@@ -281,7 +294,7 @@ async def composite_with_effects(
             "3. Remove the person's original background\n"
             "4. Apply reference-style effects (glow, lighting, color grading)\n"
             "5. Position/size the person as in references\n"
-            "6. No text. Background must remain pixel-perfect."
+            "6. No text. Background and logo must remain pixel-perfect — do NOT remove or cover the logo."
         )
     else:
         instructions = (
@@ -289,7 +302,7 @@ async def composite_with_effects(
             "2. Remove the person's original background\n"
             "3. Apply reference-style effects (glow, lighting, color grading) to the person\n"
             "4. Position/size the person as in references\n"
-            "5. No text. Background must remain pixel-perfect."
+            "5. No text. Background and logo must remain pixel-perfect — do NOT remove or cover the logo."
         )
     sections.append(_section("TASK", instructions))
     full_prompt = "\n".join(sections)

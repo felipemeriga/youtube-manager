@@ -13,7 +13,7 @@ def make_base_state(**overrides) -> ThumbnailState:
         user_id="user-1",
         topic="",
         topic_research="",
-        platforms=["youtube", "instagram_post"],
+        platforms=["youtube"],
         background_urls={},
         photo_name=None,
         composite_urls={},
@@ -72,11 +72,9 @@ async def test_background_uploads_run_in_parallel():
 
         result = await generate_background_node(state)
 
-    # Both platforms should have results
     assert "youtube" in result["background_urls"]
-    assert "instagram_post" in result["background_urls"]
-    # Upload was called (2 per platform: original + preview) = 4 total
-    assert sb.storage.from_.return_value.upload.call_count == 4
+    # 1 platform * 2 uploads (original + preview) = 2 total
+    assert sb.storage.from_.return_value.upload.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -87,7 +85,6 @@ async def test_composite_uploads_run_in_parallel():
     state = make_base_state(
         background_urls={
             "youtube": {"url": "user-1/bg_yt.png", "preview_url": ""},
-            "instagram_post": {"url": "user-1/bg_ig.png", "preview_url": ""},
         },
         photo_name="photo1.jpg",
     )
@@ -113,9 +110,8 @@ async def test_composite_uploads_run_in_parallel():
         result = await composite_node(state)
 
     assert "youtube" in result["composite_urls"]
-    assert "instagram_post" in result["composite_urls"]
-    # 2 platforms * 2 uploads (original + preview) = 4
-    assert sb.storage.from_.return_value.upload.call_count == 4
+    # 1 platform * 2 uploads (original + preview) = 2
+    assert sb.storage.from_.return_value.upload.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -126,7 +122,6 @@ async def test_text_node_uploads_run_in_parallel():
     state = make_base_state(
         composite_urls={
             "youtube": {"url": "user-1/comp_yt.png", "preview_url": ""},
-            "instagram_post": {"url": "user-1/comp_ig.png", "preview_url": ""},
         },
         thumb_text="Test Text",
     )
@@ -152,8 +147,8 @@ async def test_text_node_uploads_run_in_parallel():
         result = await add_text_node(state)
 
     assert "youtube" in result["final_urls"]
-    assert "instagram_post" in result["final_urls"]
-    assert sb.storage.from_.return_value.upload.call_count == 4
+    # 1 platform * 2 uploads (original + preview) = 2
+    assert sb.storage.from_.return_value.upload.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -191,7 +186,6 @@ async def test_save_node_parallel_uploads():
     state = make_base_state(
         final_urls={
             "youtube": {"url": "user-1/thumb_yt.png", "preview_url": ""},
-            "instagram_post": {"url": "user-1/thumb_ig.png", "preview_url": ""},
         }
     )
 
@@ -206,6 +200,5 @@ async def test_save_node_parallel_uploads():
         result = await save_node(state)
 
     assert "youtube" in result["final_urls"]
-    assert "instagram_post" in result["final_urls"]
-    # 2 platforms * 1 upload each = 2
-    assert sb.storage.from_.return_value.upload.call_count == 2
+    # 1 platform * 1 upload each = 1
+    assert sb.storage.from_.return_value.upload.call_count == 1

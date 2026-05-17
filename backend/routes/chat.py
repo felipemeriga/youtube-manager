@@ -22,7 +22,7 @@ class ChatRequest(BaseModel):
     content: str
     type: str = "text"
     image_url: str | None = None  # Storage path of uploaded image
-    platforms: list[str] | None = None  # e.g. ["youtube", "instagram_post"]
+    platforms: list[str] | None = None  # e.g. ["youtube"]
 
 
 def sse_event(data: dict) -> str:

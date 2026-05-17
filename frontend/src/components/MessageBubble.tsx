@@ -37,8 +37,6 @@ interface Message {
 
 const platformLabels: Record<string, string> = {
   youtube: "YouTube",
-  instagram_post: "Instagram Post",
-  instagram_story: "Instagram Story",
 };
 
 interface MessageBubbleProps {
