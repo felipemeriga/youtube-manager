@@ -173,6 +173,34 @@ export default function ClipJobPage() {
           setRenderTriggered(true);
           // Lazy permission request — must happen from a user gesture.
           ensureNotificationPermission();
+          // Clear stale "done" signals for the candidates being re-rendered.
+          // Without this, a previous render's final_storage_key / signedUrl
+          // makes the FinalRenderPanel show "Baixar" pointing at the OLD
+          // file while the new render is in progress. refresh() at the end
+          // (and SSE render_complete) repopulates with the fresh values.
+          const reRendering = new Set(selected);
+          setJob((j) =>
+            j
+              ? {
+                  ...j,
+                  candidates: j.candidates.map((c) =>
+                    reRendering.has(c.id)
+                      ? { ...c, final_storage_key: null }
+                      : c,
+                  ),
+                }
+              : j,
+          );
+          setSignedUrls((u) => {
+            const next = { ...u };
+            for (const id of reRendering) delete next[id];
+            return next;
+          });
+          setRenderProgress((p) => {
+            const next = { ...p };
+            for (const id of reRendering) delete next[id];
+            return next;
+          });
           const signal = getSignal();
           try {
             await clipsApi.render(job.id, Array.from(selected), captionStyle, signal);

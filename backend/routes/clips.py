@@ -175,9 +175,12 @@ async def render_finals(
             detail=f"Cannot render — job status is {job_res.data['status']}",
         )
 
+    # Null final_storage_key on re-renders so the UI shows a progress bar
+    # instead of "Baixar" pointing at the previous render's file. The pipeline
+    # will write the fresh key when the new render completes.
     await (
         sb.table("clip_candidates")
-        .update({"selected": True})
+        .update({"selected": True, "final_storage_key": None})
         .in_("id", req.candidate_ids)
         .execute()
     )
