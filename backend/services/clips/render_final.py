@@ -122,7 +122,10 @@ def build_ass_file(
             # cue collapse to zero/negative duration.
             if next_local_start - local_end < CUE_GAP_SECONDS:
                 local_end = max(local_start + 0.05, next_local_start - CUE_GAP_SECONDS)
-        text = cue.text.replace("\n", " ").replace(",", "\\,")
+        # ASS Dialogue: Text is the LAST field — commas inside it are part of
+        # the text, not field separators, so they must NOT be backslash-escaped
+        # (libass renders `\,` literally or drops it).
+        text = cue.text.replace("\n", " ")
         lines.append(
             f"Dialogue: 0,{_seconds_to_ass_ts(local_start)},"
             f"{_seconds_to_ass_ts(local_end)},Default,,0,0,0,,{text}"

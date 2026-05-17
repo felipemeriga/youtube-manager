@@ -166,16 +166,50 @@ async def test_add_punctuation_maps_words_back():
 
 
 @pytest.mark.asyncio
-async def test_add_punctuation_falls_back_on_word_count_mismatch():
-    cues = [TranscriptCue(start=0.0, end=2.0, text="hello world")]
-    # LLM adds an extra word — should fall back to original
+async def test_add_punctuation_insertion_stays_local_via_diff_alignment():
+    # 4 cues × 3 words = 12 original. LLM adds one filler word ("oh,") at the
+    # start of cue index 1. With diff alignment, that extra word must attach
+    # to cue 1 — not shift everything after it by one position.
+    cues = [
+        TranscriptCue(start=0.0, end=1.0, text="hello world today"),
+        TranscriptCue(start=1.0, end=2.0, text="this is fine"),
+        TranscriptCue(start=2.0, end=3.0, text="and we continue"),
+        TranscriptCue(start=3.0, end=4.0, text="with the talk"),
+    ]
+    punctuated = "Hello world today. Oh, this is fine. And we continue with the talk."
     with patch(
         "services.llm.ask_llm",
         new_callable=AsyncMock,
-        return_value="Hello, beautiful world!",
+        return_value=punctuated,
     ):
         result = await add_punctuation(cues)
-    assert result[0].text == "hello world"
+    # Cue 0 unchanged in word count — the insertion didn't bleed backwards.
+    assert result[0].text == "Hello world today."
+    # Cue 1 carries the inserted "Oh," AND its original 3 words.
+    assert result[1].text.startswith("Oh,")
+    assert "this is fine." in result[1].text
+    # Cues 2 and 3 are NOT shifted — last cue's text must still end with "talk."
+    assert result[3].text.endswith("talk.")
+    # Timestamps preserved everywhere.
+    assert [c.start for c in result] == [0.0, 1.0, 2.0, 3.0]
+
+
+@pytest.mark.asyncio
+async def test_add_punctuation_falls_back_on_excessive_drift():
+    # 10 cues × 5 words = 50 original; LLM returns 80 (drift=30 > 20 tolerance).
+    cues = [
+        TranscriptCue(start=float(i), end=float(i + 1), text="a b c d e")
+        for i in range(10)
+    ]
+    punctuated = " ".join(["w"] * 80)
+    with patch(
+        "services.llm.ask_llm",
+        new_callable=AsyncMock,
+        return_value=punctuated,
+    ):
+        result = await add_punctuation(cues)
+    # Raw originals returned unchanged
+    assert [c.text for c in result] == ["a b c d e"] * 10
 
 
 @pytest.mark.asyncio

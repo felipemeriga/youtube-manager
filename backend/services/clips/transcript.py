@@ -1,4 +1,5 @@
 import asyncio
+import difflib
 import logging
 import re
 from pathlib import Path
@@ -159,24 +160,82 @@ async def add_punctuation(cues: list[TranscriptCue]) -> list[TranscriptCue]:
     punctuated = punctuated.strip().strip('"').strip("'").strip()
     punct_words = punctuated.split()
 
-    # Validate: word count must match (LLM was told not to add/remove words)
+    # The LLM is told not to add/remove words, but small drifts happen in
+    # practice (contraction splits, filler insertions). Reject only if the
+    # drift is large enough that alignment would obviously misalign.
     total_original = sum(word_counts)
-    if len(punct_words) != total_original:
+    drift = abs(len(punct_words) - total_original)
+    max_drift = max(20, total_original // 20)  # 5% or 20 words, whichever is larger
+    if drift > max_drift:
         logger.warning(
-            "Punctuation word count mismatch: original=%d, punctuated=%d — skipping",
+            "Punctuation word count mismatch beyond tolerance: "
+            "original=%d, punctuated=%d, drift=%d, max=%d — skipping",
             total_original,
             len(punct_words),
+            drift,
+            max_drift,
         )
         return cues
+    if drift:
+        logger.info(
+            "Punctuation drift accepted: original=%d, punctuated=%d (drift=%d)",
+            total_original,
+            len(punct_words),
+            drift,
+        )
 
-    # Redistribute punctuated words back onto cues
-    out: list[TranscriptCue] = []
-    offset = 0
-    for cue, wc in zip(cues, word_counts):
-        new_text = " ".join(punct_words[offset : offset + wc])
-        out.append(TranscriptCue(start=cue.start, end=cue.end, text=new_text))
-        offset += wc
-    return out
+    # Diff-align punctuated words against the flat original word sequence,
+    # so insertions/substitutions land in the cue where they actually occur
+    # rather than shifting the whole tail of the transcript. Without this,
+    # a single inserted word causes captions to drift up to 1-2 seconds out
+    # of sync by the end of a long transcript.
+    orig_flat: list[tuple[int, str]] = []
+    for i, c in enumerate(cues):
+        for w in c.text.split():
+            orig_flat.append((i, w))
+
+    def _norm(w: str) -> str:
+        return "".join(ch.lower() for ch in w if ch.isalnum())
+
+    orig_norm = [_norm(w) for _, w in orig_flat]
+    punct_norm = [_norm(w) for w in punct_words]
+    sm = difflib.SequenceMatcher(a=orig_norm, b=punct_norm, autojunk=False)
+
+    cue_words: list[list[str]] = [[] for _ in cues]
+    for op, i1, i2, j1, j2 in sm.get_opcodes():
+        if op == "equal":
+            for k in range(j2 - j1):
+                cue_idx = orig_flat[i1 + k][0]
+                cue_words[cue_idx].append(punct_words[j1 + k])
+        elif op == "replace":
+            # Spread the replacement words across the original range
+            # proportionally so they stay near their context.
+            span_orig = max(1, i2 - i1)
+            for k in range(j1, j2):
+                rel = (k - j1) / max(1, j2 - j1)
+                orig_pos = min(i1 + int(rel * span_orig), i2 - 1)
+                cue_idx = orig_flat[orig_pos][0]
+                cue_words[cue_idx].append(punct_words[k])
+        elif op == "insert":
+            # Attach an insertion to the cue of the word that FOLLOWS it so
+            # filler words like "Oh," before a new sentence visually arrive
+            # with the cue they precede, not the previous one. Falls back to
+            # the last cue when the insertion is at end-of-transcript.
+            if i1 < len(orig_flat):
+                cue_idx = orig_flat[i1][0]
+            elif orig_flat:
+                cue_idx = orig_flat[-1][0]
+            else:
+                cue_idx = 0
+            for k in range(j1, j2):
+                cue_words[cue_idx].append(punct_words[k])
+        # op == "delete": original words removed from punctuated output —
+        # nothing to assign.
+
+    return [
+        TranscriptCue(start=c.start, end=c.end, text=" ".join(cue_words[i]))
+        for i, c in enumerate(cues)
+    ]
 
 
 def is_broken_captions(cues: list) -> bool:

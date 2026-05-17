@@ -24,6 +24,15 @@ def test_build_ass_file_writes_overlapping_cues(tmp_path):
     assert "0:00:00.00" in body  # "hello" starts at 0 in clip-local time
 
 
+def test_build_ass_file_preserves_commas_unescaped(tmp_path):
+    cues = [TranscriptCue(start=10, end=12, text="well, hello there")]
+    out = tmp_path / "clip.ass"
+    build_ass_file(cues, clip_start=10, clip_end=20, out_path=out)
+    body = out.read_text()
+    assert "well, hello there" in body
+    assert "well\\, hello" not in body
+
+
 @pytest.mark.asyncio
 async def test_render_one_final_orchestrates(tmp_path):
     candidate = CandidateClip(

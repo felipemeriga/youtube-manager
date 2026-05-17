@@ -317,6 +317,22 @@ async def run_finals_pipeline(
                 job_res.data["youtube_url"], audio_path, job_tmp
             )
 
+        # Legacy jobs were cached before add_punctuation was wired into the
+        # preview stage, so their transcript_cues row has no commas/periods.
+        # Detect that and punctuate on-demand, then persist so we only pay
+        # the LLM cost once per legacy job.
+        if not any(ch in c.text for c in cues for ch in ".,?!;:"):
+            logger.info("Cues lack punctuation — running add_punctuation")
+            cues = await add_punctuation(cues)
+            await _update_job(
+                job_id,
+                {
+                    "transcript_cues": [
+                        {"start": c.start, "end": c.end, "text": c.text} for c in cues
+                    ]
+                },
+            )
+
         # Stage 4/4: render finals (loop). Overall pct goes from 30 → 95 across
         # all selected candidates; per-candidate intra-encode pct rides on top
         # via render_progress events keyed by candidate_id.
