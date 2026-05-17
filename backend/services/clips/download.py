@@ -2,6 +2,7 @@ import asyncio
 import logging
 from pathlib import Path
 
+from .render_preview import _video_dims
 from .storage import source_key, upload_file
 from .ytdlp_args import ytdlp_auth_args
 
@@ -37,8 +38,16 @@ async def download_source(
     tmp_dir.mkdir(parents=True, exist_ok=True)
     local_path = tmp_dir / "source.mp4"
     await _run_ytdlp_download(url, local_path)
+    try:
+        width, height = _video_dims(local_path)
+        res = f"{width}x{height}"
+    except Exception:
+        res = "unknown"
     await upload_file(local_path, source_key(user_id, job_id), "video/mp4")
     logger.info(
-        "Downloaded source for job %s, size=%d", job_id, local_path.stat().st_size
+        "Downloaded source for job %s, size=%d, resolution=%s",
+        job_id,
+        local_path.stat().st_size,
+        res,
     )
     return local_path

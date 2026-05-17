@@ -1,15 +1,13 @@
 """Shared yt-dlp argument builder.
 
-YouTube has started bot-blocking server IPs with the error
-``Sign in to confirm you're not a bot``. The fix is to pass either a cookies
-file or a browser-cookie source to every yt-dlp invocation. This helper
-centralises that so the three call sites (metadata, download, transcript)
-stay in sync.
+YouTube bot-blocks server IPs with ``Sign in to confirm you're not a bot``.
+We bypass this with client spoofing and optional residential proxy rotation.
+Cookie/browser auth is available as a local dev fallback only.
 
-Resolves relative cookie-file paths to absolute paths anchored at the backend
-package root, so ``YOUTUBE_COOKIES_FILE=cookies.txt`` works regardless of the
-process CWD. Logs the auth mode on first use so configuration mistakes are
-visible in startup logs rather than masked as "still bot-blocked".
+Auth modes (configured via YOUTUBE_AUTH_MODE):
+- ""        (default): no auth — relies on client spoofing + optional proxy
+- "cookies": Netscape-format cookies file (local dev only, expires quickly)
+- "browser": pull cookies from a local browser (only works on desktop)
 """
 
 from __future__ import annotations
@@ -52,25 +50,46 @@ def _resolve_cookies_file(raw: str) -> str | None:
     return str(p)
 
 
-def ytdlp_auth_args() -> list[str]:
-    """Return the auth flags to splice into a yt-dlp argv.
+_CHROME_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
 
-    Priority: explicit cookies file (if it exists) > browser source > no auth.
-    A missing/empty cookies file does NOT block fallback to the browser
-    source, so an env with both set still works when the file is wrong.
-    """
-    cookies_file_raw = (settings.youtube_cookies_file or "").strip()
-    if cookies_file_raw:
-        resolved = _resolve_cookies_file(cookies_file_raw)
-        if resolved:
-            _log_once(f"yt-dlp auth: using cookies file {resolved}")
-            return ["--cookies", resolved]
-    browser = (settings.youtube_cookies_from_browser or "").strip()
-    if browser:
-        _log_once(f"yt-dlp auth: using cookies from browser {browser!r}")
-        return ["--cookies-from-browser", browser]
-    _log_once(
-        "yt-dlp auth: NONE configured (set YOUTUBE_COOKIES_FILE or "
-        "YOUTUBE_COOKIES_FROM_BROWSER to bypass YouTube bot challenge)"
-    )
-    return []
+
+def ytdlp_auth_args() -> list[str]:
+    """Return the auth and runtime flags to splice into a yt-dlp argv."""
+    args: list[str] = [
+        # Allow yt-dlp to download remote JS challenge solver components.
+        "--remote-components", "ejs:github",
+        # Do NOT override player_client. As of yt-dlp 2026.03+, the default
+        # client mix (android_vr + web_safari) returns full-quality streams
+        # anonymously for server IPs. Forcing `tv` triggers a broken OAuth
+        # path; forcing `web,mweb` throttles to low-res single-file streams.
+        "--user-agent", _CHROME_UA,
+    ]
+
+    # Optional residential proxy for bot bypass.
+    proxy_url = (settings.youtube_proxy_url or "").strip()
+    if proxy_url:
+        args += ["--proxy", proxy_url]
+        _log_once(f"yt-dlp: using proxy {proxy_url[:30]}…")
+
+    mode = (settings.youtube_auth_mode or "").strip().lower()
+
+    if mode == "cookies":
+        cookies_file_raw = (settings.youtube_cookies_file or "").strip()
+        if cookies_file_raw:
+            resolved = _resolve_cookies_file(cookies_file_raw)
+            if resolved:
+                _log_once(f"yt-dlp auth: using cookies file {resolved}")
+                return args + ["--cookies", resolved]
+
+    if mode == "browser":
+        browser = (settings.youtube_cookies_from_browser or "").strip()
+        if browser:
+            _log_once(f"yt-dlp auth: using cookies from browser {browser!r}")
+            return args + ["--cookies-from-browser", browser]
+
+    _log_once("yt-dlp auth: none (client spoofing + proxy only)")
+    return args

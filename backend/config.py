@@ -16,13 +16,13 @@ class Settings(BaseSettings):
     clips_cleanup_token: str = ""  # service token for /api/clips/cleanup
     clips_tmp_dir: str = "/tmp/clips"
     clips_bucket: str = "clips"
-    # yt-dlp auth: YouTube now bot-blocks unauthenticated server IPs. Set
-    # either a Netscape-format cookies file path OR a browser name
-    # (chrome / firefox / safari / edge) to source cookies from. If both are
-    # empty, yt-dlp runs without auth and may hit "Sign in to confirm you're
-    # not a bot" errors.
+    # yt-dlp auth: YouTube bot-blocks unauthenticated server IPs.
+    # Default is no auth with client spoofing to bypass bot challenges.
+    # Cookies/browser modes available as local dev fallbacks only.
+    youtube_auth_mode: str = ""  # "cookies", "browser", ""
     youtube_cookies_file: str = ""
     youtube_cookies_from_browser: str = ""
+    youtube_proxy_url: str = ""  # residential proxy URL for bot bypass
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
