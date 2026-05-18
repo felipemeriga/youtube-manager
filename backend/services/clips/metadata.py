@@ -1,40 +1,22 @@
-import asyncio
-import json
 import logging
 
+from services.youtube_saas import fetch_video_info
+
 from .models import VideoMetadata
-from .ytdlp_args import ytdlp_auth_args
 
 logger = logging.getLogger(__name__)
 
 MAX_DURATION_SECONDS = 3600
 
 
-async def _run_ytdlp_dump(url: str) -> str:
-    """Run `yt-dlp --dump-json --no-download <url>` and return stdout."""
-    proc = await asyncio.create_subprocess_exec(
-        "yt-dlp",
-        *ytdlp_auth_args(),
-        "--dump-json",
-        "--no-download",
-        url,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        raise RuntimeError(f"yt-dlp failed: {stderr.decode()[:500]}")
-    return stdout.decode()
-
-
 async def fetch_metadata(url: str) -> VideoMetadata:
-    raw = await _run_ytdlp_dump(url)
-    data = json.loads(raw)
-    duration = int(data.get("duration") or 0)
-    if duration > MAX_DURATION_SECONDS:
-        raise ValueError(f"Video duration {duration}s exceeds 60 min limit")
+    info = await fetch_video_info(url)
+    if info.duration_seconds > MAX_DURATION_SECONDS:
+        raise ValueError(
+            f"Video duration {info.duration_seconds}s exceeds 60 min limit"
+        )
     return VideoMetadata(
-        youtube_video_id=data["id"],
-        title=data.get("title", ""),
-        duration_seconds=duration,
+        youtube_video_id=info.video_id,
+        title=info.title,
+        duration_seconds=info.duration_seconds,
     )

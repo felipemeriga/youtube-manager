@@ -5,8 +5,7 @@ RUN uv sync --frozen --no-dev
 COPY . .
 
 FROM python:3.12-slim-bookworm
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg unzip \
-    && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/.venv .venv

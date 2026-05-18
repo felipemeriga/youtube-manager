@@ -1,10 +1,10 @@
-import asyncio
 import difflib
 import logging
 import re
 from pathlib import Path
 
 from config import settings
+from services.youtube_saas import fetch_captions_json3, fetch_video_info
 
 from .models import TranscriptCue
 
@@ -248,30 +248,43 @@ def is_broken_captions(cues: list) -> bool:
     return False
 
 
-async def _download_yt_captions(url: str, out_dir: Path) -> Path | None:
-    from .ytdlp_args import ytdlp_auth_args
+def _parse_youtube_json3(payload: dict) -> list[TranscriptCue]:
+    """Parse YouTube's JSON3 timedtext payload into cues.
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    proc = await asyncio.create_subprocess_exec(
-        "yt-dlp",
-        *ytdlp_auth_args(),
-        "--write-auto-subs",
-        "--sub-langs",
-        "en",
-        "--sub-format",
-        "vtt",
-        "--skip-download",
-        "--convert-subs",
-        "vtt",
-        "-o",
-        str(out_dir / "captions.%(ext)s"),
-        url,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    await proc.communicate()
-    candidates = list(out_dir.glob("captions*.vtt"))
-    return candidates[0] if candidates else None
+    Each event has a start time and a list of word segments; we concatenate
+    the segs into a single cue text and use the event's duration for the
+    cue's end time. Events with no segs (style/positioning headers) are
+    skipped. Cues with empty text are skipped.
+    """
+    cues: list[TranscriptCue] = []
+    for event in payload.get("events") or []:
+        segs = event.get("segs")
+        if not segs:
+            continue
+        text = "".join(s.get("utf8", "") for s in segs).strip()
+        if not text:
+            continue
+        start = (event.get("tStartMs") or 0) / 1000.0
+        dur = (event.get("dDurationMs") or 0) / 1000.0
+        cues.append(TranscriptCue(start=start, end=start + dur, text=text))
+    return cues
+
+
+async def _fetch_yt_captions(url: str) -> list[TranscriptCue] | None:
+    """Fetch YouTube auto-captions for ``url`` via the SaaS, parsed as cues.
+
+    Returns None when the video has no auto-captions available or the
+    fetch fails — callers should fall back to Whisper.
+    """
+    try:
+        info = await fetch_video_info(url)
+        payload = await fetch_captions_json3(info)
+    except Exception as e:
+        logger.warning("youtube_saas captions fetch failed: %s", e)
+        return None
+    if payload is None:
+        return None
+    return _parse_youtube_json3(payload)
 
 
 async def _whisper_transcribe(audio_path: Path) -> list[TranscriptCue]:
@@ -324,14 +337,12 @@ async def fetch_transcript(
 ) -> list[TranscriptCue]:
     """Try YouTube auto-captions first; fall back to Whisper if missing/broken.
 
-    Retries Whisper once on failure before raising.
+    Retries Whisper once on failure before raising. ``tmp_dir`` is kept in
+    the signature so callers don't need to change — the SaaS path no longer
+    needs a scratch dir, but the Whisper fallback may add one in the future.
     """
-    # Return raw cues without splitting — the caller (`job_runner`) runs
-    # `add_punctuation` first, then `_split_long_cues`, so subtitle breaks
-    # can land on sentence boundaries instead of mid-clause.
-    vtt_path = await _download_yt_captions(url, tmp_dir)
-    if vtt_path and vtt_path.exists():
-        cues = parse_vtt(vtt_path.read_text())
+    cues = await _fetch_yt_captions(url)
+    if cues is not None:
         if not is_broken_captions(cues):
             logger.info("Using YT captions: %d cues", len(cues))
             return cues

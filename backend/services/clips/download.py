@@ -1,31 +1,12 @@
-import asyncio
 import logging
 from pathlib import Path
 
+from services.youtube_saas import download_video_and_audio, fetch_video_info
+
 from .render_preview import _video_dims
 from .storage import source_key, upload_file
-from .ytdlp_args import ytdlp_auth_args
 
 logger = logging.getLogger(__name__)
-
-
-async def _run_ytdlp_download(url: str, out_path: Path) -> None:
-    proc = await asyncio.create_subprocess_exec(
-        "yt-dlp",
-        *ytdlp_auth_args(),
-        "-f",
-        "bv*[height<=1080]+ba/b",
-        "--merge-output-format",
-        "mp4",
-        "-o",
-        str(out_path),
-        url,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        raise RuntimeError(f"yt-dlp download failed: {stderr.decode()[:500]}")
 
 
 async def download_source(
@@ -34,10 +15,14 @@ async def download_source(
     job_id: str,
     tmp_dir: Path,
 ) -> Path:
-    """Download YouTube video and upload to Supabase. Returns local file path."""
+    """Download YouTube video via SaaS, mux to MP4, upload to Supabase.
+
+    Returns the local file path of the muxed source MP4.
+    """
     tmp_dir.mkdir(parents=True, exist_ok=True)
     local_path = tmp_dir / "source.mp4"
-    await _run_ytdlp_download(url, local_path)
+    info = await fetch_video_info(url)
+    await download_video_and_audio(info, local_path)
     try:
         width, height = _video_dims(local_path)
         res = f"{width}x{height}"

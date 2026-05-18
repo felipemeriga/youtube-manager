@@ -16,13 +16,9 @@ class Settings(BaseSettings):
     clips_cleanup_token: str = ""  # service token for /api/clips/cleanup
     clips_tmp_dir: str = "/tmp/clips"
     clips_bucket: str = "clips"
-    # yt-dlp auth: YouTube bot-blocks unauthenticated server IPs.
-    # Default is no auth with client spoofing to bypass bot challenges.
-    # Cookies/browser modes available as local dev fallbacks only.
-    youtube_auth_mode: str = ""  # "cookies", "browser", ""
-    youtube_cookies_file: str = ""
-    youtube_cookies_from_browser: str = ""
-    youtube_proxy_url: str = ""  # residential proxy URL for bot bypass
+    # RapidAPI key for the youtube-media-downloader SaaS — replaces yt-dlp,
+    # which YouTube bot-blocks on datacenter IPs.
+    rapidapi_key: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

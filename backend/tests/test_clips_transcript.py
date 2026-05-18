@@ -109,23 +109,24 @@ def test_split_long_cues_preserves_time_bounds():
 
 @pytest.mark.asyncio
 async def test_fetch_transcript_uses_yt_captions_when_good(tmp_path):
-    vtt_path = tmp_path / "captions.en.vtt"
-    vtt_path.write_text(SAMPLE_VTT * 5)  # 10 cues
+    fake_cues = [
+        TranscriptCue(start=float(i), end=float(i + 1), text=f"cue {i}")
+        for i in range(10)
+    ]
 
-    async def fake_dl(url, out_dir):
-        return vtt_path
+    async def fake_fetch(url):
+        return fake_cues
 
-    with patch("services.clips.transcript._download_yt_captions", new=fake_dl):
+    with patch("services.clips.transcript._fetch_yt_captions", new=fake_fetch):
         cues = await fetch_transcript(
             "https://youtu.be/x", tmp_path / "audio.mp3", tmp_path
         )
-    assert len(cues) >= 5
+    assert len(cues) == 10
 
 
 @pytest.mark.asyncio
 async def test_fetch_transcript_falls_back_to_whisper(tmp_path):
-    # YT captions return None → fallback
-    async def fake_dl(url, out_dir):
+    async def fake_fetch(url):
         return None
 
     fake_whisper_cues = [
@@ -137,13 +138,43 @@ async def test_fetch_transcript_falls_back_to_whisper(tmp_path):
         return fake_whisper_cues
 
     with (
-        patch("services.clips.transcript._download_yt_captions", new=fake_dl),
+        patch("services.clips.transcript._fetch_yt_captions", new=fake_fetch),
         patch("services.clips.transcript._whisper_transcribe", new=fake_whisper),
     ):
         cues = await fetch_transcript(
             "https://youtu.be/x", tmp_path / "audio.mp3", tmp_path
         )
     assert len(cues) == 2
+
+
+def test_parse_youtube_json3_extracts_cues_from_segs():
+    from services.clips.transcript import _parse_youtube_json3
+
+    payload = {
+        "events": [
+            # Style/positioning event with no segs — must be skipped.
+            {"tStartMs": 0, "dDurationMs": 1000, "wpWinPosId": 1},
+            {
+                "tStartMs": 1000,
+                "dDurationMs": 2000,
+                "segs": [{"utf8": "hello"}, {"utf8": " world"}],
+            },
+            {
+                "tStartMs": 3500,
+                "dDurationMs": 1500,
+                "segs": [{"utf8": "  "}],  # whitespace-only — skipped
+            },
+            {
+                "tStartMs": 5000,
+                "dDurationMs": 1000,
+                "segs": [{"utf8": "next cue"}],
+            },
+        ]
+    }
+    cues = _parse_youtube_json3(payload)
+    assert [c.text for c in cues] == ["hello world", "next cue"]
+    assert cues[0].start == 1.0 and cues[0].end == 3.0
+    assert cues[1].start == 5.0 and cues[1].end == 6.0
 
 
 @pytest.mark.asyncio
