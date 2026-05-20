@@ -1,7 +1,6 @@
 import { Box, IconButton, Tooltip, Avatar } from "@mui/material";
 import ChatIcon from "@mui/icons-material/Chat";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
-import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -76,29 +75,6 @@ export default function IconRail() {
           }}
         >
           <PhotoLibraryIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-
-      <Tooltip title="Clips" placement="right">
-        <IconButton
-          onClick={() => navigate("/clips")}
-          onMouseEnter={() => prefetchRoute("/clips")}
-          onFocus={() => prefetchRoute("/clips")}
-          sx={{
-            color: location.pathname.startsWith("/clips")
-              ? "#93b6f0"
-              : "rgba(255,255,255,0.4)",
-            backgroundColor: location.pathname.startsWith("/clips")
-              ? "rgba(91,141,239,0.12)"
-              : "transparent",
-            "&:hover": {
-              color: "#93b6f0",
-              backgroundColor: "rgba(91,141,239,0.08)",
-            },
-            transition: "all 0.2s ease",
-          }}
-        >
-          <VideoLibraryIcon fontSize="small" />
         </IconButton>
       </Tooltip>
 

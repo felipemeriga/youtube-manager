@@ -10,8 +10,11 @@ import LoginPage from "./pages/LoginPage";
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const AssetsPage = lazy(() => import("./pages/AssetsPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-const ClipsPage = lazy(() => import("./pages/ClipsPage"));
-const ClipJobPage = lazy(() => import("./pages/ClipJobPage"));
+// Clips feature temporarily disabled — RapidAPI quota concern. Backend code
+// and pages remain so we can flip it back on by restoring the routes + sidebar
+// icon (see also components/IconRail.tsx).
+// const ClipsPage = lazy(() => import("./pages/ClipsPage"));
+// const ClipJobPage = lazy(() => import("./pages/ClipJobPage"));
 
 function PageLoader() {
   return (
@@ -46,8 +49,6 @@ export default function App() {
               >
                 <Route path="/" element={<ChatPage />} />
                 <Route path="/assets" element={<AssetsPage />} />
-                <Route path="/clips" element={<ClipsPage />} />
-                <Route path="/clips/:jobId" element={<ClipJobPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Routes>
