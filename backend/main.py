@@ -3,10 +3,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from config import settings
 from routes.assets import router as assets_router
 from routes.chat import router as chat_router
+from routes.clips import router as clips_router
 from routes.conversations import router as conversations_router
 from routes.memories import router as memories_router
 from routes.personas import router as personas_router
@@ -28,6 +30,17 @@ async def lifespan(app):
         logger.info("LangGraph thumbnail graph initialized with PostgresSaver")
     else:
         logger.warning("DATABASE_URL not set — thumbnail graph will use fallback")
+
+    # Clip job recovery — mark orphaned in-flight jobs as failed after restart
+    try:
+        from services.clips.job_runner import recover_orphans
+
+        n = await recover_orphans()
+        if n:
+            logger.info("Recovered %d orphaned clip jobs (marked failed)", n)
+    except Exception:
+        logger.exception("Clip orphan recovery failed (non-fatal)")
+
     yield
 
 
@@ -41,11 +54,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
 app.include_router(conversations_router)
 app.include_router(assets_router)
 app.include_router(chat_router)
 app.include_router(personas_router)
 app.include_router(memories_router)
+app.include_router(clips_router)
 
 
 @app.get("/api/health")

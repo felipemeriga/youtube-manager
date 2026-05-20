@@ -32,8 +32,8 @@ export default function ThinkingBar({ stage }: { stage: string }) {
           gap: 1.5,
           p: 1.5,
           borderRadius: 2.5,
-          backgroundColor: "rgba(124, 58, 237, 0.08)",
-          border: "1px solid rgba(124, 58, 237, 0.15)",
+          backgroundColor: "rgba(91, 141, 239, 0.08)",
+          border: "1px solid rgba(91, 141, 239, 0.15)",
           backdropFilter: "blur(10px)",
         }}
       >
@@ -42,7 +42,7 @@ export default function ThinkingBar({ stage }: { stage: string }) {
             width: 8,
             height: 8,
             borderRadius: "50%",
-            backgroundColor: "#7c3aed",
+            backgroundColor: "#5b8def",
             "@keyframes pulse": {
               "0%, 100%": { opacity: 1 },
               "50%": { opacity: 0.4 },
@@ -52,7 +52,7 @@ export default function ThinkingBar({ stage }: { stage: string }) {
         />
         <Typography
           variant="caption"
-          sx={{ color: "#a78bfa", fontWeight: 500, letterSpacing: "0.02em" }}
+          sx={{ color: "#93b6f0", fontWeight: 500, letterSpacing: "0.02em" }}
         >
           {STAGE_LABELS[stage] || stage}
         </Typography>

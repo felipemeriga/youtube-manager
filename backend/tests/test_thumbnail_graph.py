@@ -109,7 +109,7 @@ async def test_graph_starts_and_interrupts_at_background(mock_supabase):
                 return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ):
@@ -153,7 +153,7 @@ async def test_graph_approve_background_shows_photos(mock_supabase):
                 return_value=[],
             ):
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ):

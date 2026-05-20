@@ -1,7 +1,57 @@
+import io
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+from PIL import Image
 
 from services.thumbnail_state import ThumbnailState
+
+
+def test_make_preview_output_is_byte_identical_to_sync_call():
+    """The async-dispatched _make_preview must produce the same bytes as a direct call.
+
+    Guard against any accidental change to PIL params (resampling, quality, format)
+    when wrapping in asyncio.to_thread. Per project memory, thumbnail output stability
+    is mandatory.
+    """
+    from services.thumbnail_nodes import _make_preview
+
+    img = Image.new("RGB", (1600, 900), (128, 64, 200))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    src_bytes = buf.getvalue()
+
+    # Direct sync call — establishes the reference output.
+    out1 = _make_preview(src_bytes)
+    out2 = _make_preview(src_bytes)
+    # PIL is deterministic for the same input + same params.
+    assert out1 == out2, "_make_preview must be deterministic"
+    assert isinstance(out1, bytes) and len(out1) > 0
+
+
+@pytest.mark.asyncio
+async def test_upload_image_with_preview_runs_pil_in_thread():
+    """_upload_image_with_preview must dispatch _make_preview via asyncio.to_thread."""
+    from services.thumbnail_nodes import _upload_image_with_preview
+
+    sb = MagicMock()
+    sb.storage.from_.return_value.upload = AsyncMock()
+
+    with (
+        patch("services.thumbnail_nodes._get_supabase", new=AsyncMock(return_value=sb)),
+        patch(
+            "services.thumbnail_nodes._make_preview", return_value=b"preview-bytes"
+        ) as preview,
+        patch(
+            "asyncio.to_thread", new=AsyncMock(return_value=b"preview-bytes")
+        ) as to_thread,
+    ):
+        await _upload_image_with_preview("user-1", "thumb", b"original-bytes")
+
+    assert to_thread.called, "PIL preview must run via asyncio.to_thread"
+    # First positional arg of to_thread should be the _make_preview function.
+    args, _ = to_thread.call_args
+    assert args[0] is preview
 
 
 def make_base_state(**overrides) -> ThumbnailState:
@@ -53,7 +103,7 @@ async def test_generate_background_returns_url():
                 sb.storage.from_.return_value.list = AsyncMock(return_value=[])
                 sb.storage.from_.return_value.upload = AsyncMock()
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ):
@@ -114,7 +164,7 @@ async def test_composite_node_returns_url():
         sb.storage.from_.return_value.list = AsyncMock(return_value=[])
         sb.storage.from_.return_value.upload = AsyncMock()
         with patch(
-            "services.thumbnail_nodes.composite_with_effects",
+            "services.nano_banana.composite_with_effects",
             new_callable=AsyncMock,
             return_value=fake_image,
         ):
@@ -146,7 +196,7 @@ async def test_add_text_node_returns_url():
         sb.storage.from_.return_value.list = AsyncMock(return_value=[])
         sb.storage.from_.return_value.upload = AsyncMock()
         with patch(
-            "services.thumbnail_nodes.add_text_with_style",
+            "services.nano_banana.add_text_with_style",
             new_callable=AsyncMock,
             return_value=fake_image,
         ):
@@ -157,6 +207,38 @@ async def test_add_text_node_returns_url():
                 result = await add_text_node(state)
 
     assert result["final_urls"]["youtube"]["url"].startswith("user-1/thumb_")
+
+
+@pytest.mark.asyncio
+async def test_add_text_node_falls_back_to_composite_on_failure():
+    """When the image provider fails on text-add, the node returns the
+    composite as final and a clarify_question, so the graph advances past
+    the text_prompt interrupt instead of leaving the user stuck."""
+    from services.thumbnail_nodes import add_text_node
+
+    composite_urls = {
+        "youtube": {"url": "user-1/comp_abc.png", "preview_url": "user-1/p_abc.jpg"}
+    }
+    state = make_base_state(composite_urls=composite_urls, thumb_text="Guerra do Ira")
+
+    with patch(
+        "services.thumbnail_nodes._get_supabase", new_callable=AsyncMock
+    ) as mock_sb:
+        sb = MagicMock()
+        mock_sb.return_value = sb
+        sb.storage.from_.return_value.download = AsyncMock(return_value=b"comp-bytes")
+        sb.storage.from_.return_value.list = AsyncMock(return_value=[])
+        sb.storage.from_.return_value.upload = AsyncMock()
+        with patch(
+            "services.nano_banana.add_text_with_style",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("OpenAI gpt-image-2 failed: 400 bad size"),
+        ):
+            result = await add_text_node(state)
+
+    assert result["final_urls"] == composite_urls
+    assert "Falha ao adicionar texto" in result["clarify_question"]
+    assert "Tente novamente" in result["clarify_question"]
 
 
 @pytest.mark.asyncio
@@ -184,7 +266,7 @@ async def test_generate_background_uses_4k_quality():
                 sb.storage.from_.return_value.list = AsyncMock(return_value=[])
                 sb.storage.from_.return_value.upload = AsyncMock()
                 with patch(
-                    "services.thumbnail_nodes.generate_background",
+                    "services.nano_banana.generate_background",
                     new_callable=AsyncMock,
                     return_value=fake_image,
                 ) as mock_gen:

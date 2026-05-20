@@ -120,7 +120,7 @@ export default function ScriptTemplateBuilder({ sections, onChange }: Props) {
                 onChange={() => toggleEnabled(index)}
                 sx={{
                   color: "rgba(255,255,255,0.3)",
-                  "&.Mui-checked": { color: "#7c3aed" },
+                  "&.Mui-checked": { color: "#5b8def" },
                   mt: -0.5,
                 }}
               />
@@ -216,7 +216,7 @@ export default function ScriptTemplateBuilder({ sections, onChange }: Props) {
           sx={{
             alignSelf: "flex-start",
             color: "rgba(255,255,255,0.5)",
-            "&:hover": { color: "#7c3aed" },
+            "&:hover": { color: "#5b8def" },
           }}
         >
           Adicionar Seção

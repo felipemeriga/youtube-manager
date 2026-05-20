@@ -5,6 +5,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
+import { prefetchRoute } from "./PrefetchLink";
 
 export default function IconRail() {
   const navigate = useNavigate();
@@ -38,14 +39,16 @@ export default function IconRail() {
       <Tooltip title="Chat" placement="right">
         <IconButton
           onClick={() => navigate("/")}
+          onMouseEnter={() => prefetchRoute("/")}
+          onFocus={() => prefetchRoute("/")}
           sx={{
-            color: isActive("/") ? "#a78bfa" : "rgba(255,255,255,0.4)",
+            color: isActive("/") ? "#93b6f0" : "rgba(255,255,255,0.4)",
             backgroundColor: isActive("/")
-              ? "rgba(124,58,237,0.12)"
+              ? "rgba(91,141,239,0.12)"
               : "transparent",
             "&:hover": {
-              color: "#a78bfa",
-              backgroundColor: "rgba(124,58,237,0.08)",
+              color: "#93b6f0",
+              backgroundColor: "rgba(91,141,239,0.08)",
             },
             transition: "all 0.2s ease",
           }}
@@ -57,14 +60,16 @@ export default function IconRail() {
       <Tooltip title="Arquivos" placement="right">
         <IconButton
           onClick={() => navigate("/assets")}
+          onMouseEnter={() => prefetchRoute("/assets")}
+          onFocus={() => prefetchRoute("/assets")}
           sx={{
-            color: isActive("/assets") ? "#a78bfa" : "rgba(255,255,255,0.4)",
+            color: isActive("/assets") ? "#93b6f0" : "rgba(255,255,255,0.4)",
             backgroundColor: isActive("/assets")
-              ? "rgba(124,58,237,0.12)"
+              ? "rgba(91,141,239,0.12)"
               : "transparent",
             "&:hover": {
-              color: "#a78bfa",
-              backgroundColor: "rgba(124,58,237,0.08)",
+              color: "#93b6f0",
+              backgroundColor: "rgba(91,141,239,0.08)",
             },
             transition: "all 0.2s ease",
           }}
@@ -76,14 +81,16 @@ export default function IconRail() {
       <Tooltip title="Configurações" placement="right">
         <IconButton
           onClick={() => navigate("/settings")}
+          onMouseEnter={() => prefetchRoute("/settings")}
+          onFocus={() => prefetchRoute("/settings")}
           sx={{
-            color: isActive("/settings") ? "#a78bfa" : "rgba(255,255,255,0.4)",
+            color: isActive("/settings") ? "#93b6f0" : "rgba(255,255,255,0.4)",
             backgroundColor: isActive("/settings")
-              ? "rgba(124,58,237,0.12)"
+              ? "rgba(91,141,239,0.12)"
               : "transparent",
             "&:hover": {
-              color: "#a78bfa",
-              backgroundColor: "rgba(124,58,237,0.08)",
+              color: "#93b6f0",
+              backgroundColor: "rgba(91,141,239,0.08)",
             },
             transition: "all 0.2s ease",
           }}
@@ -113,9 +120,9 @@ export default function IconRail() {
           height: 30,
           fontSize: 13,
           fontWeight: 600,
-          backgroundColor: "rgba(124,58,237,0.2)",
-          color: "#a78bfa",
-          border: "1px solid rgba(124,58,237,0.3)",
+          backgroundColor: "rgba(91,141,239,0.2)",
+          color: "#93b6f0",
+          border: "1px solid rgba(91,141,239,0.3)",
         }}
       >
         {initial}

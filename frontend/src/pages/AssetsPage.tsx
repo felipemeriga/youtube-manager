@@ -35,6 +35,7 @@ import {
   fetchAssetText,
   reindexPhotos,
 } from "../lib/api";
+import { usePageAbort } from "../hooks/usePageAbort";
 
 const BUCKETS = [
   { key: "reference-thumbs", label: "Thumbnails de Referência", accept: "image/*" },
@@ -97,10 +98,10 @@ function SelectionToolbar({
         px: 3,
         backgroundColor: "rgba(15,15,25,0.85)",
         backdropFilter: "blur(12px)",
-        borderTop: "1px solid rgba(124,58,237,0.3)",
+        borderTop: "1px solid rgba(91,141,239,0.3)",
       }}
     >
-      <Typography variant="body2" sx={{ color: "#a78bfa", fontWeight: 600, mr: 1 }}>
+      <Typography variant="body2" sx={{ color: "#93b6f0", fontWeight: 600, mr: 1 }}>
         {count} selecionado{count > 1 ? "s" : ""}
       </Typography>
       <Button
@@ -109,12 +110,12 @@ function SelectionToolbar({
         startIcon={<DownloadIcon />}
         onClick={onDownload}
         sx={{
-          borderColor: "rgba(124,58,237,0.4)",
-          color: "#a78bfa",
+          borderColor: "rgba(91,141,239,0.4)",
+          color: "#93b6f0",
           textTransform: "none",
           "&:hover": {
-            borderColor: "#7c3aed",
-            backgroundColor: "rgba(124,58,237,0.1)",
+            borderColor: "#5b8def",
+            backgroundColor: "rgba(91,141,239,0.1)",
           },
         }}
       >
@@ -191,7 +192,7 @@ function BatchProgressDialog({
         width: 320,
         backgroundColor: "rgba(20,20,30,0.95)",
         backdropFilter: "blur(16px)",
-        border: "1px solid rgba(124,58,237,0.3)",
+        border: "1px solid rgba(91,141,239,0.3)",
         borderRadius: 2,
         overflow: "hidden",
         boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
@@ -211,7 +212,7 @@ function BatchProgressDialog({
         }}
       >
         <Box>
-          <Typography variant="body2" sx={{ color: "#a78bfa", fontWeight: 600 }}>
+          <Typography variant="body2" sx={{ color: "#93b6f0", fontWeight: 600 }}>
             {label}
           </Typography>
           <Typography variant="caption" color="text.secondary">
@@ -237,9 +238,9 @@ function BatchProgressDialog({
         value={pct}
         sx={{
           height: 2,
-          backgroundColor: "rgba(124,58,237,0.1)",
+          backgroundColor: "rgba(91,141,239,0.1)",
           "& .MuiLinearProgress-bar": {
-            backgroundColor: progress.done ? "#10b981" : "#7c3aed",
+            backgroundColor: progress.done ? "#10b981" : "#5b8def",
           },
         }}
       />
@@ -304,19 +305,44 @@ export default function AssetsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const autoDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { getSignal, isAbort } = usePageAbort();
 
   const currentBucket = BUCKETS[activeTab];
 
+  // Refresh helper used after mutations (upload/delete). Uses the page-level
+  // signal so navigation aborts everything.
   const loadFiles = useCallback(async () => {
     setLoading(true);
-    const data = await listAssets(currentBucket.key);
-    setFiles(data as unknown as AssetFile[]);
-    setLoading(false);
-  }, [currentBucket.key]);
+    const signal = getSignal();
+    try {
+      const data = await listAssets(currentBucket.key, signal);
+      if (!signal.aborted) setFiles(data as unknown as AssetFile[]);
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  }, [currentBucket.key, getSignal, isAbort]);
 
+  // Initial fetch + refetch on bucket change. Uses a per-effect AbortController
+  // so a fast tab switch (A → B) cancels A's in-flight request, preventing the
+  // race where A's late response would overwrite B's already-displayed data.
   useEffect(() => {
-    loadFiles();
-  }, [loadFiles]);
+    const ctrl = new AbortController();
+    setLoading(true);
+    listAssets(currentBucket.key, ctrl.signal)
+      .then((data) => {
+        if (!ctrl.signal.aborted) setFiles(data as unknown as AssetFile[]);
+      })
+      .catch((err) => {
+        if ((err as { name?: string })?.name !== "AbortError") throw err;
+      })
+      .finally(() => {
+        if (!ctrl.signal.aborted) setLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [currentBucket.key]);
 
   // Clear selection when switching tabs
   useEffect(() => {
@@ -358,39 +384,49 @@ export default function AssetsPage() {
     const items: BatchItem[] = names.map((n) => ({ name: n, status: "pending" as const }));
     setBatchProgress({ type: "delete", items, collapsed: false, done: false });
 
-    for (let i = 0; i < names.length; i++) {
-      try {
-        await deleteAsset(currentBucket.key, names[i]);
-        setBatchProgress((prev) =>
-          prev
-            ? {
-                ...prev,
-                items: prev.items.map((item, idx) =>
-                  idx === i ? { ...item, status: "done" } : item
-                ),
-              }
-            : prev
-        );
-      } catch {
-        setBatchProgress((prev) =>
-          prev
-            ? {
-                ...prev,
-                items: prev.items.map((item, idx) =>
-                  idx === i ? { ...item, status: "error" } : item
-                ),
-              }
-            : prev
-        );
-      }
-    }
+    const signal = getSignal();
+    // Dispatch all deletes in parallel; each updates its own progress slot on
+    // completion. Previously this looped with `await`, turning N deletes into
+    // N sequential round trips.
+    await Promise.all(
+      names.map(async (name, i) => {
+        if (signal.aborted) return;
+        try {
+          await deleteAsset(currentBucket.key, name, signal);
+          setBatchProgress((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  items: prev.items.map((item, idx) =>
+                    idx === i ? { ...item, status: "done" } : item
+                  ),
+                }
+              : prev
+          );
+        } catch (e) {
+          if (isAbort(e)) return;
+          setBatchProgress((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  items: prev.items.map((item, idx) =>
+                    idx === i ? { ...item, status: "error" } : item
+                  ),
+                }
+              : prev
+          );
+        }
+      })
+    );
+
+    if (signal.aborted) return;
 
     setBatchProgress((prev) => (prev ? { ...prev, done: true } : prev));
     setSelected(new Set());
     loadFiles();
 
     autoDismissRef.current = setTimeout(() => setBatchProgress(null), 5000);
-  }, [selected, currentBucket.key, loadFiles]);
+  }, [selected, currentBucket.key, loadFiles, getSignal, isAbort]);
 
   const handleBatchDownload = useCallback(async () => {
     const names = Array.from(selected);
@@ -459,7 +495,9 @@ export default function AssetsPage() {
     let succeeded = 0;
     let failed = 0;
 
+    const signal = getSignal();
     for (let i = 0; i < fileList.length; i++) {
+      if (signal.aborted) return;
       setFileStatuses((prev) =>
         prev.map((item, idx) =>
           idx === i ? { ...item, status: "uploading" } : item
@@ -467,14 +505,15 @@ export default function AssetsPage() {
       );
 
       try {
-        await uploadAsset(currentBucket.key, fileList[i]);
+        await uploadAsset(currentBucket.key, fileList[i], signal);
         succeeded++;
         setFileStatuses((prev) =>
           prev.map((item, idx) =>
             idx === i ? { ...item, status: "done" } : item
           )
         );
-      } catch {
+      } catch (e) {
+        if (isAbort(e)) return;
         failed++;
         setFileStatuses((prev) =>
           prev.map((item, idx) =>
@@ -504,7 +543,12 @@ export default function AssetsPage() {
   };
 
   const handleDelete = async (name: string) => {
-    await deleteAsset(currentBucket.key, name);
+    try {
+      await deleteAsset(currentBucket.key, name, getSignal());
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
+    }
     loadFiles();
     setSnackbar({
       open: true,
@@ -521,27 +565,32 @@ export default function AssetsPage() {
 
   const handleReindex = async () => {
     setReindexing(true);
+    const signal = getSignal();
     try {
-      const result = await reindexPhotos();
+      const result = await reindexPhotos(signal);
       setSnackbar({
         open: true,
         message: `Indexou ${result.indexed} novas fotos (${result.skipped} já indexadas, ${result.total} total)`,
         severity: "success",
       });
-    } catch {
+    } catch (err) {
+      if (isAbort(err)) return;
+      const detail = err instanceof Error ? err.message : "";
       setSnackbar({
         open: true,
-        message: "Falha ao indexar fotos",
+        message: detail
+          ? `Falha ao indexar fotos: ${detail}`
+          : "Falha ao indexar fotos",
         severity: "error",
       });
     } finally {
-      setReindexing(false);
+      if (!signal.aborted) setReindexing(false);
     }
   };
 
   const handleViewScript = async (name: string) => {
     try {
-      const content = await fetchAssetText(currentBucket.key, name);
+      const content = await fetchAssetText(currentBucket.key, name, getSignal());
       setViewerTitle(
         name
           .replace(/\.md$/, "")
@@ -551,10 +600,14 @@ export default function AssetsPage() {
       );
       setViewerContent(content);
       setViewerOpen(true);
-    } catch {
+    } catch (err) {
+      if (isAbort(err)) return;
+      const detail = err instanceof Error ? err.message : "";
       setSnackbar({
         open: true,
-        message: "Falha ao carregar roteiro",
+        message: detail
+          ? `Falha ao carregar roteiro: ${detail}`
+          : "Falha ao carregar roteiro",
         severity: "error",
       });
     }
@@ -572,15 +625,7 @@ export default function AssetsPage() {
         pb: selected.size > 0 ? 10 : 3,
       }}
     >
-      <Typography
-        variant="h5"
-        sx={{
-          mb: 2,
-          background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-        }}
-      >
+      <Typography variant="h5" sx={{ mb: 2, color: "text.primary" }}>
         Arquivos
       </Typography>
 
@@ -590,8 +635,8 @@ export default function AssetsPage() {
         sx={{
           mb: 3,
           "& .MuiTab-root": { textTransform: "none" },
-          "& .Mui-selected": { color: "#7c3aed" },
-          "& .MuiTabs-indicator": { backgroundColor: "#7c3aed" },
+          "& .Mui-selected": { color: "#5b8def" },
+          "& .MuiTabs-indicator": { backgroundColor: "#5b8def" },
         }}
       >
         {BUCKETS.map((b) => (
@@ -615,12 +660,12 @@ export default function AssetsPage() {
                 disabled={reindexing}
                 size="small"
                 sx={{
-                  borderColor: "rgba(124,58,237,0.3)",
-                  color: "#a78bfa",
+                  borderColor: "rgba(91,141,239,0.3)",
+                  color: "#93b6f0",
                   whiteSpace: "nowrap",
                   "&:hover": {
-                    borderColor: "#7c3aed",
-                    backgroundColor: "rgba(124,58,237,0.08)",
+                    borderColor: "#5b8def",
+                    backgroundColor: "rgba(91,141,239,0.08)",
                   },
                 }}
               >

@@ -2,10 +2,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
-from supabase import create_client
-
 from auth import get_current_user
-from config import settings
+from services.supabase_pool import get_async_client
 
 DEFAULT_SCRIPT_SECTIONS = [
     {
@@ -57,14 +55,10 @@ class PersonaRequest(BaseModel):
 router = APIRouter()
 
 
-def get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_key)
-
-
 @router.get("/api/personas")
 async def get_persona(user_id: str = Depends(get_current_user)):
-    sb = get_supabase()
-    result = (
+    sb = await get_async_client()
+    result = await (
         sb.table("channel_personas")
         .select("*")
         .eq("user_id", user_id)
@@ -84,7 +78,7 @@ async def upsert_persona(
     request: PersonaRequest,
     user_id: str = Depends(get_current_user),
 ):
-    sb = get_supabase()
+    sb = await get_async_client()
     payload = {
         "user_id": user_id,
         "channel_name": request.channel_name,
@@ -93,7 +87,7 @@ async def upsert_persona(
     }
     if request.script_template is not None:
         payload["script_template"] = request.script_template
-    result = (
+    result = await (
         sb.table("channel_personas").upsert(payload, on_conflict="user_id").execute()
     )
     return result.data[0]
@@ -101,6 +95,6 @@ async def upsert_persona(
 
 @router.delete("/api/personas", status_code=204)
 async def delete_persona(user_id: str = Depends(get_current_user)):
-    sb = get_supabase()
-    sb.table("channel_personas").delete().eq("user_id", user_id).execute()
+    sb = await get_async_client()
+    await sb.table("channel_personas").delete().eq("user_id", user_id).execute()
     return Response(status_code=204)

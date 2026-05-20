@@ -14,16 +14,6 @@ QUALITY_TIER = {"model": "gemini-3-pro-image-preview", "image_size": "4K"}
 # Platform configs: aspect_ratio for Gemini, label for UI
 PLATFORM_CONFIGS = {
     "youtube": {"aspect_ratio": "16:9", "label": "YouTube", "image_size": "4K"},
-    "instagram_post": {
-        "aspect_ratio": "1:1",
-        "label": "Instagram Post",
-        "image_size": "4K",
-    },
-    "instagram_story": {
-        "aspect_ratio": "9:16",
-        "label": "Instagram Story",
-        "image_size": "4K",
-    },
 }
 
 DEFAULT_PLATFORMS = ["youtube"]
@@ -39,7 +29,7 @@ class ThumbnailState(TypedDict):
     topic_research: str
 
     # Platforms to generate for
-    platforms: list[str]  # e.g. ["youtube", "instagram_post", "instagram_story"]
+    platforms: list[str]  # e.g. ["youtube"]
 
     # Artifacts per platform: {"youtube": {"url": "path", "preview_url": "path"}, ...}
     background_urls: dict[str, dict[str, str]]
@@ -63,3 +53,8 @@ class ThumbnailState(TypedDict):
     # Composite mode: "natural" (preserve person as-is) or "transform" (allow modifications)
     composite_mode: str  # "natural" | "transform"
     transform_prompt: str | None  # e.g. "transform me into an astronaut"
+
+    # Image generation provider — pinned per conversation. "gemini" (default)
+    # uses nano_banana; "openai" uses gpt-image-2 via openai_image. Locked
+    # after creation so all artifacts in a conversation share a style.
+    image_provider: str  # "gemini" | "openai"

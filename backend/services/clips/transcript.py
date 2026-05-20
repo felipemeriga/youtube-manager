@@ -1,0 +1,360 @@
+import difflib
+import logging
+import re
+from pathlib import Path
+
+from config import settings
+from services.youtube_saas import fetch_captions_json3, fetch_video_info
+
+from .models import TranscriptCue
+
+logger = logging.getLogger(__name__)
+
+# Maximum words shown per subtitle frame.  Longer cues are split into
+# proportionally-timed sub-cues so viewers can read comfortably.
+MAX_WORDS_PER_CUE = 8
+# Once a chunk has at least this many words, a `.`, `?`, or `!` is enough to
+# end it — landing on a sentence boundary even if a few words short.
+_SOFT_BREAK_AFTER = max(4, MAX_WORDS_PER_CUE - 4)
+
+VTT_TIMESTAMP_RE = re.compile(
+    r"(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})"
+)
+
+
+def _ts_to_seconds(h: str, m: str, s: str, ms: str) -> float:
+    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
+
+
+def parse_vtt(content: str) -> list[TranscriptCue]:
+    cues: list[TranscriptCue] = []
+    blocks = re.split(r"\n\n+", content.strip())
+    for block in blocks:
+        lines = [ln for ln in block.splitlines() if ln and ln != "WEBVTT"]
+        if not lines:
+            continue
+        ts_line = next((ln for ln in lines if "-->" in ln), None)
+        if not ts_line:
+            continue
+        m = VTT_TIMESTAMP_RE.search(ts_line)
+        if not m:
+            continue
+        start = _ts_to_seconds(*m.groups()[:4])
+        end = _ts_to_seconds(*m.groups()[4:])
+        text = " ".join(
+            ln for ln in lines if ln is not ts_line and "-->" not in ln
+        ).strip()
+        if text:
+            cues.append(TranscriptCue(start=start, end=end, text=text))
+    return cues
+
+
+def _smart_chunk(words: list[str]) -> list[list[str]]:
+    """Group a flat word list into subtitle-sized chunks, preferring breaks
+    after sentence-ending punctuation (``.?!``) and falling back to clause
+    punctuation (``,;:``) once the chunk is close to the hard limit.
+
+    A chunk never exceeds ``MAX_WORDS_PER_CUE`` words; a sentence boundary
+    landing a few words short is allowed so the next subtitle can start on
+    a new sentence instead of mid-clause.
+    """
+    chunks: list[list[str]] = []
+    current: list[str] = []
+    for w in words:
+        current.append(w)
+        last = w[-1:] if w else ""
+        is_sentence_end = last in ".?!"
+        is_clause_end = last in ",;:"
+        # Strong preference: end the chunk after a full sentence once we
+        # have a readable minimum number of words.
+        if is_sentence_end and len(current) >= _SOFT_BREAK_AFTER:
+            chunks.append(current)
+            current = []
+            continue
+        # Mild preference: a comma is a fine break when we're already near
+        # the hard cap and another word would overflow.
+        if is_clause_end and len(current) >= MAX_WORDS_PER_CUE - 1:
+            chunks.append(current)
+            current = []
+            continue
+        # Hard cap.
+        if len(current) >= MAX_WORDS_PER_CUE:
+            chunks.append(current)
+            current = []
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _split_long_cues(cues: list[TranscriptCue]) -> list[TranscriptCue]:
+    """Split cues into subtitle-sized sub-cues, preferring breaks at
+    sentence/clause punctuation. Cues already short enough pass through.
+
+    Time is distributed proportionally across sub-cues so each chunk appears
+    on screen for a duration that matches its share of the original text.
+    """
+    out: list[TranscriptCue] = []
+    for cue in cues:
+        words = cue.text.split()
+        if len(words) <= MAX_WORDS_PER_CUE:
+            out.append(cue)
+            continue
+        chunks = _smart_chunk(words)
+        total_words = sum(len(c) for c in chunks)
+        duration = cue.end - cue.start
+        offset = cue.start
+        for chunk in chunks:
+            chunk_duration = duration * (len(chunk) / total_words)
+            out.append(
+                TranscriptCue(
+                    start=offset,
+                    end=offset + chunk_duration,
+                    text=" ".join(chunk),
+                )
+            )
+            offset += chunk_duration
+    return out
+
+
+_PUNCTUATE_SYSTEM = (
+    "You are a punctuation corrector for video subtitles. "
+    "Detect the language of the input text and add punctuation that is "
+    "natural for that language — commas, periods, question marks, "
+    "exclamation marks, semicolons, colons, and quotation marks where "
+    "appropriate. Fix capitalization at sentence starts and on proper nouns. "
+    "Do NOT change, add, remove, or reorder any words — only insert "
+    "punctuation and fix letter case. Preserve hyphens inside hyphenated "
+    "words (e.g. 'well-known'). Return ONLY the corrected text, nothing else."
+)
+
+_PUNCTUATE_MODEL = "claude-haiku-4-5-20251001"
+
+
+async def add_punctuation(cues: list[TranscriptCue]) -> list[TranscriptCue]:
+    """Run cue texts through a fast LLM to add missing punctuation.
+
+    Joins all cue texts, sends to Haiku, then maps the punctuated words
+    back onto the original cues preserving their timestamps.  Falls back
+    to the original cues if the LLM changes the word count.
+    """
+    from services.llm import ask_llm
+
+    if not cues:
+        return cues
+
+    # Build flat text with word count per cue for redistribution
+    word_counts = [len(c.text.split()) for c in cues]
+    flat_text = " ".join(c.text for c in cues)
+
+    try:
+        punctuated = await ask_llm(
+            system=_PUNCTUATE_SYSTEM,
+            messages=[{"role": "user", "content": flat_text}],
+            model=_PUNCTUATE_MODEL,
+        )
+    except Exception:
+        logger.warning("Punctuation LLM call failed — using raw transcript")
+        return cues
+
+    # Strip any wrapping quotes or whitespace the model might add
+    punctuated = punctuated.strip().strip('"').strip("'").strip()
+    punct_words = punctuated.split()
+
+    # The LLM is told not to add/remove words, but small drifts happen in
+    # practice (contraction splits, filler insertions). Reject only if the
+    # drift is large enough that alignment would obviously misalign.
+    total_original = sum(word_counts)
+    drift = abs(len(punct_words) - total_original)
+    max_drift = max(20, total_original // 20)  # 5% or 20 words, whichever is larger
+    if drift > max_drift:
+        logger.warning(
+            "Punctuation word count mismatch beyond tolerance: "
+            "original=%d, punctuated=%d, drift=%d, max=%d — skipping",
+            total_original,
+            len(punct_words),
+            drift,
+            max_drift,
+        )
+        return cues
+    if drift:
+        logger.info(
+            "Punctuation drift accepted: original=%d, punctuated=%d (drift=%d)",
+            total_original,
+            len(punct_words),
+            drift,
+        )
+
+    # Diff-align punctuated words against the flat original word sequence,
+    # so insertions/substitutions land in the cue where they actually occur
+    # rather than shifting the whole tail of the transcript. Without this,
+    # a single inserted word causes captions to drift up to 1-2 seconds out
+    # of sync by the end of a long transcript.
+    orig_flat: list[tuple[int, str]] = []
+    for i, c in enumerate(cues):
+        for w in c.text.split():
+            orig_flat.append((i, w))
+
+    def _norm(w: str) -> str:
+        return "".join(ch.lower() for ch in w if ch.isalnum())
+
+    orig_norm = [_norm(w) for _, w in orig_flat]
+    punct_norm = [_norm(w) for w in punct_words]
+    sm = difflib.SequenceMatcher(a=orig_norm, b=punct_norm, autojunk=False)
+
+    cue_words: list[list[str]] = [[] for _ in cues]
+    for op, i1, i2, j1, j2 in sm.get_opcodes():
+        if op == "equal":
+            for k in range(j2 - j1):
+                cue_idx = orig_flat[i1 + k][0]
+                cue_words[cue_idx].append(punct_words[j1 + k])
+        elif op == "replace":
+            # Spread the replacement words across the original range
+            # proportionally so they stay near their context.
+            span_orig = max(1, i2 - i1)
+            for k in range(j1, j2):
+                rel = (k - j1) / max(1, j2 - j1)
+                orig_pos = min(i1 + int(rel * span_orig), i2 - 1)
+                cue_idx = orig_flat[orig_pos][0]
+                cue_words[cue_idx].append(punct_words[k])
+        elif op == "insert":
+            # Attach an insertion to the cue of the word that FOLLOWS it so
+            # filler words like "Oh," before a new sentence visually arrive
+            # with the cue they precede, not the previous one. Falls back to
+            # the last cue when the insertion is at end-of-transcript.
+            if i1 < len(orig_flat):
+                cue_idx = orig_flat[i1][0]
+            elif orig_flat:
+                cue_idx = orig_flat[-1][0]
+            else:
+                cue_idx = 0
+            for k in range(j1, j2):
+                cue_words[cue_idx].append(punct_words[k])
+        # op == "delete": original words removed from punctuated output —
+        # nothing to assign.
+
+    return [
+        TranscriptCue(start=c.start, end=c.end, text=" ".join(cue_words[i]))
+        for i, c in enumerate(cues)
+    ]
+
+
+def is_broken_captions(cues: list) -> bool:
+    if len(cues) < 5:
+        return True
+    music_tag_re = re.compile(r"\[(music|applause|laughter|silence)\]", re.IGNORECASE)
+    music_count = sum(1 for c in cues if music_tag_re.fullmatch(c.text.strip()))
+    if music_count / len(cues) > 0.5:
+        return True
+    return False
+
+
+def _parse_youtube_json3(payload: dict) -> list[TranscriptCue]:
+    """Parse YouTube's JSON3 timedtext payload into cues.
+
+    Each event has a start time and a list of word segments; we concatenate
+    the segs into a single cue text and use the event's duration for the
+    cue's end time. Events with no segs (style/positioning headers) are
+    skipped. Cues with empty text are skipped.
+    """
+    cues: list[TranscriptCue] = []
+    for event in payload.get("events") or []:
+        segs = event.get("segs")
+        if not segs:
+            continue
+        text = "".join(s.get("utf8", "") for s in segs).strip()
+        if not text:
+            continue
+        start = (event.get("tStartMs") or 0) / 1000.0
+        dur = (event.get("dDurationMs") or 0) / 1000.0
+        cues.append(TranscriptCue(start=start, end=start + dur, text=text))
+    return cues
+
+
+async def _fetch_yt_captions(url: str) -> list[TranscriptCue] | None:
+    """Fetch YouTube auto-captions for ``url`` via the SaaS, parsed as cues.
+
+    Returns None when the video has no auto-captions available or the
+    fetch fails — callers should fall back to Whisper.
+    """
+    try:
+        info = await fetch_video_info(url)
+        payload = await fetch_captions_json3(info)
+    except Exception as e:
+        logger.warning("youtube_saas captions fetch failed: %s", e)
+        return None
+    if payload is None:
+        return None
+    return _parse_youtube_json3(payload)
+
+
+async def _whisper_transcribe(audio_path: Path) -> list[TranscriptCue]:
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    with audio_path.open("rb") as f:
+        result = await client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+            response_format="verbose_json",
+            timestamp_granularities=["word"],
+        )
+    cues: list[TranscriptCue] = []
+    # Group words into ~2.5s cues so each subtitle frame stays short and
+    # readable.  Also break on sentence-ending punctuation.
+    current_words: list[str] = []
+    current_start: float | None = None
+    last_end: float = 0.0
+    for w in getattr(result, "words", []) or []:
+        if current_start is None:
+            current_start = w.start
+        current_words.append(w.word)
+        last_end = w.end
+        if last_end - current_start >= 2.5 or w.word.endswith((".", "?", "!")):
+            cues.append(
+                TranscriptCue(
+                    start=current_start,
+                    end=last_end,
+                    text=" ".join(current_words).strip(),
+                )
+            )
+            current_words = []
+            current_start = None
+    if current_words and current_start is not None:
+        cues.append(
+            TranscriptCue(
+                start=current_start,
+                end=last_end,
+                text=" ".join(current_words).strip(),
+            )
+        )
+    return cues
+
+
+async def fetch_transcript(
+    url: str,
+    audio_path: Path,
+    tmp_dir: Path,
+) -> list[TranscriptCue]:
+    """Try YouTube auto-captions first; fall back to Whisper if missing/broken.
+
+    Retries Whisper once on failure before raising. ``tmp_dir`` is kept in
+    the signature so callers don't need to change — the SaaS path no longer
+    needs a scratch dir, but the Whisper fallback may add one in the future.
+    """
+    cues = await _fetch_yt_captions(url)
+    if cues is not None:
+        if not is_broken_captions(cues):
+            logger.info("Using YT captions: %d cues", len(cues))
+            return cues
+        logger.info("YT captions broken (%d cues) — falling back to Whisper", len(cues))
+    else:
+        logger.info("YT captions missing — falling back to Whisper")
+
+    last_err: Exception | None = None
+    for attempt in range(2):
+        try:
+            return await _whisper_transcribe(audio_path)
+        except Exception as e:
+            last_err = e
+            logger.warning("Whisper attempt %d failed: %s", attempt + 1, e)
+    raise RuntimeError(f"Transcription failed: {last_err}")

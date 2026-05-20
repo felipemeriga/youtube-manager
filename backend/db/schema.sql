@@ -128,6 +128,8 @@ CREATE TABLE photo_embeddings (
 );
 
 CREATE INDEX idx_photo_embeddings_user_id ON photo_embeddings(user_id);
+CREATE INDEX idx_photo_embeddings_embedding ON photo_embeddings
+    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
 -- RPC function for photo similarity search
 CREATE OR REPLACE FUNCTION match_photos(
@@ -166,6 +168,14 @@ CREATE TABLE thumbnail_memories (
 );
 
 CREATE INDEX idx_thumbnail_memories_user_id ON thumbnail_memories(user_id);
+CREATE INDEX idx_thumbnail_memories_embedding ON thumbnail_memories
+    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Sort indexes for ORDER BY performance
+CREATE INDEX idx_messages_created_at ON messages (created_at);
+CREATE INDEX idx_conversations_updated_at ON conversations (updated_at DESC);
+CREATE INDEX idx_user_memories_created_at ON user_memories (created_at DESC);
+CREATE INDEX idx_thumbnail_memories_created_at ON thumbnail_memories (created_at DESC);
 
 -- RPC function for thumbnail memory similarity search
 CREATE OR REPLACE FUNCTION match_thumbnail_memories(

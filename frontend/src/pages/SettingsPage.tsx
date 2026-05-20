@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Box,
   TextField,
@@ -23,6 +23,18 @@ import {
 } from "../lib/api";
 import type { Memory, ScriptSection } from "../lib/api";
 import ScriptTemplateBuilder from "../components/ScriptTemplateBuilder";
+import { usePageAbort } from "../hooks/usePageAbort";
+import { useCachedQuery, invalidate } from "../lib/cache";
+
+interface SettingsBundle {
+  persona: {
+    channel_name: string;
+    language: string;
+    persona_text: string;
+    script_template?: ScriptSection[];
+  } | null;
+  memories: Memory[];
+}
 
 export default function SettingsPage() {
   const [channelName, setChannelName] = useState("");
@@ -37,30 +49,52 @@ export default function SettingsPage() {
   }>({ open: false, message: "", severity: "success" });
   const [memories, setMemories] = useState<Memory[]>([]);
   const [scriptTemplate, setScriptTemplate] = useState<ScriptSection[]>([]);
+  const { getSignal, isAbort } = usePageAbort();
+
+  // SWR cache keyed once per session — navigating away and back is instant
+  // because the cached bundle is shown immediately while a background fetch
+  // refreshes it.
+  const fetchBundle = useCallback(
+    async (signal: AbortSignal): Promise<SettingsBundle> => {
+      const [persona, memories] = await Promise.all([
+        getPersona(signal).catch((e) => { if (isAbort(e)) throw e; return null; }),
+        listMemories(signal).catch((e) => { if (isAbort(e)) throw e; return []; }),
+      ]);
+      return { persona, memories };
+    },
+    [isAbort],
+  );
+
+  const { data: bundle, error: bundleError } = useCachedQuery<SettingsBundle>(
+    "settings:bundle",
+    fetchBundle,
+  );
+
+  // Project the cached bundle into the form-field state. This runs whenever
+  // the cache hook produces fresh data; it does NOT clobber user edits made
+  // after the initial load because state setters only fire when the bundle
+  // identity actually changes.
+  useEffect(() => {
+    if (!bundle) return;
+    if (bundle.persona) {
+      setChannelName(bundle.persona.channel_name);
+      setLanguage(bundle.persona.language);
+      setPersonaText(bundle.persona.persona_text);
+      setScriptTemplate(bundle.persona.script_template || []);
+    }
+    setMemories(bundle.memories);
+    setLoading(false);
+  }, [bundle]);
 
   useEffect(() => {
-    Promise.all([
-      getPersona().catch(() => null),
-      listMemories().catch(() => []),
-    ])
-      .then(([persona, mems]) => {
-        if (persona) {
-          setChannelName(persona.channel_name);
-          setLanguage(persona.language);
-          setPersonaText(persona.persona_text);
-          setScriptTemplate(persona.script_template || []);
-        }
-        setMemories(mems);
-      })
-      .catch(() => {
-        setSnackbar({
-          open: true,
-          message: "Falha ao carregar configurações",
-          severity: "error",
-        });
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    if (!bundleError) return;
+    setSnackbar({
+      open: true,
+      message: "Falha ao carregar configurações",
+      severity: "error",
+    });
+    setLoading(false);
+  }, [bundleError]);
 
   const handleSave = async () => {
     if (!channelName.trim() || !language.trim() || !personaText.trim()) {
@@ -73,34 +107,43 @@ export default function SettingsPage() {
     }
 
     setSaving(true);
+    const signal = getSignal();
     try {
-      await upsertPersona({
-        channel_name: channelName.trim(),
-        language: language.trim(),
-        persona_text: personaText.trim(),
-        script_template: scriptTemplate,
-      });
+      await upsertPersona(
+        {
+          channel_name: channelName.trim(),
+          language: language.trim(),
+          persona_text: personaText.trim(),
+          script_template: scriptTemplate,
+        },
+        signal
+      );
+      invalidate("settings:");
       setSnackbar({
         open: true,
         message: "Persona salva com sucesso",
         severity: "success",
       });
-    } catch {
+    } catch (e) {
+      if (isAbort(e)) return;
       setSnackbar({
         open: true,
         message: "Falha ao salvar persona",
         severity: "error",
       });
     } finally {
-      setSaving(false);
+      if (!signal.aborted) setSaving(false);
     }
   };
 
   const handleDeleteMemory = async (id: string) => {
+    const signal = getSignal();
     try {
-      await deleteMemory(id);
+      await deleteMemory(id, signal);
       setMemories((prev) => prev.filter((m) => m.id !== id));
-    } catch {
+      invalidate("settings:");
+    } catch (e) {
+      if (isAbort(e)) return;
       setSnackbar({
         open: true,
         message: "Falha ao excluir memória",

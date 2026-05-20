@@ -48,8 +48,8 @@ export default function ScriptTopicList({
             backgroundColor: "rgba(255,255,255,0.03)",
             border: "1px solid rgba(255,255,255,0.08)",
             "&:hover": {
-              border: "1px solid rgba(124,58,237,0.4)",
-              backgroundColor: "rgba(124,58,237,0.05)",
+              border: "1px solid rgba(91,141,239,0.4)",
+              backgroundColor: "rgba(91,141,239,0.05)",
             },
           }}
         >
@@ -58,7 +58,7 @@ export default function ScriptTopicList({
               <Box
                 sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}
               >
-                <TrendingUpIcon sx={{ fontSize: 16, color: "#7c3aed" }} />
+                <TrendingUpIcon sx={{ fontSize: 16, color: "#5b8def" }} />
                 <Typography
                   variant="subtitle2"
                   sx={{ color: "rgba(255,255,255,0.95)" }}
@@ -107,7 +107,7 @@ export default function ScriptTopicList({
                     alignItems: "center",
                     gap: 0.5,
                     fontSize: 11,
-                    color: "#7c3aed",
+                    color: "#5b8def",
                     mt: 0.5,
                     textDecoration: "none",
                     "&:hover": { textDecoration: "underline" },

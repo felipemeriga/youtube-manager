@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import {
   Box,
   TextField,
@@ -37,8 +37,6 @@ interface Message {
 
 const platformLabels: Record<string, string> = {
   youtube: "YouTube",
-  instagram_post: "Instagram Post",
-  instagram_story: "Instagram Story",
 };
 
 interface MessageBubbleProps {
@@ -77,7 +75,7 @@ const markdownStyles = {
     fontWeight: 600,
     mt: 1.5,
     mb: 0.5,
-    color: "#a78bfa",
+    color: "#93b6f0",
   },
   "& p": {
     m: 0,
@@ -105,14 +103,14 @@ const markdownStyles = {
     fontStyle: "italic",
   },
   "& code": {
-    backgroundColor: "rgba(124,58,237,0.15)",
-    border: "1px solid rgba(124,58,237,0.2)",
+    backgroundColor: "rgba(91,141,239,0.15)",
+    border: "1px solid rgba(91,141,239,0.2)",
     borderRadius: 0.5,
     px: 0.75,
     py: 0.25,
     fontSize: 13,
     fontFamily: "monospace",
-    color: "#c4b5fd",
+    color: "#93b6f0",
   },
   "& pre": {
     backgroundColor: "rgba(0,0,0,0.3)",
@@ -152,7 +150,7 @@ const markdownStyles = {
     },
   },
   "& blockquote": {
-    borderLeft: "3px solid #7c3aed",
+    borderLeft: "3px solid #5b8def",
     pl: 1.5,
     ml: 0,
     my: 1,
@@ -161,7 +159,7 @@ const markdownStyles = {
   },
 };
 
-export default function MessageBubble({
+function MessageBubble({
   message,
   onApprove,
   onReject,
@@ -197,7 +195,7 @@ export default function MessageBubble({
             width: 30,
             height: 30,
             borderRadius: "50%",
-            background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
+            background: "#5b8def",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -212,15 +210,15 @@ export default function MessageBubble({
 
       <Box
         sx={{
-          maxWidth: "70%",
+          maxWidth: { xs: "85%", sm: "70%" },
           p: 2,
           borderRadius: 2.5,
           backgroundColor: isUser
-            ? "rgba(124, 58, 237, 0.12)"
+            ? "rgba(91, 141, 239, 0.12)"
             : "rgba(23, 23, 32, 0.68)",
           backdropFilter: "blur(20px)",
           border: `1px solid ${
-            isUser ? "rgba(124,58,237,0.2)" : "rgba(255,255,255,0.06)"
+            isUser ? "rgba(91,141,239,0.2)" : "rgba(255,255,255,0.06)"
           }`,
           transition: "all 0.2s ease",
         }}
@@ -231,7 +229,7 @@ export default function MessageBubble({
               <Box key={platform} sx={{ flex: "1 1 0", minWidth: 150 }}>
                 <Typography
                   variant="caption"
-                  sx={{ color: "#a78bfa", mb: 0.5, display: "block" }}
+                  sx={{ color: "#93b6f0", mb: 0.5, display: "block" }}
                 >
                   {platformLabels[platform] || platform}
                 </Typography>
@@ -481,7 +479,7 @@ function AuthOutputImage({
           backgroundColor: "rgba(255,255,255,0.03)",
         }}
       >
-        <CircularProgress size={24} sx={{ color: "#7c3aed" }} />
+        <CircularProgress size={24} sx={{ color: "#5b8def" }} />
       </Box>
     );
   }
@@ -566,13 +564,13 @@ function TextPromptInput({ onSubmit }: { onSubmit: (text: string) => void }) {
               backgroundColor: "rgba(0,0,0,0.2)",
               borderRadius: 2,
               "& fieldset": {
-                borderColor: "rgba(124,58,237,0.3)",
+                borderColor: "rgba(91,141,239,0.3)",
               },
               "&:hover fieldset": {
-                borderColor: "rgba(124,58,237,0.5)",
+                borderColor: "rgba(91,141,239,0.5)",
               },
               "&.Mui-focused fieldset": {
-                borderColor: "#7c3aed",
+                borderColor: "#5b8def",
               },
             },
             "& .MuiInputBase-input::placeholder": {
@@ -585,12 +583,12 @@ function TextPromptInput({ onSubmit }: { onSubmit: (text: string) => void }) {
           onClick={handleSubmit}
           disabled={submitted || !text.trim()}
           sx={{
-            backgroundColor: "#7c3aed",
+            backgroundColor: "#5b8def",
             minWidth: 44,
             height: 40,
-            "&:hover": { backgroundColor: "#6d28d9" },
+            "&:hover": { backgroundColor: "#4a7ad8" },
             "&.Mui-disabled": {
-              backgroundColor: "rgba(124,58,237,0.3)",
+              backgroundColor: "rgba(91,141,239,0.3)",
             },
           }}
         >
@@ -600,3 +598,27 @@ function TextPromptInput({ onSubmit }: { onSubmit: (text: string) => void }) {
     </Box>
   );
 }
+
+// Bypass re-render when only the parent re-rendered (e.g. streaming token tick).
+// We compare just the fields that affect what's rendered. Callback identity is
+// ignored because the relevant interactive buttons live on the latest message,
+// and isLatest/isStreaming changes will force a re-render via this comparator.
+function arePropsEqual(prev: MessageBubbleProps, next: MessageBubbleProps) {
+  if (prev.isLatest !== next.isLatest) return false;
+  if (prev.isStreaming !== next.isStreaming) return false;
+  if (prev.conversationMode !== next.conversationMode) return false;
+  const a = prev.message;
+  const b = next.message;
+  if (a === b) return true;
+  if (a.id !== b.id) return false;
+  if (a.role !== b.role) return false;
+  if (a.type !== b.type) return false;
+  if (a.content !== b.content) return false;
+  if (a.image_url !== b.image_url) return false;
+  if (a.image_base64 !== b.image_base64) return false;
+  // images is a record; cheap reference check is enough for our usage
+  if (a.images !== b.images) return false;
+  return true;
+}
+
+export default memo(MessageBubble, arePropsEqual);

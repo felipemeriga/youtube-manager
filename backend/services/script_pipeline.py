@@ -6,9 +6,9 @@ import unicodedata
 from datetime import datetime, timezone
 from typing import AsyncGenerator
 
-from supabase._async.client import create_client as create_async_client
-
 from config import settings
+from services.conversation_title import derive_title
+from services.supabase_pool import get_async_client
 from routes.personas import DEFAULT_SCRIPT_SECTIONS
 from services.llm import ask_llm
 from services.memory_extractor import extract_memory
@@ -61,9 +61,7 @@ Guidelines:
 
 
 async def get_supabase():
-    return await create_async_client(
-        settings.supabase_url, settings.supabase_service_key
-    )
+    return await get_async_client()
 
 
 def sse_event(data: dict) -> str:
@@ -286,7 +284,14 @@ async def handle_script_chat_message(
     try:
         sb = await get_supabase()
 
-        persona = await _get_user_persona(sb, user_id)
+        # Run the three independent reads in parallel — they don't depend on
+        # each other, so a single round-trip beats three sequential ones.
+        persona, memories, existing_messages = await asyncio.gather(
+            _get_user_persona(sb, user_id),
+            _get_user_memories(sb, user_id),
+            _get_messages(sb, conversation_id),
+        )
+
         if not persona:
             yield sse_event(
                 {
@@ -296,13 +301,10 @@ async def handle_script_chat_message(
             )
             return
 
-        memories = await _get_user_memories(sb, user_id)
-        existing_messages = await _get_messages(sb, conversation_id)
-
         if not existing_messages:
             await (
                 sb.table("conversations")
-                .update({"title": content[:50]})
+                .update({"title": derive_title(content)})
                 .eq("id", conversation_id)
                 .execute()
             )

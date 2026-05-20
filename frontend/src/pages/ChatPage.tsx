@@ -4,16 +4,18 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  Drawer,
+  IconButton,
   Button,
   Stack,
   Typography,
-  Checkbox,
-  FormControlLabel,
 } from "@mui/material";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ImageIcon from "@mui/icons-material/Image";
+import MenuIcon from "@mui/icons-material/Menu";
 import ContextPanel from "../components/ContextPanel";
 import ChatArea from "../components/ChatArea";
+import { useToast } from "../components/ToastProvider";
 import {
   listConversations,
   createConversation,
@@ -24,6 +26,7 @@ import {
   updateConversation,
   AVAILABLE_MODELS,
 } from "../lib/api";
+import { usePageAbort } from "../hooks/usePageAbort";
 
 interface Message {
   id?: string;
@@ -32,6 +35,7 @@ interface Message {
   type: string;
   image_url?: string | null;
   image_base64?: string;
+  created_at?: string;
   images?: Record<
     string,
     {
@@ -50,6 +54,7 @@ interface Conversation {
 }
 
 export default function ChatPage() {
+  const { showError } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -58,10 +63,12 @@ export default function ChatPage() {
   const [currentStage, setCurrentStage] = useState<string | null>(null);
   const [conversationMode, setConversationMode] = useState<string>("thumbnail");
   const [conversationModel, setConversationModel] = useState<string>("");
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [showModeDialog, setShowModeDialog] = useState(false);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([
-    "youtube",
-  ]);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const selectedPlatforms = ["youtube"];
+  const [imageProvider] = useState<"gemini" | "openai">("gemini");
   const pendingMessageRef = useRef<{
     content: string;
     type: string;
@@ -81,6 +88,7 @@ export default function ChatPage() {
   > | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { getSignal, isAbort } = usePageAbort();
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -94,9 +102,13 @@ export default function ChatPage() {
   }, [stopPolling]);
 
   const loadConversations = useCallback(async () => {
-    const data = await listConversations();
-    setConversations(data as unknown as Conversation[]);
-  }, []);
+    try {
+      const data = await listConversations(getSignal());
+      setConversations(data as unknown as Conversation[]);
+    } catch (e) {
+      if (!isAbort(e)) throw e;
+    }
+  }, [getSignal, isAbort]);
 
   useEffect(() => {
     loadConversations();
@@ -109,14 +121,17 @@ export default function ChatPage() {
     setIsStreaming(false);
     setStreamingContent("");
 
+    const signal = getSignal();
     try {
-      const data = await getConversation(id);
+      const data = await getConversation(id, 50, undefined, signal);
       const convData = data as {
         messages: Message[];
         mode?: string;
         model?: string;
+        has_more?: boolean;
       };
       let msgs = convData.messages || [];
+      setHasMoreMessages(!!convData.has_more);
       const mode = convData.mode || "thumbnail";
       const model = convData.model || "";
       setConversationMode(mode);
@@ -131,7 +146,7 @@ export default function ChatPage() {
         msgs[msgs.length - 1].role === "user"
       ) {
         try {
-          const statusData = (await getConversationStatus(id)) as Record<
+          const statusData = (await getConversationStatus(id, signal)) as Record<
             string,
             unknown
           >;
@@ -162,23 +177,55 @@ export default function ChatPage() {
             msgs = [...msgs, assistantMsg];
           } else if (statusData.status === "idle") {
             // Graph completed — reload messages from DB
-            const refreshed = await getConversation(id);
+            const refreshed = await getConversation(id, 50, undefined, signal);
             const refreshedMsgs =
               (refreshed as { messages: Message[] }).messages || [];
             if (refreshedMsgs.length > msgs.length) {
               msgs = refreshedMsgs;
             }
           }
-        } catch {
-          // Ignore — proceed with whatever messages we have
+        } catch (e) {
+          if (isAbort(e)) return;
+          // Ignore other errors — proceed with whatever messages we have
         }
       }
 
       setMessages(msgs);
-    } catch {
+    } catch (e) {
+      if (isAbort(e)) return;
       setMessages([]);
       setCurrentStage(null);
       setIsStreaming(false);
+    }
+  };
+
+  const handleLoadMoreMessages = async () => {
+    if (!selectedId || !hasMoreMessages || loadingMore || messages.length === 0)
+      return;
+    setLoadingMore(true);
+    const signal = getSignal();
+    try {
+      const oldest = messages[0];
+      const data = await getConversation(
+        selectedId,
+        50,
+        oldest.created_at,
+        signal
+      );
+      const convData = data as {
+        messages: Message[];
+        has_more?: boolean;
+      };
+      const olderMsgs = convData.messages || [];
+      setHasMoreMessages(!!convData.has_more);
+      if (olderMsgs.length > 0) {
+        setMessages((prev) => [...olderMsgs, ...prev]);
+      }
+    } catch (e) {
+      if (isAbort(e)) return;
+      // ignore other errors
+    } finally {
+      if (!signal.aborted) setLoadingMore(false);
     }
   };
 
@@ -192,7 +239,7 @@ export default function ChatPage() {
 
   const handleModeSelect = async (mode: string) => {
     setShowModeDialog(false);
-    const conv = await createConversation(mode);
+    const conv = await createConversation(mode, getSignal(), imageProvider);
     const newConv = conv as unknown as Conversation;
     setConversations((prev) => [newConv, ...prev]);
     setSelectedId(newConv.id);
@@ -213,7 +260,12 @@ export default function ChatPage() {
   };
 
   const handleDeleteConversation = async (id: string) => {
-    await deleteConversation(id);
+    try {
+      await deleteConversation(id, getSignal());
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
+    }
     setConversations((prev) => prev.filter((c) => c.id !== id));
     if (selectedId === id) {
       setSelectedId(null);
@@ -279,6 +331,7 @@ export default function ChatPage() {
 
     setCurrentStage("generating");
 
+    const signal = getSignal();
     try {
       await streamChat(
         conversationId,
@@ -353,9 +406,19 @@ export default function ChatPage() {
           },
         },
         imageUrl,
-        platforms
+        platforms,
+        signal
       );
-    } catch {
+    } catch (err) {
+      // Page navigated away (or signal otherwise aborted) — don't surface a
+      // toast/error message: the UI is gone, the request was cancelled by us.
+      if (isAbort(err)) return;
+      const detail = err instanceof Error ? err.message : "";
+      showError(
+        detail
+          ? `Algo deu errado: ${detail}`
+          : "Algo deu errado. Tente novamente."
+      );
       setMessages((prev) => [
         ...prev,
         {
@@ -439,18 +502,63 @@ export default function ChatPage() {
   const handleModelChange = async (newModel: string) => {
     if (!selectedId) return;
     setConversationModel(newModel);
-    await updateConversation(selectedId, { model: newModel || undefined });
+    try {
+      await updateConversation(selectedId, { model: newModel || undefined }, getSignal());
+    } catch (e) {
+      if (isAbort(e)) return;
+      throw e;
+    }
   };
 
   return (
     <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
-      <ContextPanel
-        conversations={conversations}
-        selectedId={selectedId}
-        onSelect={handleSelectConversation}
-        onCreate={handleCreateConversation}
-        onDelete={handleDeleteConversation}
-      />
+      {/* Sidebar: permanent on md+, off-canvas drawer on xs */}
+      <Box sx={{ display: { xs: "none", md: "flex" } }}>
+        <ContextPanel
+          conversations={conversations}
+          selectedId={selectedId}
+          onSelect={handleSelectConversation}
+          onCreate={handleCreateConversation}
+          onDelete={handleDeleteConversation}
+        />
+      </Box>
+      <Drawer
+        variant="temporary"
+        open={mobileDrawerOpen}
+        onClose={() => setMobileDrawerOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: "block", md: "none" },
+          "& .MuiDrawer-paper": { width: 260, boxSizing: "border-box" },
+        }}
+      >
+        <ContextPanel
+          conversations={conversations}
+          selectedId={selectedId}
+          onSelect={handleSelectConversation}
+          onCreate={handleCreateConversation}
+          onDelete={handleDeleteConversation}
+          onAfterNavigate={() => setMobileDrawerOpen(false)}
+        />
+      </Drawer>
+      {/* Hamburger toggle, mobile-only */}
+      <IconButton
+        onClick={() => setMobileDrawerOpen(true)}
+        aria-label="Abrir conversas"
+        sx={{
+          display: { xs: "flex", md: "none" },
+          position: "fixed",
+          top: 8,
+          left: 8,
+          zIndex: 1200,
+          color: "rgba(255,255,255,0.7)",
+          backgroundColor: "rgba(18,18,25,0.85)",
+          backdropFilter: "blur(8px)",
+          "&:hover": { backgroundColor: "rgba(30,30,40,0.95)" },
+        }}
+      >
+        <MenuIcon />
+      </IconButton>
       <ChatArea
         messages={messages}
         streamingContent={streamingContent}
@@ -475,6 +583,9 @@ export default function ChatPage() {
             ? handleModelChange
             : undefined
         }
+        hasMoreMessages={hasMoreMessages}
+        loadingMore={loadingMore}
+        onLoadMore={handleLoadMoreMessages}
       />
       <Dialog
         open={showModeDialog}
@@ -506,49 +617,15 @@ export default function ChatPage() {
                   py: 1.5,
                   width: "100%",
                   "&:hover": {
-                    borderColor: "#7c3aed",
-                    backgroundColor: "rgba(124,58,237,0.08)",
+                    borderColor: "#5b8def",
+                    backgroundColor: "rgba(91,141,239,0.08)",
                   },
                 }}
               >
                 Thumbnail
               </Button>
-              <Box sx={{ ml: 4, mt: 1 }}>
-                {[
-                  { key: "youtube", label: "YouTube (16:9)" },
-                  { key: "instagram_post", label: "Instagram Post (1:1)" },
-                  { key: "instagram_story", label: "Instagram Story (9:16)" },
-                ].map((p) => (
-                  <FormControlLabel
-                    key={p.key}
-                    control={
-                      <Checkbox
-                        checked={selectedPlatforms.includes(p.key)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedPlatforms((prev) => [...prev, p.key]);
-                          } else {
-                            setSelectedPlatforms((prev) =>
-                              prev.filter((k) => k !== p.key)
-                            );
-                          }
-                        }}
-                        size="small"
-                        sx={{
-                          color: "#7c3aed",
-                          "&.Mui-checked": { color: "#7c3aed" },
-                        }}
-                      />
-                    }
-                    label={p.label}
-                    sx={{
-                      color: "rgba(255,255,255,0.7)",
-                      display: "flex",
-                      "& .MuiTypography-root": { fontSize: 13 },
-                    }}
-                  />
-                ))}
-              </Box>
+              {/* OpenAI provider disabled — org verification required for gpt-image-2,
+                  gpt-image-1.5 not yet validated. Re-enable when ready. */}
             </Box>
             <Button
               variant="outlined"
@@ -560,8 +637,8 @@ export default function ChatPage() {
                 color: "text.primary",
                 py: 1.5,
                 "&:hover": {
-                  borderColor: "#7c3aed",
-                  backgroundColor: "rgba(124,58,237,0.08)",
+                  borderColor: "#5b8def",
+                  backgroundColor: "rgba(91,141,239,0.08)",
                 },
               }}
             >

@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -22,14 +22,22 @@ def mock_supabase():
     return MagicMock()
 
 
+def _patch_get_client(mock_sb):
+    return patch(
+        "routes.personas.get_async_client", new=AsyncMock(return_value=mock_sb)
+    )
+
+
 def test_get_persona_returns_404_when_not_found():
     user_id = "test-user-id"
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
+    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=None)
+    )
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.get("/api/personas")
 
     assert response.status_code == 404
@@ -41,14 +49,18 @@ def test_get_persona_returns_data_when_exists():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
-        "user_id": user_id,
-        "channel_name": "My Channel",
-        "language": "en",
-        "persona_text": "Friendly tech educator",
-    }
+    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data={
+                "user_id": user_id,
+                "channel_name": "My Channel",
+                "language": "en",
+                "persona_text": "Friendly tech educator",
+            }
+        )
+    )
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.get("/api/personas")
 
     assert response.status_code == 200
@@ -64,14 +76,18 @@ def test_put_persona_upserts_and_returns_data():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.upsert.return_value.execute.return_value.data = [
-        {
-            "user_id": user_id,
-            "channel_name": "My Channel",
-            "language": "pt",
-            "persona_text": "Canal de tecnologia",
-        }
-    ]
+    mock_sb.table.return_value.upsert.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data=[
+                {
+                    "user_id": user_id,
+                    "channel_name": "My Channel",
+                    "language": "pt",
+                    "persona_text": "Canal de tecnologia",
+                }
+            ]
+        )
+    )
 
     payload = {
         "channel_name": "My Channel",
@@ -79,7 +95,7 @@ def test_put_persona_upserts_and_returns_data():
         "persona_text": "Canal de tecnologia",
     }
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.put("/api/personas", json=payload)
 
     assert response.status_code == 200
@@ -105,11 +121,11 @@ def test_delete_persona_returns_204():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.delete.return_value.eq.return_value.execute.return_value.data = [
-        {"user_id": user_id}
-    ]
+    mock_sb.table.return_value.delete.return_value.eq.return_value.execute = AsyncMock(
+        return_value=MagicMock(data=[{"user_id": user_id}])
+    )
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.delete("/api/personas")
 
     assert response.status_code == 204
@@ -121,15 +137,19 @@ def test_get_persona_includes_default_template_when_null():
     client = create_app(user_id)
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
-        "user_id": user_id,
-        "channel_name": "My Channel",
-        "language": "en",
-        "persona_text": "Friendly",
-        "script_template": None,
-    }
+    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data={
+                "user_id": user_id,
+                "channel_name": "My Channel",
+                "language": "en",
+                "persona_text": "Friendly",
+                "script_template": None,
+            }
+        )
+    )
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.get("/api/personas")
 
     assert response.status_code == 200
@@ -148,15 +168,19 @@ def test_get_persona_returns_custom_template():
         {"name": "Intro", "description": "Quick intro", "enabled": True, "order": 0},
     ]
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
-        "user_id": user_id,
-        "channel_name": "My Channel",
-        "language": "en",
-        "persona_text": "Friendly",
-        "script_template": custom_template,
-    }
+    mock_sb.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data={
+                "user_id": user_id,
+                "channel_name": "My Channel",
+                "language": "en",
+                "persona_text": "Friendly",
+                "script_template": custom_template,
+            }
+        )
+    )
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.get("/api/personas")
 
     assert response.status_code == 200
@@ -173,17 +197,21 @@ def test_put_persona_with_script_template():
     ]
 
     mock_sb = mock_supabase()
-    mock_sb.table.return_value.upsert.return_value.execute.return_value.data = [
-        {
-            "user_id": user_id,
-            "channel_name": "Ch",
-            "language": "en",
-            "persona_text": "Fun",
-            "script_template": template,
-        }
-    ]
+    mock_sb.table.return_value.upsert.return_value.execute = AsyncMock(
+        return_value=MagicMock(
+            data=[
+                {
+                    "user_id": user_id,
+                    "channel_name": "Ch",
+                    "language": "en",
+                    "persona_text": "Fun",
+                    "script_template": template,
+                }
+            ]
+        )
+    )
 
-    with patch("routes.personas.get_supabase", return_value=mock_sb):
+    with _patch_get_client(mock_sb):
         response = client.put(
             "/api/personas",
             json={

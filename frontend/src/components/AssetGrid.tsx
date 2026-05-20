@@ -4,6 +4,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import DescriptionIcon from "@mui/icons-material/Description";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import { LazyImage } from "../ds/LazyImage";
 
 interface AssetFile {
   name: string;
@@ -11,6 +12,21 @@ interface AssetFile {
   metadata?: { size?: number };
   created_at?: string;
 }
+
+const EMPTY_HINTS: Record<string, string> = {
+  "reference-thumbs":
+    "Faça upload de 3-5 thumbnails que representam seu estilo — o agente usa elas para definir layout, tipografia e composição.",
+  "personal-photos":
+    "Suba fotos suas em diferentes poses e expressões. O agente vai escolher a foto ideal para cada thumbnail.",
+  logos:
+    "Adicione o logo do canal. Ele será posicionado nas thumbnails seguindo as referências.",
+  outputs:
+    "Suas thumbnails geradas vão aparecer aqui depois de salvas em uma conversa.",
+  scripts:
+    "Os roteiros que você salvar nas conversas vão aparecer aqui.",
+  fonts:
+    "Suba arquivos .ttf, .otf ou .woff para que o agente use suas fontes na tipografia.",
+};
 
 interface AssetGridProps {
   files: AssetFile[];
@@ -56,7 +72,7 @@ function formatScriptName(name: string) {
 
 const checkboxSx = {
   color: "rgba(255,255,255,0.3)",
-  "&.Mui-checked": { color: "#7c3aed" },
+  "&.Mui-checked": { color: "#5b8def" },
   p: 0.5,
 };
 
@@ -101,20 +117,20 @@ function AssetList({
               p: 2,
               borderRadius: 2,
               border: isSelected
-                ? "1px solid rgba(124,58,237,0.5)"
+                ? "1px solid rgba(91,141,239,0.5)"
                 : "1px solid rgba(255,255,255,0.08)",
               backgroundColor: isSelected
-                ? "rgba(124,58,237,0.08)"
+                ? "rgba(91,141,239,0.08)"
                 : "rgba(255,255,255,0.03)",
               cursor: onView ? "pointer" : "default",
               boxShadow: isSelected
-                ? "0 0 12px rgba(124,58,237,0.15)"
+                ? "0 0 12px rgba(91,141,239,0.15)"
                 : "none",
               "&:hover": {
                 backgroundColor: isSelected
-                  ? "rgba(124,58,237,0.12)"
+                  ? "rgba(91,141,239,0.12)"
                   : "rgba(255,255,255,0.06)",
-                borderColor: "rgba(124,58,237,0.3)",
+                borderColor: "rgba(91,141,239,0.3)",
                 "& .select-checkbox": {
                   opacity: 1,
                 },
@@ -144,15 +160,14 @@ function AssetList({
                 width: 40,
                 height: 40,
                 borderRadius: 1.5,
-                background:
-                  "linear-gradient(135deg, rgba(124,58,237,0.2), rgba(59,130,246,0.2))",
+                background: "rgba(91,141,239,0.12)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <DescriptionIcon sx={{ fontSize: 20, color: "#a78bfa" }} />
+              <DescriptionIcon sx={{ fontSize: 20, color: "#93b6f0" }} />
             </Box>
 
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -190,7 +205,7 @@ function AssetList({
                   onClick={() => onView(file.name)}
                   sx={{
                     color: "rgba(255,255,255,0.5)",
-                    "&:hover": { color: "#7c3aed" },
+                    "&:hover": { color: "#5b8def" },
                   }}
                 >
                   <VisibilityIcon fontSize="small" />
@@ -201,7 +216,7 @@ function AssetList({
                 onClick={() => onDownload(file.name)}
                 sx={{
                   color: "rgba(255,255,255,0.5)",
-                  "&:hover": { color: "#7c3aed" },
+                  "&:hover": { color: "#5b8def" },
                 }}
               >
                 <DownloadIcon fontSize="small" />
@@ -235,9 +250,21 @@ export default function AssetGrid({
   onSelectAll,
 }: AssetGridProps) {
   if (files.length === 0) {
+    const hint = EMPTY_HINTS[bucket] ?? "Nenhum arquivo aqui ainda.";
     return (
-      <Box sx={{ textAlign: "center", py: 4 }}>
-        <Typography color="text.secondary">Nenhum arquivo</Typography>
+      <Box sx={{ textAlign: "center", py: 6, px: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{ color: "rgba(255,255,255,0.55)", fontWeight: 600, mb: 0.75 }}
+        >
+          Nenhum arquivo aqui ainda
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{ color: "rgba(255,255,255,0.4)", lineHeight: 1.5 }}
+        >
+          {hint}
+        </Typography>
       </Box>
     );
   }
@@ -291,13 +318,13 @@ export default function AssetGrid({
                 borderRadius: 2,
                 overflow: "hidden",
                 border: isSelected
-                  ? "1px solid rgba(124,58,237,0.5)"
+                  ? "1px solid rgba(91,141,239,0.5)"
                   : "1px solid rgba(255,255,255,0.08)",
                 backgroundColor: isSelected
-                  ? "rgba(124,58,237,0.08)"
+                  ? "rgba(91,141,239,0.08)"
                   : "rgba(255,255,255,0.03)",
                 boxShadow: isSelected
-                  ? "0 0 12px rgba(124,58,237,0.15)"
+                  ? "0 0 12px rgba(91,141,239,0.15)"
                   : "none",
                 position: "relative",
                 transition: "all 0.2s",
@@ -335,17 +362,18 @@ export default function AssetGrid({
               </Box>
 
               {isImage(file.name) ? (
-                <Box
-                  component="img"
-                  src={file.public_url || `/api/assets/${bucket}/${file.name}`}
-                  alt={file.name}
-                  sx={{
-                    width: "100%",
-                    height: 280,
-                    objectFit: "cover",
-                    display: "block",
-                  }}
-                />
+                <Box sx={{ width: "100%", height: 280 }}>
+                  {/* Use the Supabase public_url returned by list_assets — the
+                      browser fetches <img src> directly without our Bearer
+                      token, so the backend route would 401. Responsive srcset
+                      via `?w=` is omitted here because Supabase URLs use a
+                      different transform API; revisit if/when we route image
+                      requests through a signed-URL endpoint. */}
+                  <LazyImage
+                    src={file.public_url || `/api/assets/${bucket}/${file.name}`}
+                    alt={file.name}
+                  />
+                </Box>
               ) : (
                 <Box
                   sx={{

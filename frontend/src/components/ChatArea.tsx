@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import MessageBubble from "./MessageBubble";
 import AssistantLogo from "./AssistantLogo";
 import ChatInput from "./ChatInput";
@@ -44,6 +44,9 @@ interface ChatAreaProps {
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (model: string) => void;
+  hasMoreMessages?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 export default function ChatArea({
@@ -62,15 +65,28 @@ export default function ChatArea({
   models,
   selectedModel,
   onModelChange,
+  hasMoreMessages,
+  loadingMore,
+  onLoadMore,
 }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
 
+  // During streaming, switching to "auto" + rAF-throttling avoids the
+  // animation queue thrash that "smooth" causes on every token. Once the
+  // stream settles we do one final smooth scroll to the bottom.
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages, streamingContent]);
+    if (!scrollRef.current) return;
+    const el = scrollRef.current;
+    if (isStreaming) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+      });
+    } else {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages, streamingContent, isStreaming]);
 
   const isEmpty = messages.length === 0 && !isStreaming;
 
@@ -81,6 +97,8 @@ export default function ChatArea({
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        // leave room for the mobile hamburger button (top-left)
+        pt: { xs: 5, md: 0 },
       }}
     >
       <Box ref={scrollRef} sx={{ flex: 1, overflow: "auto", py: 2 }}>
@@ -100,7 +118,8 @@ export default function ChatArea({
                 width: 56,
                 height: 56,
                 borderRadius: "50%",
-                background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
+                backgroundColor: "rgba(91,141,239,0.10)",
+                border: "1px solid rgba(91,141,239,0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -125,6 +144,31 @@ export default function ChatArea({
           </Box>
         )}
 
+        {hasMoreMessages && onLoadMore && (
+          <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+            <Button
+              variant="text"
+              onClick={onLoadMore}
+              disabled={loadingMore}
+              size="small"
+              sx={{
+                color: "#93b6f0",
+                textTransform: "none",
+                fontSize: 13,
+              }}
+            >
+              {loadingMore ? (
+                <CircularProgress size={14} sx={{ color: "#5b8def", mr: 1 }} />
+              ) : null}
+              Carregar mensagens anteriores
+            </Button>
+          </Box>
+        )}
+
+        {/* MessageBubble has its own arePropsEqual that ignores callback
+            identity (see MessageBubble.tsx). The map runs every parent
+            render, but each bubble's React.memo skips its own re-render
+            when message/isLatest/isStreaming/conversationMode are stable. */}
         {messages.map((msg, i) => (
           <MessageBubble
             key={msg.id || i}

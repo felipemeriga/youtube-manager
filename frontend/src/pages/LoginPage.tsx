@@ -1,15 +1,12 @@
 import { useState, FormEvent, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Box,
-  TextField,
-  Button,
-  Typography,
-  Alert,
-  Paper,
-} from "@mui/material";
+import { Alert, TextField } from "@mui/material";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../components/AuthProvider";
+import { Button } from "../ds/Button";
+import { Card } from "../ds/Card";
+import { Stack } from "../ds/Stack";
+import { palette, typography } from "../ds/tokens";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -28,10 +25,7 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setError(error.message);
@@ -40,84 +34,73 @@ export default function LoginPage() {
   };
 
   return (
-    <Box
-      sx={{
+    <div
+      style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        height: "100vh",
-        background:
-          "radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 50%, rgba(59,130,246,0.06) 0%, transparent 50%), linear-gradient(180deg, #0f0f14 0%, #13141f 100%)",
+        minHeight: "100vh",
+        padding: "16px",
+        background: palette.bg.canvas,
       }}
     >
-      <Paper
-        sx={{
-          p: 4,
-          width: 400,
-          backdropFilter: "blur(20px)",
-          backgroundColor: "rgba(255,255,255,0.05)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 3,
-        }}
-      >
-        <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
-          <Box
-            component="img"
-            src="/logo.svg"
-            alt="YouTube Manager"
-            sx={{ width: 64, height: 64, borderRadius: 2 }}
-          />
-        </Box>
-        <Typography
-          variant="h4"
-          sx={{
-            mb: 3,
-            textAlign: "center",
-            background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          YouTube Manager
-        </Typography>
+      <Card padded style={{ width: "100%", maxWidth: 400 }}>
+        <Stack gap={6} align="stretch">
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 12,
+                background: palette.accent[50],
+                border: `1px solid ${palette.border.default}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: palette.accent[500],
+                ...typography.scale.title,
+              }}
+              aria-label="YouTube Manager"
+            >
+              YM
+            </div>
+            <h1
+              style={{
+                ...typography.scale.display,
+                color: palette.text.primary,
+                margin: 0,
+                textAlign: "center",
+              }}
+            >
+              YouTube Manager
+            </h1>
+          </div>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+          {error && <Alert severity="error">{error}</Alert>}
 
-        <form onSubmit={handleSubmit}>
-          <TextField
-            fullWidth
-            label="E-mail"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            fullWidth
-            label="Senha"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            sx={{ mb: 3 }}
-          />
-          <Button
-            fullWidth
-            type="submit"
-            variant="contained"
-            disabled={loading}
-            sx={{
-              background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
-              py: 1.5,
-            }}
-          >
-            {loading ? "Entrando..." : "Entrar"}
-          </Button>
-        </form>
-      </Paper>
-    </Box>
+          <form onSubmit={handleSubmit}>
+            <Stack gap={3}>
+              <TextField
+                fullWidth
+                label="E-mail"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <TextField
+                fullWidth
+                label="Senha"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <Button type="submit" disabled={loading} style={{ width: "100%", padding: "10px 14px" }}>
+                {loading ? "Entrando..." : "Entrar"}
+              </Button>
+            </Stack>
+          </form>
+        </Stack>
+      </Card>
+    </div>
   );
 }
