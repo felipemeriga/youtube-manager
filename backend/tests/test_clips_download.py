@@ -37,9 +37,7 @@ async def test_download_source_fetches_and_muxes_then_uploads(tmp_path):
             "services.clips.download.fetch_video_info",
             new=AsyncMock(return_value=_info()),
         ),
-        patch(
-            "services.clips.download.download_video_and_audio", new=fake_dl
-        ),
+        patch("services.clips.download.download_video_and_audio", new=fake_dl),
         patch("services.clips.download.upload_file", new=fake_upload),
     ):
         local_path = await download_source(
